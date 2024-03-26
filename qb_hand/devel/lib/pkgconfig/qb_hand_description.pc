@@ -1,0 +1,8 @@
+prefix=/home/jesse/Thesis/code_jesse/qb_hand/devel
+
+Name: qb_hand_description
+Description: Description of qb_hand_description
+Version: 3.0.3
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,8 @@
+prefix=/home/jesse/Thesis/code_jesse/qb_hand/devel
+
+Name: qb_hand_hardware_interface
+Description: Description of qb_hand_hardware_interface
+Version: 3.0.3
+Cflags: -I/home/jesse/Thesis/code_jesse/qb_hand/src/qbhand-ros/qb_hand_hardware_interface/include
+Libs: -L${prefix}/lib -lqb_hand_hardware_interface
+Requires: roscpp control_toolbox transmission_interface qb_device_hardware_interface

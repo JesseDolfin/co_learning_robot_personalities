@@ -1,0 +1,8 @@
+prefix=/home/jesse/Thesis/code_jesse/qb_hand/install
+
+Name: qb_device_description
+Description: Description of qb_device_description
+Version: 3.0.6
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

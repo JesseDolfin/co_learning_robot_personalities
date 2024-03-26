@@ -1,0 +1,27 @@
+<package format="2">
+  <name>qb_device_srvs</name>
+  <version>3.0.6</version>
+  <description>
+    This package contains the device-independent custom ROS services for qbrobotics® devices.
+  </description>
+  <author>qbrobotics®</author>
+  <maintainer email="support@qbrobotics.com">qb Support Team</maintainer>
+  <license>BSD 3-Clause</license>
+
+  <url type="bugtracker">https://bitbucket.org/qbrobotics/qbdevice-ros/issues</url>
+  <url type="repository">https://bitbucket.org/qbrobotics/qbdevice-ros</url>
+  <url type="website">http://wiki.ros.org/qb_device_srvs</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>std_srvs</depend>
+  <depend>qb_device_msgs</depend>
+
+  <build_depend>message_generation</build_depend>
+  <build_export_depend>message_runtime</build_export_depend>
+  <exec_depend>message_runtime</exec_depend>
+
+  <export>
+    <architecture_independent/>
+  </export>
+</package>

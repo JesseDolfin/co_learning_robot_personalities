@@ -1,0 +1,21 @@
+<package format="2">
+  <name>qb_device_utils</name>
+  <version>3.0.6</version>
+  <description>
+    This package contains a device-independent utility functions for qbrobotics® devices.
+  </description>
+  <author>qbrobotics®</author>
+  <maintainer email="support@qbrobotics.com">qb Support Team</maintainer>
+  <license>BSD 3-Clause</license>
+
+  <url type="bugtracker">https://bitbucket.org/qbrobotics/qbdevice-ros/issues</url>
+  <url type="repository">https://bitbucket.org/qbrobotics/qbdevice-ros</url>
+  <url type="website">http://wiki.ros.org/qb_device_utils</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+
+  <!--TODO: <test_depend>gtest</test_depend>-->
+  <doc_depend>doxygen</doc_depend>
+</package>
