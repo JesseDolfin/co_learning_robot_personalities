@@ -1,0 +1,3 @@
+[submodule "Control_in_HRI"]
+	path = Control_in_HRI
+	url = https://github.com/JesseDolfin/Control_in_HRI.git
