@@ -9,10 +9,6 @@ import actionlib
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 
 
-# Imports the environment
-from CoLearnEnvironment import CoLearn
-from QLearnAgent import Q_learning_agent
-
 if __name__ == "__main__":
     global bag
     try:
@@ -20,12 +16,6 @@ if __name__ == "__main__":
         client = actionlib.SimpleActionClient('/iiwa7/torque_controller', ControllerAction)
         client.wait_for_server()
 
-        agent = Q_learning_agent(action_size=3,state_size=3,env=CoLearn())
-
-            
-        
-
-        
         # Define message
         goal = ControllerGoal()
         goal.mode = 'ee_cartesian'
@@ -38,7 +28,7 @@ if __name__ == "__main__":
         goal.damping = 2*np.sqrt(goal.stiffness)
         goal.nullspace_gain = [0,0,0,0,0,0,0]
         goal.nullspace_reference = [0,0,0.0,0,0,0,0]
-        goal.reference = [0.4, 0.5, 0.4, 0, np.pi, 0] #[x y z rx ry rz] (meters, rad)
+        goal.reference = [0.0, 0.0, 1.2, 0, 0, 0] #[x y z rx ry rz] (meters, rad)
         goal.velocity_reference =np.zeros(6)
     
         client.send_goal(goal)
