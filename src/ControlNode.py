@@ -7,6 +7,7 @@ from std_msgs.msg import Float32MultiArray
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 from QLearnAgent import QLearningAgent
 from CoLearnEnvironment import CoLearn
+from ..Control_in_HRI.PA3_MAIN import secondary_task
 
 
 class RoboticArmControllerNode:
