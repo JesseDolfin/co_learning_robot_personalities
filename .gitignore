@@ -2,3 +2,5 @@ __pycache__/
 Q_tables/
 jupyter/
 test.py
+build/
+devel/

@@ -72,7 +72,7 @@ class CoLearn(Env):
         reward_preference = 0 #10 if (self.phase == 0 and self.state == 0) or (self.phase == 1 and self.state == 1) else 0
 
         # Simulate a person who prefers everything but position C and the item placed on them (state 2)
-        if (self.phase == 0 and self.state == 2) or (self.phase == 1 and self.state == 2):
+        if (self.phase == 0 and self.state == 0) or (self.phase == 0 and (self.state == 1 or self.state == 2)):
             reward = 16
         else:
             reward = 0

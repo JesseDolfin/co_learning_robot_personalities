@@ -7,7 +7,7 @@ from std_msgs.msg import Float32MultiArray
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 from QLearnAgent import QLearningAgent
 from CoLearnEnvironment import CoLearn
-from ..Control_in_HRI.PA3_MAIN import secondary_task
+from PA3_MAIN import secondary_task
 
 
 class RoboticArmControllerNode:
@@ -171,7 +171,7 @@ if __name__ == '__main__':
     try:
         num_test_runs = 10  # Specify the number of test runs
         node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9, simulate_mode=False)
-        node.rl_agent.load_q_table('code_jesse/Q_tables/q_table_solved_100000_2.npy')
+        node.rl_agent.load_q_table('Co-Learning-KUKA-RL/Q_tables/q_table_solved_100000_1.npy')
         print(f"Q_table for phase 0:\n{node.rl_agent.q_table[:,:,0]}\nQ_table for phase 1:\n{node.rl_agent.q_table[:,:,1]}")
         node.run()
 
