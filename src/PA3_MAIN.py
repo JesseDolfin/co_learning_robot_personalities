@@ -72,7 +72,7 @@ class secondary_task():
         ##initialize "real-time" clock
         self.FPS = 500   #in Hertz
 
-        self.max_time = 30 # seconds
+        self.max_time = 40 # seconds
 
         ## Define colors to be used to render different tissue layers and haptic
         self.cSkin      = (210,161,140)
@@ -85,6 +85,7 @@ class secondary_task():
         self.cVerte     = (226,195,152)
 
         self.cOrange = (255,100,0)
+        self.cBlack = (100,100,100)
         self.cWhite  = (255,255,255)
         self.cGreen = (0,230,0)
 
@@ -197,7 +198,7 @@ class secondary_task():
         wall_size_factor3 = 1/150     + random.randint(-1,1)/4000 # SUPRASPINAL LIGAMENT 0.72mm
         wall_size_factor4 = 0.2       + random.randint(-1,1)/80# INTERSPINAL LIGAMENT 30 mm
         wall_size_factor5 = 0.03      + random.randint(-1,1)/533 # LIGAMENTUM FLAVUM 4.5 mm
-        wall_size_factor6 = 2/(37.5 *difficulty_factor)    # CEREBROSPINAL FLUID 4 mm
+        wall_size_factor6 = 2.5/(37.5 *difficulty_factor)    # CEREBROSPINAL FLUID 4 mm
         wall_size_factor7 = 0.1       + random.randint(-1,1)/160 # SPINAL CORD 15 mm
         wall_size_factor8 = 1/13      + random.randint(-1,1)/200 # VERTEBRAE ONE 11.5 mm
         wall_size_factor9 = 0.393333  + random.randint(-1,1)/40 # CARTILAGE disk 118 mm
@@ -316,7 +317,7 @@ class secondary_task():
 
             # Check if the mouse is over the button. This will create the button hover effect
             if button_rect.collidepoint(pygame.mouse.get_pos()):
-                pygame.draw.rect(button_surface, (127, 255, 212), (1, 1, 148, 48))
+                pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
             else:
                 pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 150, 50))
                 pygame.draw.rect(button_surface, (255, 255, 255), (1, 1, 148, 48))
@@ -724,9 +725,9 @@ class secondary_task():
             self.screenVR.blit(self.vertebrae_layer,(self.vert_rect6[0],self.vert_rect6[1]))
             
             # Draw needle 
-            pygame.draw.line(self.screenVR, self.cOrange, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]+np.cos(self.alpha)*250, self.haptic.center[1]+ np.sin(self.alpha)*250), 2 )
-            pygame.draw.line(self.screenVR, self.cOrange, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]+np.sin(-self.alpha)*25, self.haptic.center[1]+ np.cos(-self.alpha)*25), 2 )
-            pygame.draw.line(self.screenVR, self.cOrange, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]-np.sin(-self.alpha)*25, self.haptic.center[1]- np.cos(-self.alpha)*25), 2 )
+            pygame.draw.line(self.screenVR, self.cBlack, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]+np.cos(self.alpha)*250, self.haptic.center[1]+ np.sin(self.alpha)*250), 2 )
+            pygame.draw.line(self.screenVR, self.cBlack, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]+np.sin(-self.alpha)*25, self.haptic.center[1]+ np.cos(-self.alpha)*25), 2 )
+            pygame.draw.line(self.screenVR, self.cBlack, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]-np.sin(-self.alpha)*25, self.haptic.center[1]- np.cos(-self.alpha)*25), 2 )
             
             
             pause_clock = False
@@ -741,7 +742,7 @@ class secondary_task():
                         self.draw_progress_bar(i)
                         pause_clock = True
                     else:
-                        space_bar_text = self.font.render(f'Press space bar to start draining the fluid', True, (0,0,0))
+                        space_bar_text = self.font_low_time.render(f'Press space bar to start draining the fluid!', True, (20,150,40))
                         self.screenVR.blit(space_bar_text, (0, 60))
                         i = self.max_needle_pressure
 
@@ -782,15 +783,15 @@ class secondary_task():
             time_left = self.max_time - time_elpased 
 
             if time_left <= 10:
-                text_time = self.font_low_time.render(f"Time left for procedure: {time_left:.2f}",True,(255,0,0))
+                text_time = self.font_low_time.render(f"Time left for procedure: {time_left:.2f}s",True,(255,0,0))
                 self.screenVR.blit(text_time,(0,378))
             else:
-                text_time = self.font.render(f"Time left for procedure: {time_left:.2f}",True,(0,0,0)) # Display the time left to complete the simulation
+                text_time = self.font.render(f"Time left for procedure: {time_left:.2f}s",True,(0,0,0)) # Display the time left to complete the simulation
                 self.screenVR.blit(text_time,(0,380))
            
             self.screenVR.blit(text_surface1, (0, 0))
             self.screenVR.blit(text_surface2, (0, 20))
-            self.screenVR.blit(text_surface3, (0, 40))
+            #self.screenVR.blit(text_surface3, (0, 40))
 
             ##Fuse it back together
             self.window.blit(self.screenHaptics, (0,0))
@@ -854,8 +855,8 @@ class secondary_task():
         text = font.render("Restart Simulation", True, (0, 0, 0))
         font_message = pygame.font.Font(None, 38)
         bad_text = font_message.render("You hit the patient's spine! Please try again", True, (240, 0, 0))
-        good_text_1 = font_message.render(f"You succesfully drained the fluid from", True, (2, 217, 30))
-        good_text_2 = font_message.render(f"the epidural space, well done!", True, (2, 217, 30))
+        good_text_1 = font_message.render(f"You succesfully drained all the fluid", True, (20,150,40))
+        good_text_2 = font_message.render(f"from the epidural space, well done!", True, (20,150,40))
         hit_count_text = font.render(f"Spine hits:  {self.spine_hit_count}", True, (0, 0, 0))
         success_text = font.render(f"Successes: {self.success_count}", True, (0, 0, 0))
         completion_text = font.render(f"You succesfully completed: {self.spine_hit_count+self.success_count} simulation runs!", True, (0, 0, 0))
@@ -902,7 +903,7 @@ class secondary_task():
             if tries < 10:
                 # Check if the mouse is over the button. This will create the button hover effect
                 if button_rect.collidepoint(pygame.mouse.get_pos()):
-                    pygame.draw.rect(button_surface, (127, 255, 212), (1, 1, 148, 48))
+                    pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
                 else:
                     pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 150, 50))
                     pygame.draw.rect(button_surface, (255, 255, 255), (1, 1, 148, 48))
@@ -922,7 +923,7 @@ class secondary_task():
                     self.screenHaptics.blit(bad_text,(20,120))
                 elif not self.spinal_coord_collision and not self.time_up:
                     self.screenHaptics.blit(good_text_1,(20,120))
-                    self.screenHaptics.blit(good_text_2,(65,150))
+                    self.screenHaptics.blit(good_text_2,(25,150))
                 else:
                     self.screenHaptics.blit(time_up_text,(20,120))
                     self.screenHaptics.blit(please_again_text,(120,150))
