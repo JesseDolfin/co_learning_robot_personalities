@@ -5,3 +5,5 @@ test.py
 build/
 devel/
 .catkin_workspace
+.catkin_tools/
+logs/
