@@ -94,25 +94,23 @@ To get a local copy up and running follow these simple example steps.
 
 ### Prerequisites
 
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
+This repository requires access to the TU Delft CoR gitlab iiwa repository: https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros.
+Please follow the installation instructions from iiwa_ros before installing this package.
+
 
 ### Installation
 
-1. Clone the repo
+1. Clone the repo in the same workspace you defined during the installation of iiwa_ros, and update the submodules
    ```sh
+   cd <work space>
    git clone https://github.com/JesseDolfin/Co-Learning-KUKA-RL.git
+   cd Co-Learning-KUKA-RL
+   git submodule update --recursive --remote
    ```
-2. Install NPM packages
+2. Build the package
    ```sh
-   npm install
-   ```
-3. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
+   catkin_make
+   source devel/setup.bash
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
