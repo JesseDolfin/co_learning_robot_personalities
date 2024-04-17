@@ -5,9 +5,9 @@ import actionlib
 import numpy as np
 from std_msgs.msg import Float32MultiArray
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
-from QLearnAgent import QLearningAgent
-from CoLearnEnvironment import CoLearn
-from PA3_MAIN import secondary_task
+from q_learning.src.QLearnAgent import QLearningAgent
+from q_learning.src.CoLearnEnvironment import CoLearn
+from Secondary_task.src.PA3_MAIN import secondary_task
 
 
 class RoboticArmControllerNode:
@@ -27,10 +27,11 @@ class RoboticArmControllerNode:
         self.phase = 0
         self.state = 0
         self.terminated = False
-        self.prev_phase = 1
+        self.prev_phase = 0
         self.episode = 0
-        self.flag = True
+        self.flag = False
         self.home_pos = [-0.7, -0.7, 0.5, 0.0, 0.0, 0.0]
+        self.initialise = True
         self.i = 0
         self.count = 0
         self.max_exploration_factor = exploration_factor
@@ -45,6 +46,7 @@ class RoboticArmControllerNode:
 
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
+        #self.task = secondary_task()
 
 
     def result_callback(self, msg):
@@ -59,7 +61,7 @@ class RoboticArmControllerNode:
             position (list): The desired position coordinates.
         """
         goal = ControllerGoal()
-        goal.mode = 'ee_cartesian'
+        goal.mode = 'ee_cartesian_ds'
         goal.time = 3
         goal.precision = 1e-1
         goal.rate = 100
@@ -70,11 +72,11 @@ class RoboticArmControllerNode:
         goal.reference = position
         goal.velocity_reference = np.zeros(6)
 
-        #self.client.wait_for_server()
+        self.client.wait_for_server()
         self.client.send_goal(goal)
         self.client.wait_for_result()
 
-        rospy.sleep(goal.time)  # FOR SIMULATION PURPOSE. TODO: THIS NEEDS TO BE REPLACED BY PROPER 'WAIT FOR CONFIRMATION OF GOOD MOVEMENT'!
+        rospy.sleep(0.1)  # FOR SIMULATION PURPOSE. TODO: THIS NEEDS TO BE REPLACED BY PROPER 'WAIT FOR CONFIRMATION OF GOOD MOVEMENT'!
 
         self.start_episode()
 
@@ -87,8 +89,9 @@ class RoboticArmControllerNode:
         the agent re-trains this q_table to enable co learning
         """
         if not self.simulate_mode:
-            if self.phase == 1 and self.flag:
+            if (self.phase == 1 and self.flag) or self.initialise == True:
                 self.flag = False
+                self.initialise = False
                 rospy.loginfo(f"Episode:   Action: Home_Pos")
                 self.send_position_command(self.home_pos)
 
@@ -96,6 +99,7 @@ class RoboticArmControllerNode:
             self.exploration_factor = max(self.exploration_factor * 0.90, 0.1)  # Decay exploration factor
             self.action, self.phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
             position = self.convert_action_to_position(self.phase, self.action)
+           
 
             rospy.loginfo(f"Episode:{self.episode}, Action:{self.action}")
 
@@ -171,7 +175,7 @@ if __name__ == '__main__':
     try:
         num_test_runs = 10  # Specify the number of test runs
         node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9, simulate_mode=False)
-        node.rl_agent.load_q_table('Co-Learning-KUKA-RL/Q_tables/q_table_solved_100000_1.npy')
+        node.rl_agent.load_q_table('src/q_learning/Q_tables/q_table_solved_100000_1.npy')
         print(f"Q_table for phase 0:\n{node.rl_agent.q_table[:,:,0]}\nQ_table for phase 1:\n{node.rl_agent.q_table[:,:,1]}")
         node.run()
 

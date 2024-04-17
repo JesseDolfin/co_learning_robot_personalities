@@ -1,6 +1,6 @@
 import numpy as np
-from QLearnAgent import QLearningAgent
-from CoLearnEnvironment import CoLearn
+from q_learning.src.QLearnAgent import QLearningAgent
+from q_learning.src.CoLearnEnvironment import CoLearn
 
 
 def hyperSearch():

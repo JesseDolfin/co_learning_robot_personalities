@@ -91,7 +91,7 @@ class secondary_task():
 
 
         self.start_screen()
-        self.initialise()
+        #self.initialise()
 
     def initialise(self):
 
