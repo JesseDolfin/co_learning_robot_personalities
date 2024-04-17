@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>secondary_task_messages</name>
+  <name>co_learning_messages</name>
   <version>0.0.1</version>
   <description>Contains the message definition for relaying the status of the secondary task</description>
 

@@ -16,14 +16,16 @@ import uuid
 import random
 import sys
 import time
+import rospy
+from co_learning_messages.msg import secondary_task_message
 
 class secondary_task():
     def __init__(self):
-        # haply stuff
-        self.CW = 0
-        self.CCW = 1
-        self.haplyBoard = Board
-        self.device = Device
+        
+        pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
+        rospy.init_node("secondary_task")
+        
+
         self.SimpleActuatorMech = Mechanisms
         self.pantograph = Pantograph
         self.robot = PShape

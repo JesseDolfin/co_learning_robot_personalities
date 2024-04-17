@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(secondary_task_messages)
+project(co_learning_messages)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
