@@ -1,0 +1,12 @@
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/share/secondary_task/cmake/secondary_taskConfig.cmake
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/share/secondary_task/cmake/secondary_taskConfig-version.cmake
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/secondary_task/pshape.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/secondary_task/PA3_MAIN.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/secondary_task/cmake.lock
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/secondary_task/pyhapi.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/secondary_task/pantograph.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/python3/dist-packages/pantograph/__init__.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/python3/dist-packages/pshape/__init__.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/python3/dist-packages/pyhapi/__init__.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/python3/dist-packages/PA3_MAIN/__init__.py
+Symlinking /home/jesse/Thesis/Co-Learning-KUKA-RL/devel/lib/pkgconfig/secondary_task.pc

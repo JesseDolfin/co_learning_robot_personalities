@@ -1,0 +1,17 @@
+[  0%] Built target actionlib_msgs_generate_messages_py
+[  0%] Built target std_msgs_generate_messages_py
+[  0%] Built target std_msgs_generate_messages_cpp
+[  0%] Built target std_msgs_generate_messages_eus
+[  0%] Built target actionlib_msgs_generate_messages_eus
+[  0%] Built target actionlib_msgs_generate_messages_cpp
+[  0%] Built target actionlib_msgs_generate_messages_lisp
+[  0%] Built target actionlib_msgs_generate_messages_nodejs
+[  0%] Built target std_msgs_generate_messages_nodejs
+[  0%] Built target std_msgs_generate_messages_lisp
+[  0%] Built target _secondary_task_messages_generate_messages_check_deps_secondary_task_message
+[ 14%] Built target secondary_task_messages_generate_messages_cpp
+[ 42%] Built target secondary_task_messages_generate_messages_eus
+[ 71%] Built target secondary_task_messages_generate_messages_nodejs
+[ 85%] Built target secondary_task_messages_generate_messages_py
+[100%] Built target secondary_task_messages_generate_messages_lisp
+[100%] Built target secondary_task_messages_generate_messages
