@@ -7,38 +7,35 @@ from std_msgs.msg import Float32MultiArray
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 from q_learning.src.QLearnAgent import QLearningAgent
 from q_learning.src.CoLearnEnvironment import CoLearn
-from Secondary_task.src.PA3_MAIN import secondary_task
+from co_learning_messages.msg import secondary_task_message
 
 
 
 
 class RoboticArmControllerNode:
-    def __init__(self, num_test_runs, exploration_factor=0.8, simulate_mode=False):
+    def __init__(self, num_test_runs, exploration_factor=0.8):
         """
         Initializes the RoboticArmControllerNode, handles the sending of position commands and 
         uses the QLearnAgent() and CoLearn() classes for reinforcement learning purposes
 
         Args:
             num_test_runs (int): The number of test runs to perform.
-            simulate_mode (bool): Whether to run in simulation mode.
             exploration_factor (float): The exploration factor for the Q-learning agent.
         """
         self.num_test_runs = num_test_runs
         self.exploration_factor = exploration_factor
-        self.simulate_mode = simulate_mode
         self.phase = 0
         self.state = 0
         self.terminated = False
-        self.prev_phase = 0
         self.episode = 0
-        self.flag = False
         self.home_pos = [-0.7, -0.7, 0.5, 0.0, 0.0, 0.0]
-        self.initialise = True
         self.i = 0
-        self.count = 0
+        self.initialise = True
         self.max_exploration_factor = exploration_factor
+        self.secondary_task_proceed = False
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
+        rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
 
         ns = rospy.get_param('/namespaces')
         self.client = actionlib.SimpleActionClient(ns+'/torque_controller', ControllerAction)
@@ -48,12 +45,14 @@ class RoboticArmControllerNode:
 
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
-        #self.task = secondary_task()
 
+        self.rate = rospy.Rate(10)
 
-    def result_callback(self, msg):
-        # TODO: Figure out how to obtain information once movement is done.
-        rospy.loginfo(msg)
+    def status_callback(self, msg):
+        # Log update the variable that tells the system to proceed when True is received on the secondary task callback
+        rospy.loginfo("Tries: %s, Success: %s", msg.tries, msg.success)
+        self.secondary_task_proceed = msg.success
+
 
     def send_position_command(self, position):
         """
@@ -78,70 +77,87 @@ class RoboticArmControllerNode:
         self.client.send_goal(goal)
         self.client.wait_for_result()
 
-        rospy.sleep(0.1)  # FOR SIMULATION PURPOSE. TODO: THIS NEEDS TO BE REPLACED BY PROPER 'WAIT FOR CONFIRMATION OF GOOD MOVEMENT'!
+        return True
+        
+    def phase_0(self):
+        self.exploration_factor = max(self.exploration_factor * 0.90, 0.1)  # Decay exploration factor
+        action, phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
 
+        rospy.loginfo(f"Episode:{self.episode}, Phase:{phase}, Action:{action}")
+
+        position = self.convert_action_to_position(self.phase, action)
+        _= self.send_position_command(position)
+        self.state = 1
         self.start_episode()
+
+    def phase_1(self):
+        self.exploration_factor = max(self.exploration_factor * 0.90, 0.1)  # Decay exploration factor
+        action, phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
+
+        rospy.loginfo(f"Episode:{self.episode}, Phase:{phase}, Action:{action}")
+        self.episode += 1
+
+        position = self.convert_action_to_position(self.phase, action)
+        _= self.send_position_command(position)
+        self.state = 2
+        self.start_episode()
+
+    def open_hand(self): #TODO: Implement functionality
+        if self.terminated:
+            self.state = 4
+        else:
+            self.state = 3
+        self.start_episode()
+
+    def home_position(self):
+        rospy.loginfo(f"Episode:{self.episode}, Phase:/, Action:home_pos")
+      
+        self.state = 0
+        if self.secondary_task_proceed:
+            _=self.send_position_command(self.home_pos)
+            self.start_episode()
+        else:
+            self.rate.sleep()
+            self.home_position()
+
+    def stop(self):
+        if self.num_test_runs > 0:
+            self.reset()
+        else:
+            return
+        
 
     def start_episode(self):
         """
-        Starts an episode of the robotic arm controller.
-        Contains functionality for simulation mode, triggered by the self.simulation_mode flag and real-time training mode.
-        - In simulation mode an existing q_table is used and the agent just repeats its highest action value.
-        - In real-time training mode the agent uses an existing q_table (trained to incorporate a certain preference) but this time
-        the agent re-trains this q_table to enable co learning
+        Implements the finite state machine of the actions the robot has to take
+        - Start: Initialise the robot by homing it
+        - State 0: Go to the state: 'phase_0'. Perform a step of the q_learning agent and send position command to the robot, go to state 1
+        - State 1: Go to the state: 'phase_1'. Perform a step of the q_learning agent and send position command to the robot, go to state 2
+        - State 2: Open the robotic hand, if simulation continues go to state 3, otherwise go to state 4
+        - State 3: Home the robotic arm, go to state 0
+        - State 4: End simulation, reset state machine
         """
-        if not self.simulate_mode:
-            if (self.phase == 1 and self.flag) or self.initialise == True:
-                self.flag = False
-                self.initialise = False
-                rospy.loginfo(f"Episode:   Action: Home_Pos")
-                self.send_position_command(self.home_pos)
 
-            self.episode += 1
-            self.exploration_factor = max(self.exploration_factor * 0.90, 0.1)  # Decay exploration factor
-            self.action, self.phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
-            position = self.convert_action_to_position(self.phase, self.action)
-           
-
-            rospy.loginfo(f"Episode:{self.episode}, Action:{self.action}")
-
-            if self.phase == 1:
-                self.flag = True
-
-            if not self.terminated:  # Check if episode is not terminated
-                self.send_position_command(position)
-            else:
-                self.reset()
-        else:
-            if self.count <= self.num_test_runs - 1:
-
-                if self.phase == 1 and self.flag:
-                    self.flag = False
-                    rospy.loginfo(f"Episode:   Action: Home_Pos")
-                    self.send_position_command(self.home_pos)
-
-                self.episode += 1
-                self.action = np.argmax(self.rl_agent.q_table[self.state,:,self.phase])
-                position = self.convert_action_to_position(self.phase,self.action)
-                
-                # Manual step operation
-                self.state = self.action
-                self.phase += 1
-                if self.phase >= 2:
-                    self.phase = 0
-
-                rospy.loginfo(f"Episode:{self.episode}, Action:{self.action}")
-
-                if self.phase == 1:
-                    self.flag = True
-
-                self.count += 1
-                self.send_position_command(position)
-            else:
-                self.i = self.num_test_runs + 1 # Hacky way to do this
-                self.run()
-
+        if self.initialise:
+            self.initialise = False
+            self.home_position()
             
+        if self.state == 0:
+            self.phase_0()
+
+        if self.state == 1:
+            self.phase_1()
+
+        if self.state == 2:
+            self.open_hand()
+
+        if self.state == 3:
+            self.home_position()
+
+        if self.state == 4:
+            self.stop()
+
+             
     def convert_action_to_position(self, phase, action):
         # TODO: Find correct values
         positions = {
@@ -154,32 +170,21 @@ class RoboticArmControllerNode:
         }
         return positions.get((phase, action), [0] * 6)
 
-    def run(self):
-        self.i += 1
-        if self.i < self.num_test_runs + 1:
-            rospy.loginfo(f"Starting Run:{self.i}")
-            self.start_episode()
-        else:
-            if not self.simulate_mode:
-                self.rl_agent.save_q_table()
-                rospy.signal_shutdown("Maximum number of test runs reached")
-            else:
-                rospy.signal_shutdown("Maximum number of test runs reached")
-
     def reset(self):
-        self.state, self.phase, self.terminated = self.rl_agent.reset()
+        self.state, self.phase, self.terminated = 0,0,False
+        _,_,_=self.rl_agent.reset()
         self.episode = 0
         self.exploration_factor = self.max_exploration_factor
-        self.run()
-
-
+        self.start_episode()
+            
+        
 if __name__ == '__main__':
     try:
-        num_test_runs = 10  # Specify the number of test runs
-        node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9, simulate_mode=False)
+        num_test_runs = 2  # Specify the number of test runs
+        node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9)
         node.rl_agent.load_q_table('src/q_learning/Q_tables/q_table_solved_100000_1.npy')
         print(f"Q_table for phase 0:\n{node.rl_agent.q_table[:,:,0]}\nQ_table for phase 1:\n{node.rl_agent.q_table[:,:,1]}")
-        node.run()
+        node.reset()
 
     except rospy.ROSInterruptException:
         pass

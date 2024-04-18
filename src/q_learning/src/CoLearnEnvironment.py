@@ -60,7 +60,8 @@ class CoLearn(Env):
         reward = self.obtain_reward()
 
         # Decrease remaining episode length  
-        self.episode_length -= 1
+        if self.phase == 1:
+            self.episode_length -= 1
 
         terminated = self.episode_length <= 0
 

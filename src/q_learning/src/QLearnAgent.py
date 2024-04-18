@@ -84,18 +84,22 @@ class QLearningAgent():
         Lambda = trace_decay
         replacement = replacement
 
+        current_phase = self.phase
+
         # Chose next action
         self.action = self.next_action(epsilon,replacement,self.state,self.phase)
 
         # Perform a step
-        next_state, self.phase, reward, self.terminated, info = self.env.step(self.action) 
+        next_state, next_phase, reward, self.terminated, info = self.env.step(self.action) 
 
         # Apply the update rule to the q_table
-        self.update_Q_table(next_state,reward,gamma,Lambda,alpha,self.action,self.phase,self.state)
+        self.update_Q_table(next_state,reward,gamma,Lambda,alpha,self.action,next_phase,self.state)
 
         self.state = next_state
+        
+        self.phase = next_phase
             
-        return self.action,self.phase,self.terminated
+        return self.action,current_phase,self.terminated
     
     def reset(self):
         self.terminated = False

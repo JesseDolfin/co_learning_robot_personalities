@@ -77,7 +77,7 @@ class secondary_task():
         ##initialize "real-time" clock
         self.FPS = 500   #in Hertz
 
-        self.max_time = 40 # seconds
+        self.max_time = 400 # seconds
 
         ## Define colors to be used to render different tissue layers and haptic
         self.cSkin      = (210,161,140)
@@ -374,6 +374,8 @@ class secondary_task():
         render_bar = False
         rotate_up = False
         rotate_down = False
+        update_status = True
+        update_status2 = True
         while self.run:
             # Initialize that simulation ends as soon as spinal coord is hit. 
             if self.collision_dict['Spinal cord']:
@@ -529,7 +531,7 @@ class secondary_task():
             self.xhold = self.xh
 
             # Calculate force feedback from impedance controller 
-            faulty_force = np.array([np.cos(self.alpha),np.sin(self.alpha)])*40000*np.sin(self.t/5)
+            faulty_force = np.array([np.cos(self.alpha),np.sin(self.alpha)])*40000*np.sin(self.t/3)
             
             self.fe = (self.K @ (self.xm-self.xh) - (2*0.7*np.sqrt(np.abs(self.K)) @ self.dxh)) +faulty_force
             
@@ -750,11 +752,19 @@ class secondary_task():
                         text_surface = self.font.render(f'Fluid left: {presure}ml', True, (0,0,0))
                         self.screenVR.blit(text_surface, (0, 60))
                         self.draw_progress_bar(i)
+                        update_status2 = True
+                        if update_status:
+                            self.send_task_status(True, self.spine_hit_count + self.success_count)
+                            update_status = False
                         
                     else:
                         space_bar_text = self.font_low_time.render(f'Press space bar to start draining the fluid!', True, (20,150,40))
                         self.screenVR.blit(space_bar_text, (0, 60))
                         i = self.max_needle_pressure
+                        update_status = True
+                        if update_status2:
+                            self.send_task_status(False, self.spine_hit_count + self.success_count)
+                            update_status2 = False
 
 
                     
@@ -830,7 +840,7 @@ class secondary_task():
 
             self.previous_cursor = self.cursor 
 
-            self.send_task_status(True if i<=0 else False, self.spine_hit_count + self.success_count)
+            
 
             #Slow down the loop to match FPS
             self.clock.tick(self.FPS)
@@ -840,6 +850,7 @@ class secondary_task():
                 self.run = False
                 self.spine_hit_count += 1
                 time.sleep(0.5)
+                self.send_task_status(False, self.spine_hit_count + self.success_count)
                 self.end_screen()
                 
            
@@ -847,12 +858,14 @@ class secondary_task():
                 self.run = False
                 time.sleep(0.5)
                 self.time_up = True
+                self.send_task_status(False, self.spine_hit_count + self.success_count)
                 self.end_screen()
 
             if i<=0:
                 self.run = False
                 self.success_count += 1
                 time.sleep(0.5)
+                self.send_task_status(False, self.spine_hit_count + self.success_count)
                 self.end_screen()
                 
 
