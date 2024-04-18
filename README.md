@@ -8,7 +8,6 @@
 *** Thanks again! Now go create something AMAZING! :D
 -->
 
-qb hand and secondary task sub repos did not clone
 
 
 <!-- PROJECT SHIELDS -->
