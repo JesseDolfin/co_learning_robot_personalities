@@ -120,26 +120,22 @@ Please follow the installation instructions from iiwa_ros before installing this
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+After installing the repository navigate to src/launch and run roslaunch to launch the gazebo simulation.
+```sh
+cd src
+roslaunch launch/co_learning_test_setup.launch
+```
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+Then you can start the control node and the secondary task node:
+```sh
+python ControlNode.py
+python Secondary_task/src/secondary_task.py
+```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-<!-- ROADMAP -->
-## Roadmap
-
-- [ ] Feature 1
-- [ ] Feature 2
-- [ ] Feature 3
-    - [ ] Nested Feature
-
-See the [open issues](https://github.com/JesseDolfin/Co-Learning-KUKA-RL/issues) for a full list of proposed features (and known issues).
+_For more examples, please refer to the [Documentation](https://google.com)_
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 <!-- CONTRIBUTING -->
