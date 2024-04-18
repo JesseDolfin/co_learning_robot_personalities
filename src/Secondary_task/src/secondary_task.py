@@ -21,9 +21,12 @@ from co_learning_messages.msg import secondary_task_message
 
 class secondary_task():
     def __init__(self):
+
         
-        pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
+        
+        self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
         rospy.init_node("secondary_task")
+        #self.rate = rospy.rate(50) #Hz
         
 
         self.SimpleActuatorMech = Mechanisms
@@ -277,6 +280,12 @@ class secondary_task():
         self.max_needle_pressure = 5000
 
         self.run_simulation()
+    
+    def send_task_status(self,success,tries):
+        message = secondary_task_message()
+        message.success = success
+        message.tries = tries
+        self.pub.publish(message)
 
     def start_screen(self):
         self.run = True
@@ -732,7 +741,6 @@ class secondary_task():
             pygame.draw.line(self.screenVR, self.cBlack, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]-np.sin(-self.alpha)*25, self.haptic.center[1]- np.cos(-self.alpha)*25), 2 )
             
             
-            pause_clock = False
             if self.haptic_feedback:
                 # Indicate drop in needle pressure
                 if self.collision_dict['Cerebrospinal fluid one'] and self.i > 350 and self.visual_feedback:
@@ -742,7 +750,7 @@ class secondary_task():
                         text_surface = self.font.render(f'Fluid left: {presure}ml', True, (0,0,0))
                         self.screenVR.blit(text_surface, (0, 60))
                         self.draw_progress_bar(i)
-                        pause_clock = True
+                        
                     else:
                         space_bar_text = self.font_low_time.render(f'Press space bar to start draining the fluid!', True, (20,150,40))
                         self.screenVR.blit(space_bar_text, (0, 60))
@@ -821,6 +829,8 @@ class secondary_task():
             pygame.display.flip()  
 
             self.previous_cursor = self.cursor 
+
+            self.send_task_status(True if i<=0 else False, self.spine_hit_count + self.success_count)
 
             #Slow down the loop to match FPS
             self.clock.tick(self.FPS)
@@ -936,35 +946,8 @@ class secondary_task():
                 self.screenHaptics.blit(completion_text,(20,120))
                 self.screenHaptics.blit(completion_text_2,(20,140))
 
-                
-                
-       
-                
-
-            # Update the game state
             pygame.display.update()
 
-
-            # if not proceed:
-            #     # Create text to be displayed
-            #     text_image   = pygame.image.load(self.intro_1)
-                
-            #     intro_image  = pygame.image.load(self.intro_img).convert_alpha()
-            #     intro_image  = pygame.transform.scale(intro_image,(600,300))
-            #     self.screenHaptics.blit(text_image,(0,0)) 
-            #     self.screenVR.blit(intro_image,(0,0)) 
-
-                
-            # elif proceed:
-            #     text_image   = pygame.image.load(self.intro_2)
-                
-            #     intro_image  = pygame.image.load(self.intro_img).convert_alpha()
-            #     intro_image  = pygame.transform.scale(intro_image,(600,300))
-            #     self.screenHaptics.blit(text_image,(0,0)) 
-            #     self.screenVR.blit(intro_image,(0,0)) 
-            #     run = False
-
-            #pygame.display.flip()  
 
     def save_stats(self):
 
