@@ -1,8 +1,0 @@
-prefix=/home/jesse/Thesis/code_jesse/qb_hand/devel
-
-Name: qb_hand_control
-Description: Description of qb_hand_control
-Version: 3.0.3
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

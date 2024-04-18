@@ -1,8 +1,0 @@
-prefix=/home/jesse/Thesis/code_jesse/qb_hand/devel
-
-Name: qb_device_srvs
-Description: Description of qb_device_srvs
-Version: 3.0.6
-Cflags: -I/home/jesse/Thesis/code_jesse/qb_hand/devel/include -I/home/jesse/Thesis/code_jesse/qb_hand/src/qbdevice-ros/qb_device_srvs/include
-Libs: -L${prefix}/lib 
-Requires: std_srvs qb_device_msgs message_runtime

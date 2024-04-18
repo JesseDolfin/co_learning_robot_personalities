@@ -1,8 +1,0 @@
-prefix=/home/jesse/Thesis/code_jesse/qb_hand/devel
-
-Name: qb_device_msgs
-Description: Description of qb_device_msgs
-Version: 3.0.6
-Cflags: -I/home/jesse/Thesis/code_jesse/qb_hand/devel/include -I/home/jesse/Thesis/code_jesse/qb_hand/src/qbdevice-ros/qb_device_msgs/include
-Libs: -L${prefix}/lib 
-Requires: std_msgs message_runtime
