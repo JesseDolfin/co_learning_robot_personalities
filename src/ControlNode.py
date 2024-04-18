@@ -46,7 +46,7 @@ class RoboticArmControllerNode:
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
 
-        self.rate = rospy.Rate(10)
+        self.rate = rospy.Rate(2)
 
     def status_callback(self, msg):
         # Log update the variable that tells the system to proceed when True is received on the secondary task callback
@@ -182,7 +182,7 @@ if __name__ == '__main__':
     try:
         num_test_runs = 2  # Specify the number of test runs
         node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9)
-        node.rl_agent.load_q_table('src/q_learning/Q_tables/q_table_solved_100000_1.npy')
+        node.rl_agent.load_q_table('co_learning_robot_personalities/src/q_learning/Q_tables/q_table_solved_100000_1.npy')
         print(f"Q_table for phase 0:\n{node.rl_agent.q_table[:,:,0]}\nQ_table for phase 1:\n{node.rl_agent.q_table[:,:,1]}")
         node.reset()
 
