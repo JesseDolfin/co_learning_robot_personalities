@@ -80,7 +80,6 @@ class RoboticArmControllerNode:
         return True
         
     def phase_0(self):
-        self.exploration_factor = max(self.exploration_factor * 0.90, 0.1)  # Decay exploration factor
         action, phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
 
         rospy.loginfo(f"Episode:{self.episode}, Phase:{phase}, Action:{action}")
@@ -181,8 +180,10 @@ class RoboticArmControllerNode:
 if __name__ == '__main__':
     try:
         num_test_runs = 2  # Specify the number of test runs
+        persistance_factor = 0.5
         node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9)
         node.rl_agent.load_q_table('co_learning_robot_personalities/src/q_learning/Q_tables/q_table_solved_100000_1.npy')
+        node.rl_agent.q_table*persistance_factor
         print(f"Q_table for phase 0:\n{node.rl_agent.q_table[:,:,0]}\nQ_table for phase 1:\n{node.rl_agent.q_table[:,:,1]}")
         node.reset()
 

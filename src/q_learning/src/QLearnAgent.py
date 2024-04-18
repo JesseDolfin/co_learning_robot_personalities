@@ -73,7 +73,7 @@ class QLearningAgent():
         
         #print("Training finished.\n")
   
-    def train_real_time(self,learning_rate=0.1,discount_factor=0.6,exploration_factor=0.8,trace_decay = 0.9,replacement = True):
+    def train_real_time(self,learning_rate=0.8,discount_factor=0.6,exploration_factor=0.8,trace_decay = 0.6,replacement = True):
         """
         Unravels the training loop and saves the phase, action, state, and terminated values. 
         """
