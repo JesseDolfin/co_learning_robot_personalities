@@ -1,8 +1,0 @@
-# CMake generated Testfile for 
-# Source directory: /home/jesse/Thesis/code_jesse/qb_hand/src/qbdevice-ros/qb_device_hardware_interface
-# Build directory: /home/jesse/Thesis/code_jesse/qb_hand/build/qbdevice-ros/qb_device_hardware_interface
-# 
-# This file includes the relevant testing commands required for 
-# testing this directory and lists subdirectories to be tested as well.
-add_test(_ctest_qb_device_hardware_interface_gtest_qb_device_hardware_interface_unit_tests "/home/jesse/Thesis/code_jesse/qb_hand/build/catkin_generated/env_cached.sh" "/usr/bin/python3" "/opt/ros/noetic/share/catkin/cmake/test/run_tests.py" "/home/jesse/Thesis/code_jesse/qb_hand/build/test_results/qb_device_hardware_interface/gtest-qb_device_hardware_interface_unit_tests.xml" "--return-code" "/home/jesse/Thesis/code_jesse/qb_hand/devel/lib/qb_device_hardware_interface/qb_device_hardware_interface_unit_tests --gtest_output=xml:/home/jesse/Thesis/code_jesse/qb_hand/build/test_results/qb_device_hardware_interface/gtest-qb_device_hardware_interface_unit_tests.xml")
-set_tests_properties(_ctest_qb_device_hardware_interface_gtest_qb_device_hardware_interface_unit_tests PROPERTIES  _BACKTRACE_TRIPLES "/opt/ros/noetic/share/catkin/cmake/test/tests.cmake;160;add_test;/opt/ros/noetic/share/catkin/cmake/test/gtest.cmake;98;catkin_run_tests_target;/opt/ros/noetic/share/catkin/cmake/test/gtest.cmake;37;_catkin_add_google_test;/home/jesse/Thesis/code_jesse/qb_hand/src/qbdevice-ros/qb_device_hardware_interface/CMakeLists.txt;100;catkin_add_gtest;/home/jesse/Thesis/code_jesse/qb_hand/src/qbdevice-ros/qb_device_hardware_interface/CMakeLists.txt;0;")

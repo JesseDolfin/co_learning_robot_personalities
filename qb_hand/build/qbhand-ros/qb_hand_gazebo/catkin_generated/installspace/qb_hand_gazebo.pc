@@ -1,8 +1,0 @@
-prefix=/home/jesse/Thesis/code_jesse/qb_hand/install
-
-Name: qb_hand_gazebo
-Description: Description of qb_hand_gazebo
-Version: 3.0.3
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib -lqb_hand_gazebo_plugin -lqb_hand_gazebo_hardware_interface
-Requires: roscpp controller_manager gazebo_ros_control qb_device_gazebo qb_device_hardware_interface

@@ -1,8 +1,0 @@
-prefix=/home/jesse/Thesis/code_jesse/qb_hand/install
-
-Name: qb_device_gazebo
-Description: Description of qb_device_gazebo
-Version: 3.0.6
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib -lcombined_robot_hw_sim
-Requires: roscpp controller_manager gazebo_ros_control

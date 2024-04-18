@@ -1,8 +1,0 @@
-prefix=/home/jesse/Thesis/code_jesse/qb_hand/install
-
-Name: qb_device_utils
-Description: Description of qb_device_utils
-Version: 3.0.6
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib 
-Requires: roscpp

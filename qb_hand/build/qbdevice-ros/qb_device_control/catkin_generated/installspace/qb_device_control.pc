@@ -1,8 +1,0 @@
-prefix=/home/jesse/Thesis/code_jesse/qb_hand/install
-
-Name: qb_device_control
-Description: Description of qb_device_control
-Version: 3.0.6
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib -lqb_device_control
-Requires: roscpp actionlib combined_robot_hw control_msgs controller_manager qb_device_hardware_interface qb_device_utils

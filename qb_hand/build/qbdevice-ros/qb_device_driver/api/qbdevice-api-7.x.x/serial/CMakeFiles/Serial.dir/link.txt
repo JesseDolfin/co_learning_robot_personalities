@@ -1,2 +1,0 @@
-/usr/bin/ar qc /home/jesse/Thesis/code_jesse/qb_hand/devel/lib/libSerial.a  CMakeFiles/Serial.dir/src/serial.cpp.o CMakeFiles/Serial.dir/src/impl/impl_unix.cpp.o CMakeFiles/Serial.dir/src/impl/list_ports/list_ports_linux.cpp.o
-/usr/bin/ranlib /home/jesse/Thesis/code_jesse/qb_hand/devel/lib/libSerial.a
