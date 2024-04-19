@@ -18,14 +18,16 @@ import sys
 import time
 import rospy
 from co_learning_messages.msg import secondary_task_message
+import rosgraph
 
 class secondary_task():
     def __init__(self):
 
+        self.ros_running = rosgraph.is_master_online()
         
-        
-        self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
-        rospy.init_node("secondary_task")
+        if self.ros_running:
+            self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
+            rospy.init_node("secondary_task")
         #self.rate = rospy.rate(50) #Hz
         
 
@@ -282,10 +284,13 @@ class secondary_task():
         self.run_simulation()
     
     def send_task_status(self,success,tries):
-        message = secondary_task_message()
-        message.success = success
-        message.tries = tries
-        self.pub.publish(message)
+        if self.ros_running:
+            message = secondary_task_message()
+            message.success = success
+            message.tries = tries
+            self.pub.publish(message)
+        else:
+            return
 
     def start_screen(self):
         self.run = True

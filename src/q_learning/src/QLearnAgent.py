@@ -4,6 +4,7 @@ import random
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
+import rosgraph
 import rospy
 
 from CoLearnEnvironment import CoLearn
@@ -24,11 +25,14 @@ class QLearningAgent():
             env:            Specifies the environment the agent operates on
             phases:         Phases are used to reduce the size of the Q-table, see CoLearn() for more information
         """
-
-        try:
-            rospy.init_node('Q_agent', anonymous=True)
-        except:
-            rospy.logwarn("Cannot initialize node 'Q_agent' as it has already been initialized at the top level as a ROS node.")
+        self.ros_running = rosgraph.is_master_online()
+        if self.ros_running:
+            try:
+                rospy.init_node('Q_agent', anonymous=True)
+            except:
+                rospy.logwarn("Cannot initialize node 'Q_agent' as it has already been initialized at the top level as a ROS node.")
+        else:
+            print("ROS is offline!")
 
 
 
@@ -52,7 +56,7 @@ class QLearningAgent():
         
         terminated = True
 
-        for _ in range(1, n_steps+1):
+        for _ in tqdm(range(1, n_steps+1)):
             state, phase = self.env.reset()
         
             reward = 0
@@ -166,7 +170,7 @@ class QLearningAgent():
         avg_reward = avg_reward/episodes
         rospy.loginfo(f"average reward over {episodes} episodes is: {avg_reward}")
    
-    def save_q_table(self, directory="Co-Learning-KUKA-RL/Q_tables", prefix="q_table_"):
+    def save_q_table(self, directory="co_learning_robot_personalities/src/q_learning/Q_tables", prefix="q_table_"):
         # Create the directory if it doesn't exist
         os.makedirs(directory, exist_ok=True)
 
@@ -182,10 +186,13 @@ class QLearningAgent():
         with open(filepath, "wb") as file:
             np.save(file, self.q_table)
 
-        rospy.loginfo(f"Saved Q-table as: {filepath}")
+        if self.ros_running:
+            rospy.loginfo(f"Saved Q-table as: {filepath}")
+        else:
+            print(f"Saved Q-table as: {filepath}")
         
         
-    def load_q_table(self,directory="Co-Learning-KUKA-RL/Q_tables/q_table_1"):
+    def load_q_table(self,directory="co_learning_robot_personalities/src/q_learning/Q_tables/q_table_solved_1000000_1"):
         try:
             self.q_table = np.load(directory)
             rospy.loginfo(f"Q_table loaded from directory: {directory}")
