@@ -30,7 +30,7 @@ class secondary_task():
             rospy.init_node("secondary_task")
         #self.rate = rospy.rate(50) #Hz
         
-
+        self.other_needle_forces = False
         self.SimpleActuatorMech = Mechanisms
         self.pantograph = Pantograph
         self.robot = PShape
@@ -79,7 +79,7 @@ class secondary_task():
         ##initialize "real-time" clock
         self.FPS = 500   #in Hertz
 
-        self.max_time = 400 # seconds
+        self.max_time = 20 # seconds
 
         ## Define colors to be used to render different tissue layers and haptic
         self.cSkin      = (210,161,140)
@@ -267,6 +267,7 @@ class secondary_task():
         self.vert_rect4 = [self.wall_layer3[0],2.3*self.vertebrae_rect[3]+wall_size_factor8*self.simulation_space[1][2]]
         self.vert_rect5 = [self.wall_layer3[0],3.3*self.vertebrae_rect[3]+wall_size_factor8*self.simulation_space[1][2]]
         self.vert_rect6 = [self.wall_layer3[0],4.3*self.vertebrae_rect[3]+wall_size_factor8*self.simulation_space[1][2]]
+        self.vert_rects = [self.vert_rect1,self.vert_rect2,self.vert_rect3,self.vert_rect4,self.vert_rect5,self.vert_rect6]
 
         self.window_scale = 3
 
@@ -280,6 +281,15 @@ class secondary_task():
         self.run = True
 
         self.max_needle_pressure = 5000
+
+        self.task_failed = False
+
+        self.fluid = self.max_needle_pressure
+        self.render_bar = False
+        self.rotate_up = False
+        self.rotate_down = False           
+        self.update_status = True
+        self.start_handover = False
 
         self.run_simulation()
     
@@ -315,6 +325,7 @@ class secondary_task():
             self.window.blit(self.screenVR, (900,0))
 
             self.screenHaptics.fill(self.cWhite)
+            
 
             for event in pygame.event.get(): # interrupt function
                 if event.type == pygame.KEYUP:
@@ -374,71 +385,75 @@ class secondary_task():
         pygame.draw.rect(self.screenVR,self.cGreen,bar)
         self.screenVR.blit(self.syringe_img,(70,80))
 
-    def run_simulation(self):
-        i = self.max_needle_pressure
-        render_bar = False
-        rotate_up = False
-        rotate_down = False
-        update_status = True
-        update_status2 = True
-        while self.run:
-            # Initialize that simulation ends as soon as spinal coord is hit. 
-            if self.collision_dict['Spinal cord']:
-                time.sleep(1.5)
-                self.run = False
+    def check_collision_with_vertebrae(self,haptic_endpoint):
+        # Create endpoint mask for collision detection between endpoint and drawn vertebrae
+        haptic_endpoint_mask = pygame.mask.Mask((haptic_endpoint.width, haptic_endpoint.height))
+        haptic_endpoint_mask.fill()
 
+        # Compute offset between haptic endpoint and every vertebrae mask
+        offsets = [(rect[0] - haptic_endpoint[0], rect[1] - haptic_endpoint[1]) for rect in self.vert_rects]
+
+        # Check collision for every vertebrae and endpoint
+        collisions = [haptic_endpoint_mask.overlap(self.vertebrae_mask, offset) for offset in offsets]
+
+        # Check if any of the drawn vertebrae are in collision with the needle tip
+        return any(collisions)
+    
+    def process_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.run = False
+            elif event.type == pygame.KEYUP:
+                if event.key == ord('m'):
+                    pygame.mouse.set_visible(not pygame.mouse.get_visible())
+                elif event.key == ord('q'):
+                    self.run = False
+                    pygame.display.quit()
+                    pygame.quit()
+                elif event.key == ord('r'):
+                    self.rotate_up = False
+                elif event.key == ord('e'):
+                    self.rotate_down = False
+                elif event.key == ord('v'):
+                    self.toggle_visual = not self.toggle_visual
+                elif event.key == ord('h'):
+                    self.haptic_feedback = not self.haptic_feedback
+                elif event.key == ord('p'):
+                    self.proceed = not self.proceed
+                elif event.key == ord('d'):
+                    self.debugToggle = not self.debugToggle
+                elif event.key == ord('o'):
+                    self.visual_feedback = not self.visual_feedback
+                elif event.key == ord(' '):
+                    self.render_bar = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == ord(' '):
+                    self.render_bar = True
+                elif event.key == ord('r'):
+                    self.rotate_up = True
+                elif event.key == ord('e'):
+                    self.rotate_down = True
+
+        
+
+    def run_simulation(self):
+        # Initialises some variables
+        
+
+        while self.run:
             # Set some booleans
             self.penetration    = True
             self.collision_bone = False
             self.collision_any  = False
          
-
-            ########################################  Process events  (Mouse, Keyboard etc...) ########################################
-            for event in pygame.event.get():
-                ##If the window is close then quit 
-                if event.type == pygame.QUIT:
-                    self.run = False
-                elif event.type == pygame.KEYUP:
-                    if event.key == ord('m'):   ##Change the visibility of the mouse
-                        pygame.mouse.set_visible(not pygame.mouse.get_visible())  
-                    if event.key == ord('q'):   ##Force to quit
-                        self.run = False   
-                        pygame.display.quit()
-                        pygame.quit()       
-                    if event.key ==ord('r'):
-                        rotate_up = False
-                    if event.key ==ord('e'):
-                        rotate_down = False
-
-                    # Toggle between layers displayed or not
-                    if event.key == ord('v'):
-                        self.toggle_visual = not self.toggle_visual
-                    
-                    if event.key == ord('h'):
-                        self.haptic_feedback = not self.haptic_feedback
-                    if event.key == ord('p'):
-                        self.proceed = not self.proceed
-                    if event.key == ord('d'):
-                        self.debugToggle = not self.debugToggle
-                    if event.key == ord('o'):
-                        self.visual_feedback = not self.visual_feedback
-                    if event.key == ord(' '):
-                        render_bar = False
-                    
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == ord(' '):
-                        render_bar = True
-                    if event.key ==ord('r'):
-                        rotate_up = True
-                    if event.key ==ord('e'):
-                        rotate_down = True
+            # Keyboard events
+            self.process_events()
                 
-            if rotate_up:
+            if self.rotate_up:
                 self.alpha += np.deg2rad(0.1)
-            if rotate_down:
+            if self.rotate_down:
                 self.alpha -= np.deg2rad(0.1)
               
-
             self.xh = np.array(self.haptic.center)
             
             ## Apply low pass filter to mouse position
@@ -448,44 +463,23 @@ class secondary_task():
 
             else:
                 self.cursor = pygame.mouse.get_pos()
+
             self.xm = np.array(self.cursor) 
             
-            ######################################## COMPUTE COLLISIONS WITH ANY TISSUE ########################################
-
+            ######################################## COMPUTE COLLISIONS WITH ANY TISSUE #######################################
             # Define haptic center and endpoint of our haptic (needle tip)
             self.haptic_endpoint = pygame.Rect(self.haptic.center[0]+np.cos(self.alpha)*250,self.haptic.center[1]+np.sin(self.alpha)*250, 1, 1)
             
-            # Create endpoint masks for collision detection between endpoint and drawn vertebrae (odd shape so cannot be rendered using rectangles)
-            self.haptic_endpoint_mask = pygame.mask.Mask((self.haptic_endpoint.width, self.haptic_endpoint.height))
-            self.haptic_endpoint_mask.fill()
-
-            # Compute offset between haptic endpoint and every vertebrae mask
-            xoffset1 = self.vert_rect1[0] - self.haptic_endpoint[0]
-            yoffset1 = self.vert_rect1[1] - self.haptic_endpoint[1]
-            xoffset2 = self.vert_rect2[0] - self.haptic_endpoint[0]
-            yoffset2 = self.vert_rect2[1] - self.haptic_endpoint[1]
-            xoffset3 = self.vert_rect3[0] - self.haptic_endpoint[0]
-            yoffset3 = self.vert_rect3[1] - self.haptic_endpoint[1]
-            xoffset4 = self.vert_rect4[0] - self.haptic_endpoint[0]
-            yoffset4 = self.vert_rect4[1] - self.haptic_endpoint[1]
-            xoffset5 = self.vert_rect5[0] - self.haptic_endpoint[0]
-            yoffset5 = self.vert_rect5[1] - self.haptic_endpoint[1]
-
-            # Check collision for every vertebrae and endpoint
-            vert1_collision = self.haptic_endpoint_mask.overlap(self.vertebrae_mask, (xoffset1, yoffset1))
-            vert2_collision = self.haptic_endpoint_mask.overlap(self.vertebrae_mask, (xoffset2, yoffset2))
-            vert3_collision = self.haptic_endpoint_mask.overlap(self.vertebrae_mask, (xoffset3, yoffset3))
-            vert4_collision = self.haptic_endpoint_mask.overlap(self.vertebrae_mask, (xoffset4, yoffset4))
-            vert5_collision = self.haptic_endpoint_mask.overlap(self.vertebrae_mask, (xoffset5, yoffset5))
             
-            # Check if any of the drawn vertebrae are in collision with the needle tip, if so flip boolean to limit needle movement later in pipeline
-            if vert1_collision or vert2_collision or vert3_collision or vert4_collision or vert5_collision:
-                self.collision_bone = True
+
 
             # Initialize zero endpoint force and reference position based on cursor or Haply
             self.fe = np.zeros(2)
             self.reference_pos  = self.cursor
-            
+
+
+            self.collision_bone = self.check_collision_with_vertebrae(self.haptic_endpoint)
+
             # Update the collision dict to all False to reset collision dict 
             self.collision_dict.update((value, False) for value in self.collision_dict)
             self.collision_flag = False
@@ -500,6 +494,8 @@ class secondary_task():
                     self.collision_dict.update({value: True})
                 
             ######################################## UPDATE ENVIRONMENT PARAMETERS BASED ON COLLISIONS ########################################
+
+        
 
             # Loop over all the rectangular objects and check for collision, note that we exclude the vertebrae from the loop
             # The reason being that these are modelled infinitely stiff so they don't need damping etc.
@@ -535,9 +531,12 @@ class secondary_task():
             self.endpoint_velocity = (self.xhold - self.xh)/self.FPS
             self.xhold = self.xh
 
-            # Calculate force feedback from impedance controller 
-            faulty_force = np.array([np.cos(self.alpha),np.sin(self.alpha)])*40000*np.sin(self.t/3)
+            # Implements a sine wave parallel to the needle
+            needle_direction = [np.cos(self.alpha),np.sin(self.alpha)]
+            needle_perp_direction = np.array([needle_direction[1],-needle_direction[0]])
+            faulty_force = 0#np.array(needle_direction)*40000*np.sin(self.t/5)
             
+            # Calculate force feedback from impedance controller 
             self.fe = (self.K @ (self.xm-self.xh) - (2*0.7*np.sqrt(np.abs(self.K)) @ self.dxh)) +faulty_force
             
             # Fix the proxy position of needle contact point with skin and update only when no contact is made with any tissue (so when needle is retracted)
@@ -557,8 +556,9 @@ class secondary_task():
             if any(value == True for value in self.collision_dict.values()):
                 
                 # Compute the perpendicular distance to a line (works both for horizontal and diagonal needle path)
-                distance_from_line = (self.a*(self.xm[0]+np.cos(self.alpha)*250)-1*(self.xm[1]+ np.sin(self.alpha)*250) +self.b)/np.sqrt(self.a**2+(-1)**2)
+                distance_from_line = (self.a*(self.xm[0]-np.cos(self.alpha)*250)-1*(self.xm[1]- np.sin(self.alpha)*250) +self.b)/np.sqrt(self.a**2+(-1)**2)
                 self.record_deviation_y.append(distance_from_line)
+
 
                 # Set tissue stiffness matrix depending on tissue stiffness (assumed equal for all tissues), normal force acting on needle
                 # depends on how far reference pos for needle is from projected needle path. 
@@ -622,6 +622,13 @@ class secondary_task():
             
                 # Update velocity to accomodate damping
                 self.dxh += self.ddxh*self.dt -self.fd
+
+                #dx_perp = np.dot(needle_perp_direction,self.dxh)
+     
+
+                #self.dxh[0] = self.dxh[0] - dx_perp*np.sin(self.alpha)
+                #self.dxh[1] = self.dxh[1] - dx_perp*np.cos(self.alpha)
+
 
                 # In case collision occurs with vertebrae simulate an infinitely stiff bone
                 if self.collision_bone and self.away_from_bone:
@@ -690,158 +697,10 @@ class secondary_task():
         
             self.haptic.center = self.xh 
 
-            ######################################## Graphical output ########################################
-            ##Render the haptic surface
-            self.screenHaptics.fill(self.cWhite)
-            
-            ##Change color based on effort
-            colorMaster = (255,\
-                255-np.clip(np.linalg.norm(np.abs(self.K_TISSUE)*(self.xm-self.xh)/self.window_scale)*15,0,255),\
-                255-np.clip(np.linalg.norm(np.abs(self.K_TISSUE)*(self.xm-self.xh)/self.window_scale)*15,0,255)) #if collide else (255, 255, 255)
-            
-            pygame.draw.line(self.screenHaptics, (0, 0, 0), (self.haptic.center),(self.haptic.center+2*self.K_TISSUE*(self.xm-self.xh)))
-            pygame.draw.rect(self.screenHaptics, colorMaster, self.haptic,border_radius=4)
-            
-            
-            ######################################## Robot visualization ########################################
-            # update individual link position
-            if self.robotToggle:
-                self.robot.createPantograph(self.screenHaptics,self.xh)
-                
-            ##Render the VR surface
-            self.screenVR.fill(self.cWhite)
-        
-            ### Visualize all components of the simulation
-
-            # Draw all the vertical tissue layers
-            pygame.draw.rect(self.screenVR,self.cSkin,self.wall_layer1, border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cFat,self.wall_layer2,  border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cLig_one,self.wall_layer3, border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cLig_two,self.wall_layer4,border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cLig_three,self.wall_layer5,border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cFluid,self.wall_layer6,border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cSpinal,self.wall_layer7,border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cFluid,self.wall_layer8,border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cLig_one,self.wall_layer9, border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cLig_two,self.wall_layer10, border_radius = 2)
-            pygame.draw.rect(self.screenVR,self.cLig_one,self.wall_layer11, border_radius = 2)
-            
-            # Draw all the vertebrae
-            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer12, border_radius = 4)
-            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer13, border_radius = 4)
-            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer14, border_radius = 4)
-            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer15, border_radius = 4)
-            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer16, border_radius = 4)
-            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer17, border_radius = 4)
-
-            # Draw all the vertebrae     
-            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect1[0],self.vert_rect1[1]))
-            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect2[0],self.vert_rect2[1]))
-            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect3[0],self.vert_rect3[1]))
-            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect4[0],self.vert_rect4[1]))
-            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect5[0],self.vert_rect5[1]))  
-            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect6[0],self.vert_rect6[1]))
-            
-            # Draw needle 
-            pygame.draw.line(self.screenVR, self.cBlack, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]+np.cos(self.alpha)*250, self.haptic.center[1]+ np.sin(self.alpha)*250), 2 )
-            pygame.draw.line(self.screenVR, self.cBlack, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]+np.sin(-self.alpha)*25, self.haptic.center[1]+ np.cos(-self.alpha)*25), 2 )
-            pygame.draw.line(self.screenVR, self.cBlack, (self.haptic.center[0],self.haptic.center[1]), (self.haptic.center[0]-np.sin(-self.alpha)*25, self.haptic.center[1]- np.cos(-self.alpha)*25), 2 )
-            
-            
-            if self.haptic_feedback:
-                # Indicate drop in needle pressure
-                if self.collision_dict['Cerebrospinal fluid one'] and self.i > 350 and self.visual_feedback:
-                    if render_bar:
-                        i -= 1
-                        presure = round(i/100,2)
-                        text_surface = self.font.render(f'Fluid left: {presure}ml', True, (0,0,0))
-                        self.screenVR.blit(text_surface, (0, 60))
-                        self.draw_progress_bar(i)
-                        update_status2 = True
-                        if update_status:
-                            self.send_task_status(True, self.spine_hit_count + self.success_count)
-                            update_status = False
-                        
-                    else:
-                        space_bar_text = self.font_low_time.render(f'Press space bar to start draining the fluid!', True, (20,150,40))
-                        self.screenVR.blit(space_bar_text, (0, 60))
-                        i = self.max_needle_pressure
-                        update_status = True
-                        if update_status2:
-                            self.send_task_status(False, self.spine_hit_count + self.success_count)
-                            update_status2 = False
-
-
-                    
-
-
-            #toggle a mask over the spine
-            if self.toggle_visual:
-                pygame.draw.rect(self.screenVR,self.cSkin,(self.simulation_space[0][0],0,self.simulation_space[0][1],self.simulation_space[1][1]), border_radius = 0)
-
-            if self.i < 350:
-                # # Draw all the vertebrae
-                pygame.draw.rect(self.screenVR,self.cWhite,(self.simulation_space[0][0],0,self.simulation_space[0][1],self.simulation_space[1][1]), border_radius = 0)
-
-                pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer12, border_radius = 4)
-                pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer13, border_radius = 4)
-                pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer14, border_radius = 4)
-                pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer15, border_radius = 4)
-                pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer16, border_radius = 4)
-                pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer17, border_radius = 4)
-
-                # Draw all the vertebrae
-                self.screenVR.blit(self.vertebrae_layer,(self.vert_rect1[0],self.vert_rect1[1])) 
-                self.screenVR.blit(self.vertebrae_layer,(self.vert_rect2[0],self.vert_rect2[1]))
-                self.screenVR.blit(self.vertebrae_layer,(self.vert_rect3[0],self.vert_rect3[1]))
-                self.screenVR.blit(self.vertebrae_layer,(self.vert_rect4[0],self.vert_rect4[1]))
-                self.screenVR.blit(self.vertebrae_layer,(self.vert_rect5[0],self.vert_rect5[1]))  
-                self.screenVR.blit(self.vertebrae_layer,(self.vert_rect6[0],self.vert_rect6[1]))
-            
-            # Visualize toggles on display
-            text_surface1 = self.font.render("Press 'e' to rotate needle up", True, (0, 0, 0),(255, 255, 255))
-            text_surface2 = self.font.render("Press 'r' to rotate needle down", True,(0, 0, 0), (255, 255, 255))
-            text_surface3 = self.font.render("Press 'v' to hide epidural space", True, (0, 0, 0), (255, 255, 255))
-
-
-            time_elpased =  time.time() - self.time_start
-            time_left = self.max_time - time_elpased 
-
-            if time_left <= 10:
-                text_time = self.font_low_time.render(f"Time left for procedure: {time_left:.2f}s",True,(255,0,0))
-                self.screenVR.blit(text_time,(0,378))
-            else:
-                text_time = self.font.render(f"Time left for procedure: {time_left:.2f}s",True,(0,0,0)) # Display the time left to complete the simulation
-                self.screenVR.blit(text_time,(0,380))
            
-            self.screenVR.blit(text_surface1, (0, 0))
-            self.screenVR.blit(text_surface2, (0, 20))
-            #self.screenVR.blit(text_surface3, (0, 40))
-
-            ##Fuse it back together
-            self.window.blit(self.screenHaptics, (0,0))
-            self.window.blit(self.screenBlank,(800,0))
-            self.window.blit(self.screenVR, (900,0))
-
-            ##Print status in  overlay
-            if self.debugToggle: 
-                
-                text = self.font.render("FPS = " + str(round(self.clock.get_fps())) + \
-                                    "  xm = " + str(np.round(10*self.xm)/20000) +\
-                                    "  xh = " + str(np.round(10*self.xh)/20000) +\
-                                    "  fe = " + str(np.round(10*self.fe)/20000) \
-                                    , True, (0, 0, 0), (255, 255, 255))
-                self.window.blit(text, self.textRect)
-            self.force_time.append(self.fe[0])
-
-            if self.haptic_feedback and self.visual_feedback:
-                if self.collision_dict['Spinal cord']:
-                    self.spinal_coord_collision_hit = True
-                    GB = min(255, max(0, round(255 * 0.5)))
-                    self.window.fill((255, GB, GB), special_flags = pygame.BLEND_MULT)
-
+            self.render_screen()
             
-            pygame.display.flip()  
+       
 
             self.previous_cursor = self.cursor 
 
@@ -851,7 +710,7 @@ class secondary_task():
             self.clock.tick(self.FPS)
 
 
-            if self.spinal_coord_collision:
+            if self.spinal_coord_collision or self.task_failed:
                 self.run = False
                 self.spine_hit_count += 1
                 time.sleep(0.5)
@@ -859,20 +718,188 @@ class secondary_task():
                 self.end_screen()
                 
            
-            if time_left<=0:
+            if self.time_left<=0:
                 self.run = False
                 time.sleep(0.5)
                 self.time_up = True
                 self.send_task_status(False, self.spine_hit_count + self.success_count)
                 self.end_screen()
 
-            if i<=0:
-                self.run = False
-                self.success_count += 1
-                time.sleep(0.5)
-                self.send_task_status(False, self.spine_hit_count + self.success_count)
-                self.end_screen()
+            if self.fluid <=0:
+                # self.run = False
+                # self.success_count += 1
+                # time.sleep(0.5)
+                # self.send_task_status(False, self.spine_hit_count + self.success_count)
+                # self.end_screen()
+                pass
                 
+    def render_screen(self):
+         ######################################## Graphical output ########################################
+
+        ##Render the haptic surface
+        self.screenHaptics.fill(self.cWhite)
+        
+        ##Change color based on effort
+        colorMaster = (255,\
+            255-np.clip(np.linalg.norm(np.abs(self.K_TISSUE)*(self.xm-self.xh)/self.window_scale)*15,0,255),\
+            255-np.clip(np.linalg.norm(np.abs(self.K_TISSUE)*(self.xm-self.xh)/self.window_scale)*15,0,255)) #if collide else (255, 255, 255)
+        
+        pygame.draw.line(self.screenHaptics, (0, 0, 0), (self.haptic.center),(self.haptic.center+2*self.K_TISSUE*(self.xm-self.xh)))
+        pygame.draw.rect(self.screenHaptics, colorMaster, self.haptic,border_radius=4)
+        
+        
+        ######################################## Robot visualization ########################################
+        # update individual link position
+        if self.robotToggle:
+            self.robot.createPantograph(self.screenHaptics,self.xh)
+            
+        ##Render the VR surface
+        self.screenVR.fill(self.cWhite)
+    
+        ### Visualize all components of the simulation
+
+        # Draw all the vertical tissue layers
+        pygame.draw.rect(self.screenVR,self.cSkin,self.wall_layer1, border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cFat,self.wall_layer2,  border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cLig_one,self.wall_layer3, border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cLig_two,self.wall_layer4,border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cLig_three,self.wall_layer5,border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cFluid,self.wall_layer6,border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cSpinal,self.wall_layer7,border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cFluid,self.wall_layer8,border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cLig_one,self.wall_layer9, border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cLig_two,self.wall_layer10, border_radius = 2)
+        pygame.draw.rect(self.screenVR,self.cLig_one,self.wall_layer11, border_radius = 2)
+        
+        # Draw all the vertebrae
+        pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer12, border_radius = 4)
+        pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer13, border_radius = 4)
+        pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer14, border_radius = 4)
+        pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer15, border_radius = 4)
+        pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer16, border_radius = 4)
+        pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer17, border_radius = 4)
+
+        # Draw all the vertebrae     
+        self.screenVR.blit(self.vertebrae_layer,(self.vert_rect1[0],self.vert_rect1[1]))
+        self.screenVR.blit(self.vertebrae_layer,(self.vert_rect2[0],self.vert_rect2[1]))
+        self.screenVR.blit(self.vertebrae_layer,(self.vert_rect3[0],self.vert_rect3[1]))
+        self.screenVR.blit(self.vertebrae_layer,(self.vert_rect4[0],self.vert_rect4[1]))
+        self.screenVR.blit(self.vertebrae_layer,(self.vert_rect5[0],self.vert_rect5[1]))  
+        self.screenVR.blit(self.vertebrae_layer,(self.vert_rect6[0],self.vert_rect6[1]))
+        
+        # Draw needle 
+        x1 = self.haptic.center[0]
+        y1 = self.haptic.center[1]
+        x2 = x1 + np.cos(self.alpha)*250
+        y2 = y1 + np.sin(self.alpha)*250
+        x2_2 = np.sin(-self.alpha)*25
+        y2_2 = np.cos(-self.alpha)*25
+
+        pygame.draw.line(self.screenVR, self.cBlack, (x1,y1), (x2, y2), 2 )
+        pygame.draw.line(self.screenVR, self.cBlack, (x1,y1), (x1+x2_2, y1+ y2_2), 2 )
+        pygame.draw.line(self.screenVR, self.cBlack, (x1,y1), (x1-x2_2, y1- y2_2), 2 )
+        
+        # handles the logic behind the progress bar of draining the fluid
+        if self.haptic_feedback:
+            if self.collision_dict['Cerebrospinal fluid one'] and self.i > 350 and self.visual_feedback:
+                if self.render_bar:
+                    self.fluid -= 1
+                    if self.fluid >0 :
+                        fluid_left = round(self.fluid/100,2)
+                        text_surface = self.font.render(f'Fluid left: {fluid_left}ml', True, (0,0,0))
+                        self.screenVR.blit(text_surface, (0, 60))
+                        self.draw_progress_bar(self.fluid)
+                    else:
+                        self.start_handover = True
+                        self.draw_progress_bar(0)
+                elif not self.render_bar and not self.start_handover:
+                    space_bar_text = self.font_low_time.render(f'Press space bar to start draining the fluid!', True, (20,150,40))
+                    self.screenVR.blit(space_bar_text, (0, 60))
+
+        time_elapsed =  time.time() - self.time_start
+        self.time_left = self.max_time - time_elapsed  
+
+        # Handles the logic of the handover phase
+        if self.start_handover:
+            if self.update_status:
+                self.time_start = time.time()
+                self.send_task_status(True, self.spine_hit_count + self.success_count)
+                self.update_status = False
+            keep_mouse_in_fluid_text_1 = self.font_low_time.render('Don\'t remove the needle from the epidural space', True, (20,150,40))
+            keep_mouse_in_fluid_text_2 = self.font_low_time.render('untill the robot has provided a piece of cotton!',True,(20,150,40))
+            keep_mouse_in_fluid_text_3 = self.font_low_time.render('You can release the spacebar now!',True,(20,150,40))
+            self.screenVR.blit(keep_mouse_in_fluid_text_1, (0, 60))
+            self.screenVR.blit(keep_mouse_in_fluid_text_2, (0, 80))
+            self.screenVR.blit(keep_mouse_in_fluid_text_3, (0, 100))
+            if not self.collision_dict['Cerebrospinal fluid one']:
+                self.send_task_status(False, self.spine_hit_count + self.success_count)
+                self.task_failed = True
+
+            if self.time_left <= 10:
+                text_time = self.font_low_time.render(f"Time left for handover: {self.time_left:.2f}s",True,(255,0,0))
+                self.screenVR.blit(text_time,(0,378))
+            else:
+                text_time = self.font.render(f"Time left for handover: {self.time_left:.2f}s",True,(0,0,0)) # Display the time left to complete the simulation
+                self.screenVR.blit(text_time,(0,380))
+                        
+
+        #toggle a mask over the spine
+        if self.toggle_visual:
+            pygame.draw.rect(self.screenVR,self.cSkin,(self.simulation_space[0][0],0,self.simulation_space[0][1],self.simulation_space[1][1]), border_radius = 0)
+
+        if self.i < 350:
+            # # Draw all the vertebrae
+            pygame.draw.rect(self.screenVR,self.cWhite,(self.simulation_space[0][0],0,self.simulation_space[0][1],self.simulation_space[1][1]), border_radius = 0)
+
+            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer12, border_radius = 4)
+            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer13, border_radius = 4)
+            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer14, border_radius = 4)
+            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer15, border_radius = 4)
+            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer16, border_radius = 4)
+            pygame.draw.rect(self.screenVR,self.cVerte,self.wall_layer17, border_radius = 4)
+
+            # Draw all the vertebrae
+            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect1[0],self.vert_rect1[1])) 
+            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect2[0],self.vert_rect2[1]))
+            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect3[0],self.vert_rect3[1]))
+            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect4[0],self.vert_rect4[1]))
+            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect5[0],self.vert_rect5[1]))  
+            self.screenVR.blit(self.vertebrae_layer,(self.vert_rect6[0],self.vert_rect6[1]))
+        
+        # Visualize toggles on display
+        text_surface1 = self.font.render("Press 'e' to rotate needle up", True, (0, 0, 0),(255, 255, 255))
+        text_surface2 = self.font.render("Press 'r' to rotate needle down", True,(0, 0, 0), (255, 255, 255))
+        text_surface3 = self.font.render("Press 'v' to hide epidural space", True, (0, 0, 0), (255, 255, 255))
+
+        
+        self.screenVR.blit(text_surface1, (0, 0))
+        self.screenVR.blit(text_surface2, (0, 20))
+        #self.screenVR.blit(text_surface3, (0, 40))
+
+        ##Fuse it back together
+        self.window.blit(self.screenHaptics, (0,0))
+        self.window.blit(self.screenBlank,(800,0))
+        self.window.blit(self.screenVR, (900,0))
+
+        ##Print status in  overlay
+        if self.debugToggle: 
+            
+            text = self.font.render("FPS = " + str(round(self.clock.get_fps())) + \
+                                "  xm = " + str(np.round(10*self.xm)/20000) +\
+                                "  xh = " + str(np.round(10*self.xh)/20000) +\
+                                "  fe = " + str(np.round(10*self.fe)/20000) \
+                                , True, (0, 0, 0), (255, 255, 255))
+            self.window.blit(text, self.textRect)
+        self.force_time.append(self.fe[0])
+
+        if self.haptic_feedback and self.visual_feedback:
+            if self.collision_dict['Spinal cord']:
+                self.spinal_coord_collision_hit = True
+                GB = min(255, max(0, round(255 * 0.5)))
+                self.window.fill((255, GB, GB), special_flags = pygame.BLEND_MULT)
+
+        pygame.display.flip()  
+
 
     def end_screen(self):
         self.run = True
@@ -892,8 +919,10 @@ class secondary_task():
         completion_text = font.render(f"You succesfully completed: {self.spine_hit_count+self.success_count} simulation runs!", True, (0, 0, 0))
         completion_text_2 = font.render(f"press 'q' to exit simulation", True, (0, 0, 0))
         text_rect = text.get_rect(center=(button_surface.get_width()/2, button_surface.get_height()/2))
-        time_up_text = font_message.render(f"You did not drain the fluid in time!", True, (240, 0, 0))
+        time_up_text = font_message.render(f"You did not obtain the item in time!", True, (240, 0, 0))
         please_again_text = font_message.render(f"Please try again", True, (240, 0, 0))
+        handover_failed_text = font_message.render(f"Needle removed from epidural space without", True, (240, 0, 0))
+        handover_failed_text_2 = font_message.render(f"successfull handover of item, task failed!", True, (240, 0, 0))
 
         # Create a pygame.Rect object that represents the button's boundaries
         button_rect = pygame.Rect(0, 0, 150, 50)  # Adjust the position as needed
@@ -949,16 +978,17 @@ class secondary_task():
                 self.screenHaptics.blit(success_text,(450,50))
 
                 # Draw respective good and bad text on screen
-                if self.spinal_coord_collision and not self.time_up:
+                if self.spinal_coord_collision and not self.time_up and not self.task_failed:
                     self.screenHaptics.blit(bad_text,(20,120))
-                elif not self.spinal_coord_collision and not self.time_up:
+                elif not self.spinal_coord_collision and not self.time_up and not self.task_failed:
                     self.screenHaptics.blit(good_text_1,(20,120))
                     self.screenHaptics.blit(good_text_2,(25,150))
+                elif self.task_failed:
+                    self.screenHaptics.blit(handover_failed_text,(20,120))
+                    self.screenHaptics.blit(handover_failed_text_2,(20,150))
                 else:
                     self.screenHaptics.blit(time_up_text,(20,120))
                     self.screenHaptics.blit(please_again_text,(120,150))
-
-                
 
             else:
                 self.screenHaptics.blit(completion_text,(20,120))
