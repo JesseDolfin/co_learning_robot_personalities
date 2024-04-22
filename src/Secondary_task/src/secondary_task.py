@@ -33,6 +33,8 @@ class secondary_task():
         self.pantograph = Pantograph
         self.robot = PShape
 
+        self.handover_successfull = False
+
         self.spine_hit_count = 0
         self.success_count = 0
 
@@ -51,8 +53,13 @@ class secondary_task():
         
         if self.ros_running:
             self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
+            rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
             rospy.init_node("secondary_task")
         #self.rate = rospy.rate(50) #Hz
+
+    def status_callback(self,msg):
+        rospy.loginfo("Begin handover: %s, Handover success: %s", msg.begin_handover, msg.handover_successfull)
+        self.handover_successfull = msg.handover_successfull
 
     def initialise_pygame(self):
         ##initialize pygame window
@@ -290,11 +297,11 @@ class secondary_task():
         self.Bones = {'Vertebrae one', 'Vertebrae two', 'Vertebrae three', 'Vertebrae four', 'Vertebrae five','Vertebrae six'}
 
 
-    def send_task_status(self,success,tries):
+    def send_task_status(self,start):
         if self.ros_running:
             message = secondary_task_message()
-            message.success = success
-            message.tries = tries
+            message.begin_handover = start
+            message.handover_successfull = None
             self.pub.publish(message)
         else:
             return
@@ -371,10 +378,12 @@ class secondary_task():
     
     def draw_progress_bar(self,needle_pressure):
         max_height = 160
+        needle_location_x = 95
+        needle_location_y = 240
         bar_height = max_height - (needle_pressure*max_height)/(self.max_needle_pressure)
-        bar = pygame.Rect((95,190),(40,bar_height)) #((topleft corner),(width,height))
+        bar = pygame.Rect((needle_location_x,needle_location_y),(40,bar_height)) #((topleft corner),(width,height))
         pygame.draw.rect(self.screenVR,self.cGreen,bar)
-        self.screenVR.blit(self.syringe_img,(70,80))
+        self.screenVR.blit(self.syringe_img,(needle_location_x-25,needle_location_y-110))#80
 
     def check_collision_with_vertebrae(self,haptic_endpoint):
         # Create endpoint mask for collision detection between endpoint and drawn vertebrae
@@ -537,7 +546,7 @@ class secondary_task():
                 self.run = False
                 self.spine_hit_count += 1
                 time.sleep(0.5)
-                self.send_task_status(False, None)
+                self.send_task_status(False)
                 self.end_screen()
                 
            
@@ -545,11 +554,11 @@ class secondary_task():
                 self.run = False
                 time.sleep(0.5)
                 self.time_up = True
-                self.send_task_status(False, None)
+                self.send_task_status(False)
                 self.end_screen()
 
-            if self.fluid <=0: # check here for the message that the handover is successfull
-                pass
+            if self.handover_successfull: # check here for the message that the handover is successfull
+                self.end_screen()
 
     def update_fe(self):
         # If collision exists with any tissue layer create a virtual needle path along the needle
@@ -753,7 +762,7 @@ class secondary_task():
         if self.start_handover:
             if self.update_status:
                 self.time_start = time.time()
-                self.send_task_status(True, self.spine_hit_count + self.success_count)
+                self.send_task_status(True)
                 self.update_status = False
             keep_mouse_in_fluid_text_1 = self.font_low_time.render('Don\'t remove the needle from the epidural space', True, (20,150,40))
             keep_mouse_in_fluid_text_2 = self.font_low_time.render('untill the robot has provided a piece of cotton!',True,(20,150,40))
@@ -762,15 +771,15 @@ class secondary_task():
             self.screenVR.blit(keep_mouse_in_fluid_text_2, (0, 80))
             self.screenVR.blit(keep_mouse_in_fluid_text_3, (0, 100))
             if not self.collision_dict['Cerebrospinal fluid one']:
-                self.send_task_status(False, self.spine_hit_count + self.success_count)
+                self.send_task_status(False)
                 self.task_failed = True
 
             if self.time_left <= 10:
                 text_time = self.font_low_time.render(f"Time left for handover: {self.time_left:.2f}s",True,(255,0,0))
-                self.screenVR.blit(text_time,(0,378))
+                self.screenVR.blit(text_time,(0,478))
             else:
                 text_time = self.font.render(f"Time left for handover: {self.time_left:.2f}s",True,(0,0,0)) # Display the time left to complete the simulation
-                self.screenVR.blit(text_time,(0,380))
+                self.screenVR.blit(text_time,(0,480))
                         
 
         #toggle a mask over the spine

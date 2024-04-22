@@ -37,6 +37,8 @@ class RoboticArmControllerNode:
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
 
+        self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
+
         ns = rospy.get_param('/namespaces')
         self.client = actionlib.SimpleActionClient(ns+'/torque_controller', ControllerAction)
         rospy.loginfo("Initializing client: Waiting for server")
@@ -50,8 +52,8 @@ class RoboticArmControllerNode:
 
     def status_callback(self, msg):
         # Log update the variable that tells the system to proceed when True is received on the secondary task callback
-        rospy.loginfo("Tries: %s, Success: %s", msg.tries, msg.success)
-        self.secondary_task_proceed = msg.success
+        rospy.loginfo("Begin handover: %s, Handover success: %s", msg.begin_handover, msg.handover_successfull)
+        self.secondary_task_proceed = msg.begin_handover
 
 
     def send_position_command(self, position):
@@ -106,6 +108,12 @@ class RoboticArmControllerNode:
             self.state = 4
         else:
             self.state = 3
+
+        # If sucessfull handover do this:
+        message = secondary_task_message()
+        message.begin_handover = None
+        message.handover_successfull = True
+        self.pub.publish(message)
         self.start_episode()
 
     def home_position(self):

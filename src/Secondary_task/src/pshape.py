@@ -21,7 +21,7 @@ class PShape:
         
         #################### Define Robot #######################
         # ROBOT PARAMETERS
-        l = [70,90]*window_scale # links length l1, l2
+        l = [80,100]*window_scale # links length l1, l2
 
         xrc = [300,0] ## center location of the robot in pygame
         
