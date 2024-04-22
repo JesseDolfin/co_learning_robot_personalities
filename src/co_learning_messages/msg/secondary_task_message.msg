@@ -1,4 +1,4 @@
 std_msgs/Header header
 
-uint8 tries
-bool success
+bool begin_handover
+bool handover_successfull
