@@ -1,4 +1,14 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
+import sys
+import os
+
+# Get the absolute path of the workspace's 'src' directory
+workspace_src = os.path.join(os.path.dirname(__file__), '../../..', 'src')
+
+# Append the workspace's 'src' directory to the Python path
+sys.path.append(workspace_src)
+
 
 import rospy
 import actionlib
