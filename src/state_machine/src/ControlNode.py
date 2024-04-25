@@ -39,6 +39,7 @@ class RoboticArmControllerNode:
         self.terminated = False
         self.episode = 0
         self.home_pos = [-0.7, -0.7, 0.5, 0.0, 0.0, 0.0]
+        self.save_position = [0,0,0]
         self.i = 0
         self.initialise = True
         self.max_exploration_factor = exploration_factor
@@ -64,6 +65,7 @@ class RoboticArmControllerNode:
         # Log update the variable that tells the system to proceed when True is received on the secondary task callback
         rospy.loginfo("Begin handover: %s, Handover success: %s", msg.begin_handover, msg.handover_successfull)
         self.secondary_task_proceed = msg.begin_handover
+        self.draining_start = msg.start_draining
 
 
     def send_position_command(self, position):
@@ -82,7 +84,15 @@ class RoboticArmControllerNode:
         goal.damping = 2 * np.sqrt(goal.stiffness)
         goal.nullspace_gain = [0] * 7
         goal.nullspace_reference = [0] * 7
-        goal.reference = position
+        if self.state == 1:
+            self.save_position = position[0:2]
+            goal.reference[0:2] = self.save_position
+            goal.reference[3:5] = [np.pi,np.pi,np.pi]
+        if self.state == 2:
+            goal.reference[0:2] = self.save_position
+            goal.reference[3:5] = position[3:5]
+        else:
+            goal.reference = position
         goal.velocity_reference = np.zeros(6)
 
         self.client.wait_for_server()
@@ -96,12 +106,27 @@ class RoboticArmControllerNode:
 
         rospy.loginfo(f"Episode:{self.episode}, Phase:{phase}, Action:{action}")
 
-        position = self.convert_action_to_position(self.phase, action)
-        _= self.send_position_command(position)
-        self.state = 1
-        self.start_episode()
+        if action == 0 and self.draining_start:
+            self.state = 1
+            self.start_episode()
+        elif action == 1 and self.secondary_task_proceed:
+            self.state = 1
+            self.start_episode()
+        else:
+            self.rate.sleep(1)
+            self.phase_0()
 
     def phase_1(self):
+        action, phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
+
+        rospy.loginfo(f"Episode:{self.episode}, Phase:{phase}, Action:{action}")
+
+        position = self.convert_action_to_position(self.phase, action)
+        _= self.send_position_command(position)
+        self.state = 2
+        self.start_episode()
+
+    def phase_2(self):
         self.exploration_factor = max(self.exploration_factor * 0.90, 0.1)  # Decay exploration factor
         action, phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
 
@@ -110,14 +135,15 @@ class RoboticArmControllerNode:
 
         position = self.convert_action_to_position(self.phase, action)
         _= self.send_position_command(position)
-        self.state = 2
+        self.state = 3
         self.start_episode()
+
 
     def open_hand(self): #TODO: Implement functionality
         if self.terminated:
-            self.state = 4
+            self.state = 5
         else:
-            self.state = 3
+            self.state = 4
 
         # If sucessfull handover do this:
         message = secondary_task_message()
@@ -148,11 +174,12 @@ class RoboticArmControllerNode:
         """
         Implements the finite state machine of the actions the robot has to take
         - Start: Initialise the robot by homing it
-        - State 0: Go to the state: 'phase_0'. Perform a step of the q_learning agent and send position command to the robot, go to state 1
-        - State 1: Go to the state: 'phase_1'. Perform a step of the q_learning agent and send position command to the robot, go to state 2
-        - State 2: Open the robotic hand, if simulation continues go to state 3, otherwise go to state 4
-        - State 3: Home the robotic arm, go to state 0
-        - State 4: End simulation, reset state machine
+        - State 0: Go to the state: 'phase_0'. Perform a step of the q_learning agent, go to state 1
+        - State 1: Go to the state: 'phase_1'. Perform a step of the q_learning agent, go to state 2
+        - State 2: Go to the state: 'phase_2'. Perform a step of the q_learning agent, go to state 3
+        - State 3: Open the robotic hand, if simulation continues go to state 4, otherwise go to state 5
+        - State 4: Home the robotic arm, go to state 0
+        - State 5: End simulation, reset state machine
         """
 
         if self.initialise:
@@ -166,24 +193,25 @@ class RoboticArmControllerNode:
             self.phase_1()
 
         if self.state == 2:
-            self.open_hand()
+            self.phase_2()
 
         if self.state == 3:
-            self.home_position()
+            self.open_hand()
 
         if self.state == 4:
+            self.home_position()
+
+        if self.state == 5:
             self.stop()
 
              
     def convert_action_to_position(self, phase, action):
         # TODO: Find correct values
         positions = {
-            (0, 0): [-0.5, 0.3, 0.5, 0, 0, 0],
-            (0, 1): [-0.5, -0.3, 0.7, 0, 0, 0],
-            (0, 2): [0.5, 0.3, 0.7, 0, 0, 0],
-            (1, 0): [-0.5, 0.3, 0.5, 0, 0, 0],
-            (1, 1): [-0.5, -0.3, 0.7, 0, 0, 0],
-            (1, 2): [0.5, 0.3, 0.7, 0, 0, 0],
+            (1, 0): [-0.5,  0.3, 0.5, 0, 0, 0],                 # Location A
+            (1, 1): [-0.5, -0.3, 0.7, 0, 0, 0],                 # Location B
+            (2, 0): [   0,    0,   0,     0, np.pi/2,       0], # Hand orientation A
+            (2, 1): [   0,    0,   0, np.pi,       0, np.pi/2], # Hand orientation B
         }
         return positions.get((phase, action), [0] * 6)
 

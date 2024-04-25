@@ -71,7 +71,6 @@ class QLearningAgent():
                 # Perform a step
                 next_state, phase, reward, terminated, info = self.env.step(action) 
               
-
                 # Apply the update rule to the q_table
                 self.update_Q_table(next_state,reward,gamma,Lambda,alpha,action,phase,state)
         

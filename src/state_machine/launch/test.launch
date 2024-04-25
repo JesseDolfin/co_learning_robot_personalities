@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!--|
+Authors: Leandro de Souza Rosa <l.desouzarosa@tudelft.nl>
+    Free for all, no warranties whatsoever.
+|-->
+<launch>
+     <!-- load URDF models -->
+    <!-- Load URDF for visualization and collision checking -->
+  <node name="ControlNode" pkg="state_machine" type="ControlNode" respawn="false" output="screen">
+    <param name="robot_description" textfile="$(find state_machine)/urdf/combined_arm_hand.urdf.xacro"/>
+  </node>
+
+
+    
+</launch>
+

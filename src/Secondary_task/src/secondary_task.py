@@ -45,7 +45,7 @@ class secondary_task():
         ##initialize "real-time" clock
         self.FPS = 500   #in Hertz
 
-        self.max_time = 20 # seconds
+        self.max_time = 30 # seconds
 
 
     def initialise_ros(self):
@@ -142,6 +142,10 @@ class secondary_task():
         self.penetration    = True
         self.collision_bone = False
         self.collision_any  = False
+        self.bar_pressed = False
+        self.needle_removed_too_soon = False
+        self.needle_removed_too_soon_2 = False
+        self.bar_released_too_soon = True
 
         self.window_scale = 3
 
@@ -149,8 +153,6 @@ class secondary_task():
         self.smoothing_factor = 0.1
         self.proceed = False
         self.time_up = False
-
-        self.time_start = time.time()
 
         self.run = True
 
@@ -550,7 +552,7 @@ class secondary_task():
                 self.end_screen()
                 
            
-            if self.time_left<=0:
+            if self.time_left<=0 and self.start_handover:
                 self.run = False
                 time.sleep(0.5)
                 self.time_up = True
@@ -742,6 +744,7 @@ class secondary_task():
         if self.haptic_feedback:
             if self.collision_dict['Cerebrospinal fluid one'] and self.i > 350 and self.visual_feedback:
                 if self.render_bar:
+                    self.bar_pressed = True
                     self.fluid -= 1
                     if self.fluid >0 :
                         fluid_left = round(self.fluid/100,2)
@@ -751,12 +754,23 @@ class secondary_task():
                     else:
                         self.start_handover = True
                         self.draw_progress_bar(0)
-                elif not self.render_bar and not self.start_handover:
-                    space_bar_text = self.font_low_time.render(f'Press space bar to start draining the fluid!', True, (20,150,40))
+                elif not self.render_bar and not self.start_handover and not self.bar_pressed:
+                    space_bar_text = self.font_low_time.render('Press space bar to start draining the fluid!', True, (20,150,40))
                     self.screenVR.blit(space_bar_text, (0, 60))
+
 
         time_elapsed =  time.time() - self.time_start
         self.time_left = self.max_time - time_elapsed  
+
+        if self.bar_pressed and not self.start_handover:
+            if not self.collision_dict['Cerebrospinal fluid one']:
+                self.task_failed = True
+                self.needle_removed_too_soon = True
+
+        if self.bar_pressed and not self.render_bar and not self.start_handover:
+            self.task_failed = True
+            self.bar_released_too_soon = True
+
 
         # Handles the logic of the handover phase
         if self.start_handover:
@@ -771,6 +785,7 @@ class secondary_task():
             self.screenVR.blit(keep_mouse_in_fluid_text_2, (0, 80))
             self.screenVR.blit(keep_mouse_in_fluid_text_3, (0, 100))
             if not self.collision_dict['Cerebrospinal fluid one']:
+                self.needle_removed_too_soon_2 = True
                 self.send_task_status(False)
                 self.task_failed = True
 
@@ -843,7 +858,7 @@ class secondary_task():
         bad_text = font_message.render("You hit the patient's spine! Please try again", True, (240, 0, 0))
         good_text_1 = font_message.render(f"You succesfully drained all the fluid", True, (20,150,40))
         good_text_2 = font_message.render(f"from the epidural space, well done!", True, (20,150,40))
-        hit_count_text = font.render(f"Spine hits:  {self.spine_hit_count}", True, (0, 0, 0))
+        hit_count_text = font.render(f"Fails:  {self.spine_hit_count}", True, (0, 0, 0))
         success_text = font.render(f"Successes: {self.success_count}", True, (0, 0, 0))
         completion_text = font.render(f"You succesfully completed: {self.spine_hit_count+self.success_count} simulation runs!", True, (0, 0, 0))
         completion_text_2 = font.render(f"press 'q' to exit simulation", True, (0, 0, 0))
@@ -851,14 +866,18 @@ class secondary_task():
         time_up_text = font_message.render(f"You did not obtain the item in time!", True, (240, 0, 0))
         please_again_text = font_message.render(f"Please try again", True, (240, 0, 0))
         handover_failed_text = font_message.render(f"Needle removed from epidural space without", True, (240, 0, 0))
-        handover_failed_text_2 = font_message.render(f"successfull handover of item, task failed!", True, (240, 0, 0))
+        handover_failed_text_2 = font_message.render("successfully draining the epidural space!", True, (240, 0, 0))
+        spacebar_released_text = font_message.render("Spacebar was released before all of the", True, (240, 0, 0))
+        spacebar_released_text_2 = font_message.render("fluid was drained, please try again!", True, (240, 0, 0))
+        needle_removed_handover_text = font_message.render(f"Needle removed from epidural space without", True, (240, 0, 0))
+        needle_removed_handover_text_2 = font_message.render("successfull handover of the item!", True, (240, 0, 0))
 
         # Create a pygame.Rect object that represents the button's boundaries
         button_rect = pygame.Rect(0, 0, 150, 50)  # Adjust the position as needed
 
         tries = self.spine_hit_count+self.success_count
         # Increase time constraint by 2 seconds after each successfull attempt
-        self.max_time = 30 - self.success_count*2
+        #self.max_time = 30 - self.success_count*2
 
 
 
@@ -906,14 +925,21 @@ class secondary_task():
                 self.screenHaptics.blit(success_text,(450,50))
 
                 # Draw respective good and bad text on screen
-                if self.spinal_coord_collision and not self.time_up and not self.task_failed:
+                if self.spinal_coord_collision:
                     self.screenHaptics.blit(bad_text,(20,120))
-                elif not self.spinal_coord_collision and not self.time_up and not self.task_failed:
+                elif not self.time_up and not self.task_failed:
                     self.screenHaptics.blit(good_text_1,(20,120))
                     self.screenHaptics.blit(good_text_2,(25,150))
-                elif self.task_failed:
+                elif self.needle_removed_too_soon:
                     self.screenHaptics.blit(handover_failed_text,(20,120))
                     self.screenHaptics.blit(handover_failed_text_2,(20,150))
+                    self.screenHaptics.blit(please_again_text,(20,180))
+                elif self.needle_removed_too_soon_2:
+                    self.screenHaptics.blit(needle_removed_handover_text,(20,120))
+                    self.screenHaptics.blit(needle_removed_handover_text_2,(20,150))
+                elif self.bar_released_too_soon and not self.time_up:
+                    self.screenHaptics.blit(spacebar_released_text,(20,120))
+                    self.screenHaptics.blit(spacebar_released_text_2,(20,150))
                 else:
                     self.screenHaptics.blit(time_up_text,(20,120))
                     self.screenHaptics.blit(please_again_text,(120,150))
