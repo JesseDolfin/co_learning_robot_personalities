@@ -102,9 +102,15 @@ Please follow the installation instructions from iiwa_ros before installing this
    cd <work space>
    git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
    cd co_learning_robot_personalities
-   git submodule update --recursive --remote
    ```
-2. Build the package
+2. Download the soft hand repositories
+   ```sh
+   cd src
+   git clone --recurse-submodules https://bitbucket.org/qbrobotics/qbdevice-ros.git
+   git clone https://bitbucket.org/qbrobotics/qbhand-ros.git
+   cd ..
+   ```
+3. Compile the workspace
    ```sh
    catkin_make
    source devel/setup.bash
