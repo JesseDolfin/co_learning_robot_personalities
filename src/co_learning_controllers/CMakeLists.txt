@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(secondary_task)
+project(co_learning_controllers)
 
 find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs # controller action server 
@@ -22,9 +22,6 @@ catkin_package(
 catkin_python_setup()
 
 catkin_install_python(PROGRAMS
-  src/secondary_task.py
-  src/pantograph.py
-  src/pshape.py
-  src/pyhapi.py
+  src/ControlNode.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

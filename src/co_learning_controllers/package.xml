@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>state_machine</name>
+  <name>co_learning_controllers</name>
   <version>0.0.1</version>
   <description>Defines the package that handles the state machine and urdf / launch files</description>
 
