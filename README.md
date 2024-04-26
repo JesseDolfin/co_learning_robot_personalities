@@ -33,7 +33,7 @@
   <img src="https://www.kuka.com/-/media/kuka-corporate/images/products/robots/cta-images/lbr-iiwa.png?rev=-1&w=767&hash=78E7DD844A27074AFD67AEF17C72078A" alt="KUKA arm" width="200"/>
   </a>
 
-<h3 align="center">Co-learning for KUKA iiwa7</h3>
+<h3 align="center">Co-learning with robot personalities for KUKA iiwa7</h3>
 
   <p align="center">
     <a href="https://github.com/JesseDolfin/Co-Learning-KUKA-RL/README.md"><strong>About the project</strong></a>
@@ -100,8 +100,8 @@ Please follow the installation instructions from iiwa_ros before installing this
 1. Clone the repo in the same workspace you defined during the installation of iiwa_ros, and update the submodules
    ```sh
    cd <work space>
-   git clone https://github.com/JesseDolfin/Co-Learning-KUKA-RL.git
-   cd Co-Learning-KUKA-RL
+   git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
+   cd co_learning_robot_personalities
    git submodule update --recursive --remote
    ```
 2. Build the package
