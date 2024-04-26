@@ -1,6 +1,0 @@
-[submodule "qb_hand/src/qbdevice-ros"]
-	path = qb_hand/src/qbdevice-ros
-	url = https://bitbucket.org/qbrobotics/qbdevice-ros.git
-[submodule "qb_hand/src/qbhand-ros"]
-	path = qb_hand/src/qbhand-ros
-	url = https://bitbucket.org/qbrobotics/qbhand-ros.git

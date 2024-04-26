@@ -7,3 +7,5 @@ devel/
 .catkin_workspace
 .catkin_tools/
 logs/
+qbhand-ros/
+qbdevice-ros/
