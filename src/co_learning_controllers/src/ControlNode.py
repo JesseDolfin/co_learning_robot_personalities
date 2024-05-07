@@ -18,6 +18,7 @@ from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 from q_learning.src.QLearnAgent import QLearningAgent
 from q_learning.src.CoLearnEnvironment import CoLearn
 from co_learning_messages.msg import secondary_task_message
+from HandController import SoftHandController
 
 
 
@@ -44,6 +45,8 @@ class RoboticArmControllerNode:
         self.initialise = True
         self.max_exploration_factor = exploration_factor
         self.secondary_task_proceed = False
+        self.update_phase = True
+        self.successfull_handover = 0
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
@@ -58,14 +61,17 @@ class RoboticArmControllerNode:
 
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
+        self.hand_controller = SoftHandController()
 
         self.rate = rospy.Rate(2)
 
     def status_callback(self, msg):
         # Log update the variable that tells the system to proceed when True is received on the secondary task callback
-        rospy.loginfo("Begin handover: %s, Handover success: %s", msg.begin_handover, msg.handover_successfull)
-        self.secondary_task_proceed = msg.begin_handover
-        self.draining_start = msg.start_draining
+        #rospy.loginfo("Draining_starts: %s, Draining_successfull: %s, Handover_successfull: %s", msg.draining_starts, msg.draining_successfull,msg.handover_successfull)
+        self.secondary_task_proceed = msg.secondary_task_start
+        self.draining_starts = msg.draining_starts
+        self.draining_success = msg.draining_successfull
+        self.successfull_handover = msg.handover_successfull
 
 
     def send_position_command(self, position):
@@ -102,18 +108,19 @@ class RoboticArmControllerNode:
         return True
         
     def phase_0(self):
-        action, phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
+        if self.update_phase:
+            self.action, self.phase, self.terminated = self.rl_agent.train_real_time(exploration_factor=self.exploration_factor)
+            rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
+            self.update_phase = False
 
-        rospy.loginfo(f"Episode:{self.episode}, Phase:{phase}, Action:{action}")
-
-        if action == 0 and self.draining_start:
+        if self.action == 0 and self.draining_starts == 1:
             self.state = 1
             self.start_episode()
-        elif action == 1 and self.secondary_task_proceed:
+        elif self.action == 1 and self.draining_success == 1:
             self.state = 1
             self.start_episode()
         else:
-            self.rate.sleep(1)
+            self.rate.sleep()
             self.phase_0()
 
     def phase_1(self):
@@ -140,24 +147,27 @@ class RoboticArmControllerNode:
 
 
     def open_hand(self): #TODO: Implement functionality
+        hand_open = self.hand_controller.set_percentage(100) #TODO: Functionality not yet implemented
+
         if self.terminated:
             self.state = 5
         else:
             self.state = 4
-
-        # If sucessfull handover do this:
-        message = secondary_task_message()
-        message.begin_handover = None
-        message.handover_successfull = True
-        self.pub.publish(message)
-        self.start_episode()
+        if self.successfull_handover == 1 or self.successfull_handover == -1:
+            self.rl_agent.save_q_table(prefix="intermittend_q_table_")
+            self.start_episode()
+        else:
+            self.rate.sleep()
+            self.open_hand()
 
     def home_position(self):
-        rospy.loginfo(f"Episode:{self.episode}, Phase:/, Action:home_pos")
-      
-        self.state = 0
-        if self.secondary_task_proceed:
+        if self.update_phase:
+            rospy.loginfo(f"Episode:{self.episode}, Phase:/, Action:home_pos")
             _=self.send_position_command(self.home_pos)
+            self.update_phase = False
+        self.state = 0
+
+        if self.secondary_task_proceed:
             self.start_episode()
         else:
             self.rate.sleep()
@@ -181,7 +191,8 @@ class RoboticArmControllerNode:
         - State 4: Home the robotic arm, go to state 0
         - State 5: End simulation, reset state machine
         """
-
+        print(f"State:{self.state}, Successfull handover:{self.successfull_handover}")
+        self.update_phase = True
         if self.initialise:
             self.initialise = False
             self.home_position()
@@ -208,8 +219,8 @@ class RoboticArmControllerNode:
     def convert_action_to_position(self, phase, action):
         # TODO: Find correct values
         positions = {
-            (1, 0): [-0.5,  0.3, 0.5, 0, 0, 0],                 # Location A
-            (1, 1): [-0.5, -0.3, 0.7, 0, 0, 0],                 # Location B
+            (1, 0): [-0.7,  0.7, 0.5, 0, 0, 0],                 # Location A
+            (1, 1): [-0.7,  0.7, 0.7, 0, 0, 0],                 # Location B
             (2, 0): [   0,    0,   0,     0, np.pi/2,       0], # Hand orientation A
             (2, 1): [   0,    0,   0, np.pi,       0, np.pi/2], # Hand orientation B
         }
@@ -230,7 +241,10 @@ if __name__ == '__main__':
         node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9)
         node.rl_agent.load_q_table('co_learning_robot_personalities/src/q_learning/Q_tables/q_table_solved_100000_1.npy')
         node.rl_agent.q_table*persistance_factor
-        print(f"Q_table for phase 0:\n{node.rl_agent.q_table[:,:,0]}\nQ_table for phase 1:\n{node.rl_agent.q_table[:,:,1]}")
+
+        for phase in range(node.rl_agent.env.phase_size):
+            print(f"Q_table for phase {phase}:\n{node.rl_agent.q_table[:,:,phase]}")
+
         node.reset()
 
     except rospy.ROSInterruptException:

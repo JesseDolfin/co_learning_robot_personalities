@@ -4,6 +4,13 @@ from gymnasium.spaces import Discrete
 import numpy as np
 import random
 
+from regex import R
+import rospy
+
+import rosgraph
+
+from co_learning_messages.msg import secondary_task_message
+
 class CoLearn(Env):
     def __init__(self):
         '''
@@ -27,6 +34,8 @@ class CoLearn(Env):
         - State_space = 2 states per phase
         '''
 
+        self.initialise_ros()
+
         self.action_size = 2 # Per phase
         self.action_space = Discrete(self.action_size)
         self.observation_space = Discrete(6) # Same as state space
@@ -41,6 +50,30 @@ class CoLearn(Env):
         self.info = {}
         
         self.phase = 0
+
+        self.old_phase_0 = 0
+        self.old_phase_1 = 0
+
+    def status_callback(self, msg):
+        # Log update the variable that tells the system to proceed when True is received on the secondary task callback
+        #rospy.loginfo("Draining_starts: %s, Draining_successfull: %s, Handover_successfull: %s", msg.draining_starts, msg.draining_successfull,msg.handover_successfull)
+        self.successfull_handover = msg.handover_successfull
+        self.time_left = msg.time_left
+
+    def initialise_ros(self):
+        self.ros_running = rosgraph.is_master_online()
+        if self.ros_running:
+            rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
+            self.rate=rospy.Rate(1)
+            try:
+                rospy.init_node('Environment', anonymous=True)
+            except:
+                rospy.logwarn("Cannot initialize node 'Environment' as it has already been initialized at the top level as a ROS node.")
+        else:
+            print("ROS is offline!")
+
+        self.time_left = 0
+        self.successfull_handover = 0
 
     def step(self, action=None):
         # If no action is given, sample action space
@@ -60,7 +93,7 @@ class CoLearn(Env):
         reward = self.obtain_reward()
 
         # Decrease remaining episode length at the end of all phases
-        if self.phase == self.phase_size:
+        if self.phase == self.phase_size-1:
             self.episode_length -= 1
 
         terminated = self.episode_length <= 0
@@ -68,11 +101,40 @@ class CoLearn(Env):
         return self.state, self.phase, reward, terminated, self.info 
 
     def obtain_reward(self):
+        if self.ros_running:
+            reward = 0
+            if self.old_phase < self.phase_size - 1: #at the end of the phases wait untill the handover has been successfull or not
+                reward += 0
+            else:
+                if self.successfull_handover == 0:
+                    self.rate.sleep()
+                    self.obtain_reward()
+                elif self.successfull_handover == 1:
+                    reward += ( 10 + self.time_left )
+                else:
+                    reward -= 2
+        else:
+            reward = 0
+            if self.phase == 0:
+                self.old_phase_0 = self.state
+            if self.phase == 1:
+                self.old_phase_1 = self.state
+
+            # #Trajectory 1: 0,0,1 = 10 R
+            # if self.old_phase_0 == 0 and self.old_phase_1 == 0 and self.phase == 2 and self.state == 1:
+            #     reward += 10
+            # #Trajectory 2: 1,0,1 = 5 R
+            # elif self.old_phase_0 == 1 and self.old_phase_1 == 0 and self.phase == 2 and self.state == 1:
+            #     reward += 5
+            # else:
+            #     reward += 0
+
+            if self.phase == 2 and self.state == 1:
+                reward += 10
+
+       
     
-        reward_preference = 5 if self.phase == 2 and self.state == 0 else 1 if self.phase == 2 and self.state == 1 else 0
-        reward = 16 if (self.phase == 0 and self.state == 0) or (self.phase == 0 and self.state == 1) else 0
-     
-        return reward_preference + reward
+        return reward
     
     def reset(self):
         self.state = 0

@@ -11,6 +11,8 @@ import rospy
 
 from CoLearnEnvironment import CoLearn
 
+from co_learning_messages.msg import secondary_task_message
+
 class QLearningAgent():
     def __init__(self,env):
         """
@@ -48,7 +50,7 @@ class QLearningAgent():
         self.terminated = False
         self.state,self.phase = self.env.reset()
         
-    def train(self,n_steps,learning_rate=0.1,discount_factor=0.6,exploration_factor=0.1,trace_decay=0.9,replacement = True):
+    def train(self,n_steps,learning_rate=0.5,discount_factor=0.9,exploration_factor=0.5,trace_decay=0.6,replacement = True):
         # Hyperparameters
         alpha = learning_rate
         gamma = discount_factor
@@ -59,10 +61,8 @@ class QLearningAgent():
         terminated = True
 
         for _ in tqdm(range(1, n_steps+1)):
-            state, phase = self.env.reset()
-        
+            state, phase, terminated = self.reset()
             reward = 0
-            terminated = False
             
             while not terminated:
                 # Get next action
@@ -70,15 +70,15 @@ class QLearningAgent():
 
                 # Perform a step
                 next_state, phase, reward, terminated, info = self.env.step(action) 
-              
+
                 # Apply the update rule to the q_table
-                self.update_Q_table(next_state,reward,gamma,Lambda,alpha,action,phase,state)
+                self.update_Q_table(reward,gamma,Lambda,alpha,action,state,phase)
         
                 state = next_state
         
         #print("Training finished.\n")
-  
-    def train_real_time(self,learning_rate=0.8,discount_factor=0.6,exploration_factor=0.8,trace_decay = 0.6,replacement = True):
+
+    def train_real_time(self,learning_rate=0.8,discount_factor=0.6,exploration_factor=0.2,trace_decay = 0.6,replacement = True):
         """
         Unravels the training loop and saves the phase, action, state, and terminated values. 
         """
@@ -97,33 +97,36 @@ class QLearningAgent():
         # Perform a step
         next_state, next_phase, reward, self.terminated, info = self.env.step(self.action) 
 
+
         # Apply the update rule to the q_table
         self.update_Q_table(next_state,reward,gamma,Lambda,alpha,self.action,next_phase,self.state)
-
-        self.state = next_state
         
+        self.state = next_state
         self.phase = next_phase
             
         return self.action,current_phase,self.terminated
-    
+
     def reset(self):
         self.terminated = False
         self.eligibility_trace = np.zeros((self.env.state_size, self.env.action_size, self.env.phase_size))
         self.state, self.phase = self.env.reset()
         return self.state, self.phase, self.terminated
     
-    def update_Q_table(self,next_state,reward,gamma,Lambda,alpha,action,phase,state):
+    def update_Q_table(self,reward,gamma,Lambda,alpha,action,state,phase):
         # Calculate TD error
         old_value = self.q_table[state, action, phase]
-        next_max = np.max(self.q_table[next_state, :, phase])
+        next_max = np.max(self.q_table[state, :, phase])
         delta = reward + gamma * next_max - old_value
 
+        
+        
         # Update eligibility trace
         self.eligibility_trace *= gamma * Lambda
         self.eligibility_trace[state, action, phase] += 1.0
 
         # Update Q-values using eligibility traces
         self.q_table += alpha * delta * self.eligibility_trace
+
     
     def next_action(self,epsilon,replacement,state,phase):
         # With replacement
@@ -199,7 +202,6 @@ class QLearningAgent():
             rospy.loginfo(f"Q_table loaded from directory: {directory}")
         except Exception as e:
             rospy.logwarn(e)
-            rospy.logwarn("No Q_table loaded, agent operates on random initialisation of Q_table")
         
 if __name__ == '__main__':
     try:

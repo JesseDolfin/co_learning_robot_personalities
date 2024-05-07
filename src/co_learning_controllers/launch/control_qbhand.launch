@@ -22,10 +22,10 @@
   <arg name="rescan_on_initialization" default="false" doc="Choose whether or not to rescan the serial ports on node startup."/>
   <arg name="use_fake_measurement_mode" default="false" doc="Choose whether or not to use previous command values instead of device measurements."/>
   <!-- launch settings -->
-  <arg name="standalone" default="false" doc="Choose whether or not to start the Communication Handler."/>
-  <arg name="use_controller_gui" default="false" doc="Choose whether or not to use the controller GUI."/>
+  <arg name="standalone" default="true" doc="Choose whether or not to start the Communication Handler."/>
+  <arg name="use_controller_gui" default="true" doc="Choose whether or not to use the controller GUI."/>
   <arg name="use_gazebo" default="true" doc="Choose whether or not to use Gazebo instead of real devices."/>
-  <arg name="use_rviz" default="true" doc="Choose whether or not to use rviz."/>
+  <arg name="use_rviz" default="false" doc="Choose whether or not to use rviz."/>
   <arg name="use_joint_limits" default="false" doc="Choose whether or not to use the robot joint limits."/>
   <arg name="use_waypoints" default="false" doc="Choose whether or not to use the waypoint references."/>
   <arg name="use_without_robot" default="true" doc="Choose whether or not to bring up robot description (e.g. when using with other robots is better to set it apart)."/>

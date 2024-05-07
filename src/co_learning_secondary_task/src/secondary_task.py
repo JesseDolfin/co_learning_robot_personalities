@@ -33,19 +33,17 @@ class secondary_task():
         self.pantograph = Pantograph
         self.robot = PShape
 
-        self.handover_successfull = False
-
         self.spine_hit_count = 0
         self.success_count = 0
 
-        self.time_start = 10e20
+
 
         pygame.mouse.set_visible(True)     ##Hide cursor by default. 'm' toggles it
         
         ##initialize "real-time" clock
-        self.FPS = 500   #in Hertz
+        self.FPS = 400   #in Hertz
 
-        self.max_time = 30 # seconds
+ 
 
 
     def initialise_ros(self):
@@ -58,7 +56,7 @@ class secondary_task():
         #self.rate = rospy.rate(50) #Hz
 
     def status_callback(self,msg):
-        rospy.loginfo("Begin handover: %s, Handover success: %s", msg.begin_handover, msg.handover_successfull)
+        rospy.loginfo("Secondary task starts: %s, Draining starts: %s, Draining success: %s, Handover success: %s", msg.secondary_task_start, msg.draining_starts, msg.draining_successfull, msg.handover_successfull)
         self.handover_successfull = msg.handover_successfull
 
     def initialise_pygame(self):
@@ -93,6 +91,8 @@ class secondary_task():
         self.cBlack     = (100,100,100)
         self.cWhite     = (255,255,255)
         self.cGreen     = (0,230,0)
+
+        self.time_start = time.time() +100
 
         self.clock = pygame.time.Clock()
 
@@ -136,6 +136,7 @@ class secondary_task():
         self.away_from_bone = True
         self.spinal_coord_collision = False
         self.toggle_visual = False
+        self.handover_successfull = False
         self.haptic_feedback = True
         self.proceed = False
         self.visual_feedback = True
@@ -146,6 +147,7 @@ class secondary_task():
         self.needle_removed_too_soon = False
         self.needle_removed_too_soon_2 = False
         self.bar_released_too_soon = True
+        self.update_draining_start = True
 
         self.window_scale = 3
 
@@ -156,7 +158,10 @@ class secondary_task():
 
         self.run = True
 
-        self.max_needle_pressure = 5000
+        self.max_time = 30 # seconds
+        self.time_left = self.max_time
+
+        self.max_needle_pressure = 500
 
         self.task_failed = False
 
@@ -166,6 +171,7 @@ class secondary_task():
         self.rotate_down = False           
         self.update_status = True
         self.start_handover = False
+        self.update_time = True
 
         self.xc,self.yc = self.screenVR.get_rect().center ##center of the screen
         self.center = np.array([self.xc,self.yc]) 
@@ -299,11 +305,14 @@ class secondary_task():
         self.Bones = {'Vertebrae one', 'Vertebrae two', 'Vertebrae three', 'Vertebrae four', 'Vertebrae five','Vertebrae six'}
 
 
-    def send_task_status(self,start):
+    def send_task_status(self,secondary_task_start,start,end,success,time):
         if self.ros_running:
             message = secondary_task_message()
-            message.begin_handover = start
-            message.handover_successfull = None
+            message.secondary_task_start = secondary_task_start
+            message.draining_starts = start
+            message.draining_successfull = end
+            message.handover_successfull = success
+            message.time_left = time
             self.pub.publish(message)
         else:
             return
@@ -420,14 +429,14 @@ class secondary_task():
                     self.toggle_visual = not self.toggle_visual
                 elif event.key == ord('h'):
                     self.haptic_feedback = not self.haptic_feedback
-                elif event.key == ord('p'):
-                    self.proceed = not self.proceed
                 elif event.key == ord('d'):
                     self.debugToggle = not self.debugToggle
                 elif event.key == ord('o'):
                     self.visual_feedback = not self.visual_feedback
                 elif event.key == ord(' '):
                     self.render_bar = False
+                elif event.key == ord('p'):
+                    self.handover_successfull = True
             elif event.type == pygame.KEYDOWN:
                 if event.key == ord(' '):
                     self.render_bar = True
@@ -437,7 +446,9 @@ class secondary_task():
                     self.rotate_down = True
 
     def run_simulation(self):   
+        self.send_task_status(secondary_task_start=True,start=0,end=0,success=0,time=self.max_time) 
         while self.run:
+            print(self.time_left)
             # Keyboard events
             self.process_events()
                 
@@ -458,85 +469,10 @@ class secondary_task():
 
             self.xm = np.array(self.cursor) 
             
-            ######################################## COMPUTE COLLISIONS WITH ANY TISSUE #######################################
-            # Define haptic center and endpoint of our haptic (needle tip)
-            self.haptic_endpoint = pygame.Rect(self.haptic.center[0]+np.cos(self.alpha)*250,self.haptic.center[1]+np.sin(self.alpha)*250, 1, 1)
-            
-            # Initialize zero endpoint force and reference position based on cursor 
-            self.fe = np.zeros(2)
-            self.reference_pos  = self.cursor
-
-            self.collision_bone = self.check_collision_with_vertebrae(self.haptic_endpoint)
-
-            # Update the collision dict to all False to reset collision dict 
-            self.collision_dict.update((value, False) for value in self.collision_dict)
-            self.collision_flag = False
-            
-            # Loop over all the objects and check for collision
-            for value in self.objects_dict:
-                Collision = self.haptic_endpoint.colliderect(self.objects_dict[value])
-
-                # If collision is detected in specific layer only update this value to True
-                if Collision:
-                    self.collision_any = True
-                    self.collision_dict.update({value: True})
-                
-            for collision in self.collision_dict:
-                if collision not in self.Bones and self.collision_dict[collision] == True:
-
-                    # For the objects(tissues) in collision with the needle tip set the damping value and tissue cutting force of the environment accordingly
-                    # Additionally, flip position, collision boolean and tissue layer index.
-                    self.damping        = self.variable_dict[collision]['D_TISSUE'] * self.K
-                    self.cutting_force  = self.variable_dict[collision]['tissue_cutting_force']
-                    self.collision_bool = self.variable_dict[collision]['collision_bool']
-                    self.update_bool    = self.variable_dict[collision]['update_bool']
-                    self.tissue_index   = list(self.variable_dict).index(collision) + 1  #We start counting index at zero so +1 for further computation
-            
-            
-            # In case no collisions are detected default the damping value and tissue cutting force of the environment to zero
-            if all(value == False for value in self.collision_dict.values()):
-                self.damping          = np.zeros(2)
-                self.cutting_force    = 0
-            
-            # Check if any of the rectangular vertebrae are in collision, if so flip bone collision boolean to limit needle movement
-            if self.collision_dict['Vertebrae one'] or self.collision_dict['Vertebrae two'] or self.collision_dict['Vertebrae three'] or self.collision_dict['Vertebrae four'] or self.collision_dict['Vertebrae five'] or self.collision_dict['Vertebrae six']:
-                self.collision_bone = True
-            else:
-                pass
-              
-            # Calculate endpoint velocity and update previous haptic state
-            self.endpoint_velocity = (self.xhold - self.xh)/self.FPS
-            self.xhold = self.xh
-
-            # Implements a sine wave parallel to the needle
-            needle_direction = [np.cos(self.alpha),np.sin(self.alpha)]
-            faulty_force = np.array(needle_direction)*40000*np.sin(self.t/5)
-            
-            # Calculate force feedback from impedance controller 
-            self.fe = (self.K @ (self.xm-self.xh) - (2*0.7*np.sqrt(np.abs(self.K)) @ self.dxh)) +faulty_force
+         
 
             self.update_fe()
             
-            # Fix the proxy position of needle contact point with skin and update only when no contact is made with any tissue (so when needle is retracted)
-            if self.update_prox and self.collision_dict['Skin']:
-                begin_pos = (self.haptic.center[0],self.haptic.center[1])
-                end_pos   = (self.haptic.center[0]+np.cos(self.alpha)*250, self.haptic.center[1]+ np.sin(self.alpha)*250)
-                self.a,self.b = self.compute_line(begin_pos, end_pos)
-
-                self.update_prox = False
-
-            # Enable needle proxy position update as soon as no contact is made with any tissue (so when needle is retracted)
-            if all(value == False for value in self.collision_dict.values()):
-                self.update_prox = True
-
-            # Loop trough remaining integration steps       
-            self.xhhold = self.xh
-            self.xh = self.dxh*self.dt + self.xh
-            self.i += 1
-            self.t += self.dt
-        
-            self.haptic.center = self.xh 
-
             self.render_screen()
             
             self.previous_cursor = self.cursor 
@@ -548,7 +484,6 @@ class secondary_task():
                 self.run = False
                 self.spine_hit_count += 1
                 time.sleep(0.5)
-                self.send_task_status(False)
                 self.end_screen()
                 
            
@@ -556,13 +491,70 @@ class secondary_task():
                 self.run = False
                 time.sleep(0.5)
                 self.time_up = True
-                self.send_task_status(False)
+                self.send_task_status(secondary_task_start=False,start=0,end=0,success=-1,time=0)
                 self.end_screen()
 
             if self.handover_successfull: # check here for the message that the handover is successfull
+                self.send_task_status(secondary_task_start=False,start=0,end=0,success=1,time=self.time_left)
                 self.end_screen()
 
     def update_fe(self):
+        ######################################## COMPUTE COLLISIONS WITH ANY TISSUE #######################################
+        # Define haptic center and endpoint of our haptic (needle tip)
+        self.haptic_endpoint = pygame.Rect(self.haptic.center[0]+np.cos(self.alpha)*250,self.haptic.center[1]+np.sin(self.alpha)*250, 1, 1)
+        
+        # Initialize zero endpoint force and reference position based on cursor 
+        self.fe = np.zeros(2)
+        self.reference_pos  = self.cursor
+
+        self.collision_bone = self.check_collision_with_vertebrae(self.haptic_endpoint)
+
+        # Update the collision dict to all False to reset collision dict 
+        self.collision_dict.update((value, False) for value in self.collision_dict)
+        self.collision_flag = False
+        
+        # Loop over all the objects and check for collision
+        for value in self.objects_dict:
+            Collision = self.haptic_endpoint.colliderect(self.objects_dict[value])
+
+            # If collision is detected in specific layer only update this value to True
+            if Collision:
+                self.collision_any = True
+                self.collision_dict.update({value: True})
+            
+        for collision in self.collision_dict:
+            if collision not in self.Bones and self.collision_dict[collision] == True:
+
+                # For the objects(tissues) in collision with the needle tip set the damping value and tissue cutting force of the environment accordingly
+                # Additionally, flip position, collision boolean and tissue layer index.
+                self.damping        = self.variable_dict[collision]['D_TISSUE'] * self.K
+                self.cutting_force  = self.variable_dict[collision]['tissue_cutting_force']
+                self.collision_bool = self.variable_dict[collision]['collision_bool']
+                self.update_bool    = self.variable_dict[collision]['update_bool']
+                self.tissue_index   = list(self.variable_dict).index(collision) + 1  #We start counting index at zero so +1 for further computation
+        
+        
+        # In case no collisions are detected default the damping value and tissue cutting force of the environment to zero
+        if all(value == False for value in self.collision_dict.values()):
+            self.damping          = np.zeros(2)
+            self.cutting_force    = 0
+        
+        # Check if any of the rectangular vertebrae are in collision, if so flip bone collision boolean to limit needle movement
+        if self.collision_dict['Vertebrae one'] or self.collision_dict['Vertebrae two'] or self.collision_dict['Vertebrae three'] or self.collision_dict['Vertebrae four'] or self.collision_dict['Vertebrae five'] or self.collision_dict['Vertebrae six']:
+            self.collision_bone = True
+        else:
+            pass
+            
+        # Calculate endpoint velocity and update previous haptic state
+        self.endpoint_velocity = (self.xhold - self.xh)/self.FPS
+        self.xhold = self.xh
+
+        # Implements a sine wave parallel to the needle
+        needle_direction = [np.cos(self.alpha),np.sin(self.alpha)]
+        faulty_force = np.array(needle_direction)*40000*np.sin(self.t/5)
+        
+        # Calculate force feedback from impedance controller 
+        self.fe = (self.K @ (self.xm-self.xh) - (2*0.7*np.sqrt(np.abs(self.K)) @ self.dxh)) +faulty_force
         # If collision exists with any tissue layer create a virtual needle path along the needle
         # to compute tissues normal force acting on needle when moving inside tissue 
         if any(value == True for value in self.collision_dict.values()):
@@ -679,6 +671,27 @@ class secondary_task():
                 if collision not in Bones:
                     self.variable_dict[collision]['penetration_bool'] = False
                     self.variable_dict[collision]['update_bool'] = True
+
+        # Fix the proxy position of needle contact point with skin and update only when no contact is made with any tissue (so when needle is retracted)
+        if self.update_prox and self.collision_dict['Skin']:
+            begin_pos = (self.haptic.center[0],self.haptic.center[1])
+            end_pos   = (self.haptic.center[0]+np.cos(self.alpha)*250, self.haptic.center[1]+ np.sin(self.alpha)*250)
+            self.a,self.b = self.compute_line(begin_pos, end_pos)
+
+            self.update_prox = False
+
+        # Enable needle proxy position update as soon as no contact is made with any tissue (so when needle is retracted)
+        if all(value == False for value in self.collision_dict.values()):
+            self.update_prox = True
+
+        # Loop trough remaining integration steps       
+        self.xhhold = self.xh
+        self.xh = self.dxh*self.dt + self.xh
+        self.i += 1
+        self.t += self.dt
+    
+        self.haptic.center = self.xh 
+
                 
     def render_screen(self):
         # Render the haptic surface
@@ -754,13 +767,16 @@ class secondary_task():
                     else:
                         self.start_handover = True
                         self.draw_progress_bar(0)
+                    if self.update_draining_start:
+                        self.update_draining_start = False
+                        self.send_task_status(secondary_task_start=False,start=1,end=0,success=0,time=self.time_left)
                 elif not self.render_bar and not self.start_handover and not self.bar_pressed:
                     space_bar_text = self.font_low_time.render('Press space bar to start draining the fluid!', True, (20,150,40))
                     self.screenVR.blit(space_bar_text, (0, 60))
 
-
-        time_elapsed =  time.time() - self.time_start
-        self.time_left = self.max_time - time_elapsed  
+        if self.start_handover and self.update_time:
+            self.time_start = time.time()
+            self.update_time = False
 
         if self.bar_pressed and not self.start_handover:
             if not self.collision_dict['Cerebrospinal fluid one']:
@@ -774,9 +790,11 @@ class secondary_task():
 
         # Handles the logic of the handover phase
         if self.start_handover:
+            time_elapsed =  time.time() - self.time_start
+            self.time_left = self.max_time - time_elapsed  
+            print(self.time_left)
             if self.update_status:
-                self.time_start = time.time()
-                self.send_task_status(True)
+                self.send_task_status(secondary_task_start=False,start=0,end=1,success=0,time=self.time_left)
                 self.update_status = False
             keep_mouse_in_fluid_text_1 = self.font_low_time.render('Don\'t remove the needle from the epidural space', True, (20,150,40))
             keep_mouse_in_fluid_text_2 = self.font_low_time.render('untill the robot has provided a piece of cotton!',True,(20,150,40))
@@ -786,7 +804,7 @@ class secondary_task():
             self.screenVR.blit(keep_mouse_in_fluid_text_3, (0, 100))
             if not self.collision_dict['Cerebrospinal fluid one']:
                 self.needle_removed_too_soon_2 = True
-                self.send_task_status(False)
+                self.send_task_status(secondary_task_start=False,start=0,end=0,success=-1,time=self.time_left)
                 self.task_failed = True
 
             if self.time_left <= 10:
@@ -871,6 +889,7 @@ class secondary_task():
         spacebar_released_text_2 = font_message.render("fluid was drained, please try again!", True, (240, 0, 0))
         needle_removed_handover_text = font_message.render(f"Needle removed from epidural space without", True, (240, 0, 0))
         needle_removed_handover_text_2 = font_message.render("successfull handover of the item!", True, (240, 0, 0))
+        successfull_handover_text = font_message.render(f"Item obtained! The procedure is successfull", True, (20,150,40))
 
         # Create a pygame.Rect object that represents the button's boundaries
         button_rect = pygame.Rect(0, 0, 150, 50)  # Adjust the position as needed
@@ -927,6 +946,8 @@ class secondary_task():
                 # Draw respective good and bad text on screen
                 if self.spinal_coord_collision:
                     self.screenHaptics.blit(bad_text,(20,120))
+                elif self.handover_successfull:
+                    self.screenHaptics.blit(successfull_handover_text ,(20,120))
                 elif not self.time_up and not self.task_failed:
                     self.screenHaptics.blit(good_text_1,(20,120))
                     self.screenHaptics.blit(good_text_2,(25,150))

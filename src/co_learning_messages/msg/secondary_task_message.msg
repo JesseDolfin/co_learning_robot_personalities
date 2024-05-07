@@ -1,4 +1,7 @@
 std_msgs/Header header
 
-bool begin_handover
-bool handover_successfull
+bool secondary_task_start
+int8 draining_starts 
+int8 draining_successfull
+int8 handover_successfull
+float32 time_left
