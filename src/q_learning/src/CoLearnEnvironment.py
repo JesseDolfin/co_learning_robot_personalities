@@ -1,3 +1,4 @@
+from email.policy import Policy
 import gymnasium as gym
 from gymnasium import Env
 from gymnasium.spaces import Discrete
@@ -16,6 +17,7 @@ class CoLearn(Env):
         '''
         Defines action space containing 6 actions (0-5)
 
+        - Wait (reachable from each phase)
         - Initiate handover at time T_1 : 0, 0
         - Initiate handover at time T_2 : 0, 1
         - Go to Location A              : 1, 0 
@@ -34,29 +36,30 @@ class CoLearn(Env):
         - State_space = 2 states per phase
         '''
 
-        self.initialise_ros()
-
-        self.action_size = 2 # Per phase
+        self.states={'Phase_0':['Wait','T1','T2'],
+                     'Phase_1':['Wait','A','B'],
+                     'Phase_2':['Wait','C','D']}
+        
+        self.action_size = 3 # per phase
         self.action_space = Discrete(self.action_size)
-        self.observation_space = Discrete(6) # Same as state space
+        
+        self.observation_size = len(set(value for sublist in self.states.values() for value in sublist))
+        self.observation_space = Discrete(self.observation_size)
 
-        self.state_size = 2 # Per phase
-        self.state = random.randint(0, self.state_size - 1) # initialize state here
+        self.phase_size = len(self.states)
+        self.phase = 0
 
-        self.phase_size = 3
+        self.state_size = len(self.states['Phase_0']) # per phase
+        self.state = random.randint(0, self.state_size-1) # initialize state here
 
         self.max_episode_length = 10
         self.episode_length = self.max_episode_length 
-        self.info = {}
-        
-        self.phase = 0
 
-        self.old_phase_0 = 0
-        self.old_phase_1 = 0
+        self.info = {}
+
+        self.initialise_ros()
 
     def status_callback(self, msg):
-        # Log update the variable that tells the system to proceed when True is received on the secondary task callback
-        #rospy.loginfo("Draining_starts: %s, Draining_successfull: %s, Handover_successfull: %s", msg.draining_starts, msg.draining_successfull,msg.handover_successfull)
         self.successfull_handover = msg.handover_successfull
         self.time_left = msg.time_left
 
@@ -76,21 +79,21 @@ class CoLearn(Env):
         self.successfull_handover = 0
 
     def step(self, action=None):
-        # If no action is given, sample action space
+        # Sample if no action is specified
         if action is None:
             action = self.action_space.sample()
 
-        # Update the state based on the action taken
+        # Actions directly match states so direct update works (no unreachable states due to phase mechanism)
         self.state = action
 
-        # Update the phase based on the previous phase
         if self.phase < self.phase_size-1:
             self.phase += 1  
         else:
             self.phase = 0
 
-        # Obtain the reward for task completion
         reward = self.obtain_reward()
+
+        self.previous_state = self.state
 
         # Decrease remaining episode length at the end of all phases
         if self.phase == self.phase_size-1:
@@ -101,39 +104,29 @@ class CoLearn(Env):
         return self.state, self.phase, reward, terminated, self.info 
 
     def obtain_reward(self):
+        reward = 0
         if self.ros_running:
-            reward = 0
-            if self.old_phase < self.phase_size - 1: #at the end of the phases wait untill the handover has been successfull or not
-                reward += 0
-            else:
+            if self.state != 0: # Incentive to not wait around
+                reward += 1
+
+            if self.phase == 2: # At the end of the phase check if handover succeeded
                 if self.successfull_handover == 0:
                     self.rate.sleep()
                     self.obtain_reward()
                 elif self.successfull_handover == 1:
-                    reward += ( 10 + self.time_left )
+                    reward += ( 10 + self.time_left ) 
                 else:
-                    reward -= 2
+                    reward -= 1 
+            
         else:
-            reward = 0
-            if self.phase == 0:
-                self.old_phase_0 = self.state
-            if self.phase == 1:
-                self.old_phase_1 = self.state
+            if self.state == 0:
+                reward -= 1
+            else:
+                reward += 1
 
-            # #Trajectory 1: 0,0,1 = 10 R
-            # if self.old_phase_0 == 0 and self.old_phase_1 == 0 and self.phase == 2 and self.state == 1:
-            #     reward += 10
-            # #Trajectory 2: 1,0,1 = 5 R
-            # elif self.old_phase_0 == 1 and self.old_phase_1 == 0 and self.phase == 2 and self.state == 1:
-            #     reward += 5
-            # else:
-            #     reward += 0
-
-            if self.phase == 2 and self.state == 1:
+            if self.phase == 2 and self.previous_state == 1 and self.state == 2:
                 reward += 10
 
-       
-    
         return reward
     
     def reset(self):

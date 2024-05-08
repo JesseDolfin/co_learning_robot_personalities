@@ -38,10 +38,11 @@ class QLearningAgent():
         else:
             print("ROS is offline!")
 
-
+        
 
         self.env = env
-        self.q_table = np.random.rand(self.env.state_size, self.env.action_size,self.env.phase_size) * 0.01 # Random initiation of q-table
+
+        self.q_table = np.random.rand(self.env.state_size, self.env.action_size, self.env.phase_size) * 0.01 # Random initiation of q-table
         self.eligibility_trace = np.zeros((self.env.state_size, self.env.action_size, self.env.phase_size))
         self.action_phase_space = np.ones((self.env.action_size,self.env.phase_size))
         self.sampled_actions = [list(range(self.env.action_size)) for _ in range(self.env.phase_size)]
@@ -71,6 +72,9 @@ class QLearningAgent():
                 # Perform a step
                 next_state, phase, reward, terminated, info = self.env.step(action) 
 
+                if phase == 0:
+                    self.reset_eligibility()
+
                 # Apply the update rule to the q_table
                 self.update_Q_table(reward,gamma,Lambda,alpha,action,state,phase)
         
@@ -78,7 +82,7 @@ class QLearningAgent():
         
         #print("Training finished.\n")
 
-    def train_real_time(self,learning_rate=0.8,discount_factor=0.6,exploration_factor=0.2,trace_decay = 0.6,replacement = True):
+    def train_real_time(self,learning_rate=0.7,discount_factor=0.99,exploration_factor=0.25,trace_decay = 0.9,replacement = True):
         """
         Unravels the training loop and saves the phase, action, state, and terminated values. 
         """
@@ -95,16 +99,21 @@ class QLearningAgent():
         self.action = self.next_action(epsilon,replacement,self.state,self.phase)
 
         # Perform a step
-        next_state, next_phase, reward, self.terminated, info = self.env.step(self.action) 
+        next_state, phase, reward, self.terminated, info = self.env.step(self.action) 
 
+        if phase == 0:
+            self.reset_eligibility()
 
         # Apply the update rule to the q_table
-        self.update_Q_table(next_state,reward,gamma,Lambda,alpha,self.action,next_phase,self.state)
+        self.update_Q_table(reward,gamma,Lambda,alpha,self.action,self.state,phase)
         
         self.state = next_state
-        self.phase = next_phase
+        self.phase = phase
             
         return self.action,current_phase,self.terminated
+    
+    def reset_eligibility(self):
+        self.eligibility_trace = np.zeros((self.env.state_size, self.env.action_size, self.env.phase_size))
 
     def reset(self):
         self.terminated = False
@@ -118,10 +127,8 @@ class QLearningAgent():
         next_max = np.max(self.q_table[state, :, phase])
         delta = reward + gamma * next_max - old_value
 
-        
-        
         # Update eligibility trace
-        self.eligibility_trace *= gamma * Lambda
+        self.eligibility_trace *= Lambda * gamma
         self.eligibility_trace[state, action, phase] += 1.0
 
         # Update Q-values using eligibility traces
