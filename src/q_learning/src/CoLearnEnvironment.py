@@ -4,6 +4,7 @@ from gymnasium import Env
 from gymnasium.spaces import Discrete
 import numpy as np
 import random
+import threading
 
 from regex import R
 import rospy
@@ -15,53 +16,60 @@ from co_learning_messages.msg import secondary_task_message
 class CoLearn(Env):
     def __init__(self):
         '''
-        Defines action space containing 6 actions (0-5)
+        Defines action space containing 8 actions (0-7)
 
-        - Wait (reachable from each phase)
+        - Home
         - Initiate handover at time T_1 : 0, 0
         - Initiate handover at time T_2 : 0, 1
         - Go to Location A              : 1, 0 
         - Go to Location B              : 1, 1
         - Go to Serve                   : 2, 0
         - Go to Drop                    : 2, 1
+        - Open hand
 
         Where the first number indicates the phase
 
         
-        Defines an observation space containing 9 states (0-8)
-
-        - Handover_time             = {T_1,T,2},                phase = 0
-        - State_position            = {Location_A,Location_B},  phase = 1
-        - State_handOrientation     = {Serve,Drop},             phase = 2
-        - State_space = 2 states per phase
+        Defines an observation space containing 8 states (0-7)
+        - Home                      = Home                      phase = 0
+        - Handover_time             = {T_1,T,2},                phase = 1
+        - State_position            = {Location_A,Location_B},  phase = 2
+        - State_handOrientation     = {Serve,Drop},             phase = 3
+        - Open hand                 = Open_hand                 phase = 4
         '''
 
-        self.states={'Phase_0':['Wait','T1','T2'],
-                     'Phase_1':['Wait','A','B'],
-                     'Phase_2':['Wait','C','D']}
         
-        self.action_size = 3 # per phase
+        self.action_size = 8
         self.action_space = Discrete(self.action_size)
         
-        self.observation_size = len(set(value for sublist in self.states.values() for value in sublist))
+        self.observation_size = 8
         self.observation_space = Discrete(self.observation_size)
 
-        self.phase_size = len(self.states)
+        self.phase_size = 5
         self.phase = 0
 
-        self.state_size = len(self.states['Phase_0']) # per phase
-        self.state = random.randint(0, self.state_size-1) # initialize state here
+        self.state_size = 8
+        self.state = 0 
 
-        self.max_episode_length = 10
+        self.max_episode_length = 100
         self.episode_length = self.max_episode_length 
 
-        self.info = {}
+        self.info = {'valid':None,
+                     'phase':0}
+        
+        self.phase_0_state = 0
+        self.phase_1_state = 0
+        self.phase_2_state = 0
+        self.phase_3_state = 0
+
+        self.handover_event = threading.Event()
 
         self.initialise_ros()
 
     def status_callback(self, msg):
         self.successfull_handover = msg.handover_successfull
         self.time_left = msg.time_left
+        self.handover_event.set()
 
     def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()
@@ -73,61 +81,93 @@ class CoLearn(Env):
             except:
                 rospy.logwarn("Cannot initialize node 'Environment' as it has already been initialized at the top level as a ROS node.")
         else:
-            print("ROS is offline!")
+            print("ROS is offline! Environment proceeds in offline mode")
 
         self.time_left = 0
         self.successfull_handover = 0
+
+    def check_valid_action(self,action):
+        if self.state == 0:                             # 0
+            valid = True if action in [1,2] else False
+        elif self.state in [1,2]:                       # 1
+            valid = True if action in [3,4] else False
+        elif self.state in [3,4]:                       # 2
+            valid = True if action in [5,6] else False
+        elif self.state in [5,6]:                       # 3
+            valid = True if action == 7 else False
+        elif self.state == 7:                           # 4
+            valid = True if action == 0 else False
+        else:
+            valid = False
+        return valid
 
     def step(self, action=None):
         # Sample if no action is specified
         if action is None:
             action = self.action_space.sample()
 
-        # Actions directly match states so direct update works (no unreachable states due to phase mechanism)
-        self.state = action
-
-        if self.phase < self.phase_size-1:
-            self.phase += 1  
-        else:
-            self.phase = 0
-
-        reward = self.obtain_reward()
+        self.valid_transition = self.check_valid_action(action)
 
         self.previous_state = self.state
 
-        # Decrease remaining episode length at the end of all phases
-        if self.phase == self.phase_size-1:
-            self.episode_length -= 1
+        if self.phase == 3:
+            self.handover_event.clear()
 
-        terminated = self.episode_length <= 0
+        if self.valid_transition:
+            self.state = action
+            if self.previous_state == 7 and self.state ==0:
+                self.phase = 0
+            else:
+                self.phase += 1
+            self.save_previous_state(self.phase,self.state)
 
-        return self.state, self.phase, reward, terminated, self.info 
+        reward = self.obtain_reward()
+
+        self.info['valid'] = self.valid_transition
+        self.info['phase'] = self.phase
+
+        self.episode_length -= 1
+
+        terminated = self.episode_length <= 0 or (self.previous_state == 7 and self.state == 0)
+
+        return self.state, reward, terminated, self.info 
 
     def obtain_reward(self):
         reward = 0
         if self.ros_running:
-            if self.state != 0: # Incentive to not wait around
-                reward += 1
-
-            if self.phase == 2: # At the end of the phase check if handover succeeded
-                if self.successfull_handover == 0:
-                    self.rate.sleep()
-                    self.obtain_reward()
-                elif self.successfull_handover == 1:
-                    reward += ( 10 + self.time_left ) 
-                else:
-                    reward -= 1 
-            
-        else:
-            if self.state == 0:
-                reward -= 1
+            if not self.valid_transition: # Only valid transitions are rewarded
+                reward = -1
             else:
-                reward += 1
-
-            if self.phase == 2 and self.previous_state == 1 and self.state == 2:
                 reward += 10
 
+            if self.phase == 4: 
+                self.handover_event.wait() # ensures we obtain the reward only as soon as the handover is successfull (or failed)
+                if self.successfull_handover == 1:
+                    reward += ( 10 + self.time_left ) 
+                else:
+                    reward = 0 # -5 
+            
+        else:
+            if not self.valid_transition:
+                reward = -1
+            else:
+                reward += 10
+
+            if self.phase_1_state == 1 and self.phase_2_state == 3 and self.phase_3_state == 6:
+                reward += 20
+
         return reward
+    
+    def save_previous_state(self,phase,state):
+        if phase == 0:
+            self.phase_0_state = state
+        if phase == 1:
+            self.phase_1_state = state
+        if phase == 2:
+            self.phase_2_state = state
+        if phase == 3:
+            self.phase_3_state = state
+        
     
     def reset(self):
         self.state = 0
