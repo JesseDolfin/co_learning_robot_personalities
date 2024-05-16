@@ -45,7 +45,7 @@ class QLearningAgent():
         self.state, self.phase = self.env.reset()
         self.e_trace = np.zeros((self.env.observation_size, self.env.action_size))
 
-    def train(self, n_steps, learning_rate=0.1, discount_factor=0.95, exploration_factor=0.1, trace_decay=0.8):
+    def train(self, n_steps, learning_rate=0.15, discount_factor=0.8, exploration_factor=0.25, trace_decay=0.3):
         # Hyperparameters
         alpha = learning_rate
         gamma = discount_factor
@@ -143,9 +143,9 @@ class QLearningAgent():
         
 if __name__ == '__main__':
     try:
-        n_steps = 100000
+        n_steps = 10
         Agent = QLearningAgent(env=CoLearn())
-        Agent.train(n_steps=n_steps,discount_factor=0.8)
+        Agent.train(n_steps=n_steps)
         Agent.save_q_table(prefix=f"q_table_solved_{n_steps}_")
         #Agent.load_q_table(directory="code_jesse/Q_tables/q_table_5.npy")
         #Agent.evaluate()
