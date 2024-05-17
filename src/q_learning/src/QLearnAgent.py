@@ -44,35 +44,66 @@ class QLearningAgent():
         self.reset_experience()
         self.state, self.phase = self.env.reset()
         self.e_trace = np.zeros((self.env.observation_size, self.env.action_size))
+        self.initialise = True
 
-    def train(self, n_steps, learning_rate=0.15, discount_factor=0.8, exploration_factor=0.25, trace_decay=0.3):
+    def train(self, n_steps = 100000, learning_rate=0.15, discount_factor=0.8, exploration_factor=0.25, trace_decay=0.3,real_time=False):
         # Hyperparameters
         alpha = learning_rate
         gamma = discount_factor
         epsilon = exploration_factor
         Lambda = trace_decay
 
-        for i in tqdm(range(1, n_steps + 1)):
-            self.state, self.phase = self.env.reset()
-            self.reset_experience()
-            terminated = False
-            self.e_trace = np.zeros_like(self.q_table)
+        if real_time:
+            if self.phase == 0 and self.initialise:
+                self.state, self.phase = self.env.reset()
+                self.reset_experience()
+                terminated = False
+                self.e_trace = np.zeros_like(self.q_table)
+                self.initialise = False
 
-            while not terminated:
-                # Exploration-exploitation trade-off
-                if random.uniform(0, 1) < epsilon:
-                    action = self.env.action_space.sample()  # Explore action space
-                else:
-                    action = np.argmax(self.q_table[self.state, :])  # Exploit learned values
-
-                # Perform a step
+            phase = self.phase
+            while phase == self.phase:
+                action = self.epsilon_greedy(epsilon)
                 next_state, reward, terminated, info = self.env.step(action)
-                self.experience_update(self.state, action, next_state, reward)
-                self.state = next_state
-                self.phase = info.get('phase', self.phase)
+                phase = info.get('phase', phase)
 
-            if i > 1:
-                self.experience_replay(alpha, gamma, Lambda)
+                self.experience_update(self.state,action,next_state,reward)
+                self.state = next_state
+
+            self.phase = phase
+
+            if terminated:
+                self.initialise = True
+
+            return action, self.phase, terminated
+
+        else:
+            for i in tqdm(range(1, n_steps + 1)):
+                self.state, self.phase = self.env.reset()
+                self.reset_experience()
+                terminated = False
+                self.e_trace = np.zeros_like(self.q_table)
+
+                while not terminated:
+                    action = self.epsilon_greedy(epsilon)
+
+                    # Perform a step
+                    next_state, reward, terminated, info = self.env.step(action)
+                    self.experience_update(self.state, action, next_state, reward)
+                    self.state = next_state
+                    self.phase = info.get('phase', self.phase)
+
+                if i > 1:
+                    self.experience_replay(alpha, gamma, Lambda)
+
+    def epsilon_greedy(self,epsilon):
+        # Exploration-exploitation trade-off
+        if random.uniform(0, 1) < epsilon:
+            action = self.env.action_space.sample()  # Explore action space
+        else:
+            action = np.argmax(self.q_table[self.state, :])  # Exploit learned values
+
+        return action
 
     def experience_update(self, state, action, next_state, reward):
         self.experience["state"].append(state)
@@ -143,7 +174,7 @@ class QLearningAgent():
         
 if __name__ == '__main__':
     try:
-        n_steps = 10
+        n_steps = 100000
         Agent = QLearningAgent(env=CoLearn())
         Agent.train(n_steps=n_steps)
         Agent.save_q_table(prefix=f"q_table_solved_{n_steps}_")

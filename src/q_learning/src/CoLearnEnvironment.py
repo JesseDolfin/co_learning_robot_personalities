@@ -71,6 +71,8 @@ class CoLearn(Env):
         self.time_left = msg.time_left
         self.handover_event.set()
 
+   
+
     def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()
         if self.ros_running:
@@ -106,6 +108,8 @@ class CoLearn(Env):
         if action is None:
             action = self.action_space.sample()
 
+        self.action = action
+
         self.valid_transition = self.check_valid_action(action)
 
         self.previous_state = self.state
@@ -136,25 +140,31 @@ class CoLearn(Env):
         reward = 0
         if self.ros_running:
             if not self.valid_transition: # Only valid transitions are rewarded
-                reward = -1
+                reward = -10
             else:
                 reward += 10
 
-            if self.phase == 4: 
+            if self.phase == 3: 
                 self.handover_event.wait() # ensures we obtain the reward only as soon as the handover is successfull (or failed)
                 if self.successfull_handover == 1:
-                    reward += ( 10 + self.time_left ) 
+                    reward += self.time_left  
                 else:
                     reward = 0 # -5 
             
         else:
             if not self.valid_transition:
-                reward = -1
+                reward = -5
             else:
-                reward += 10
+                reward += 5
+
+            # if self.previous_state == self.action:
+            #     reward -= 1
 
             if self.phase_1_state == 1 and self.phase_2_state == 3 and self.phase_3_state == 6:
-                reward += 20
+                reward += 1
+
+            if self.phase_1_state == 2 and self.phase_2_state == 4 and self.phase_3_state == 6:
+                reward += 3
 
         return reward
     
