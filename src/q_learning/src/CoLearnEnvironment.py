@@ -62,14 +62,19 @@ class CoLearn(Env):
         self.phase_2_state = 0
         self.phase_3_state = 0
 
-        self.handover_event = threading.Event()
+        self.condition = threading.Condition()
+        self.relevant_message = None
 
         self.initialise_ros()
 
     def status_callback(self, msg):
-        self.successfull_handover = msg.handover_successfull
-        self.time_left = msg.time_left
-        self.handover_event.set()
+        with self.condition:
+            if msg.handover_successfull != 0:  # Check if handover_successfull is set to either -1 or 1
+                self.relevant_part = {
+                    'handover_successfull': msg.handover_successfull,
+                    'time_left': msg.time_left
+                }
+                self.condition.notify()
 
    
 
@@ -85,8 +90,7 @@ class CoLearn(Env):
         else:
             print("ROS is offline! Environment proceeds in offline mode")
 
-        self.time_left = 0
-        self.successfull_handover = 0
+        self.relevant_part = {'handover_successfull': 0, 'time_left': 0}
 
     def check_valid_action(self,action):
         if self.state == 0:                             # 0
@@ -145,11 +149,13 @@ class CoLearn(Env):
                 reward += 10
 
             if self.phase == 3: 
-                self.handover_event.wait() # ensures we obtain the reward only as soon as the handover is successfull (or failed)
-                if self.successfull_handover == 1:
-                    reward += self.time_left  
-                else:
-                    reward = 0 # -5 
+                with self.condition:
+                    while self.relevant_part is None:
+                        self.condition.wait()  # Ensures we obtain the reward only as soon as the handover is successful (or failed)
+                    if self.relevant_part['handover_successfull'] == 1:
+                        reward += self.relevant_part['time_left']
+                    else:
+                        reward = 0  # -5
             
         else:
             if not self.valid_transition:
