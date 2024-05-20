@@ -2,6 +2,6 @@ std_msgs/Header header
 
 bool secondary_task_start
 int8 draining_starts 
-int8 draining_successfull
-int8 handover_successfull
+int8 draining_successful
+int8 handover_successful
 float32 time_left

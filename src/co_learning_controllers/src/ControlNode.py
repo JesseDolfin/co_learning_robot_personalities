@@ -10,7 +10,6 @@ workspace_src = os.path.join(os.path.dirname(__file__), '../../..', 'src')
 # Append the workspace's 'src' directory to the Python path
 sys.path.append(workspace_src)
 
-
 import rospy
 import actionlib
 import numpy as np
@@ -35,9 +34,6 @@ GOAL_STIFFNESS = 10 * np.array([100.0, 100.0, 100.0, 10.0, 10.0, 10.0])
 GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
 GOAL_NULLSPACE_GAIN = [0] * 7
 GOAL_NULLSPACE_REFERENCE = [0] * 7
-
-
-
 
 class RoboticArmControllerNode:
     def __init__(self, num_test_runs: int, exploration_factor: float = 0.8):
@@ -77,6 +73,9 @@ class RoboticArmControllerNode:
 
         self.condition = threading.Condition()
         self.relevant_part = None
+        self.alpha = 0.15
+        self.gamma = 0.8
+        self.Lamda = 0.3
 
         self.rate = rospy.Rate(1)
 
@@ -137,6 +136,7 @@ class RoboticArmControllerNode:
         return
        
     def phase_1(self):
+        self.hand_controller.open(0)  # Close
         with self.condition:
             while not (self.relevant_part and (self.relevant_part.get('draining_starts') == 1 or self.relevant_part.get('draining_successfull') == 1)):
                 self.condition.wait()
@@ -155,7 +155,8 @@ class RoboticArmControllerNode:
 
     def phase_4(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        hand_open = self.hand_controller.set_percentage(100) 
+        
+        self.hand_controller.open(100) # Open
         
         if self.successfull_handover == -1:
             return
@@ -165,11 +166,9 @@ class RoboticArmControllerNode:
                     return
                 while not (self.relevant_part and self.relevant_part.get('handover_successfull') in [-1, 1]):
                     self.condition.wait()
-    
-
 
     def phase_5(self):
-        self.rl_agent.experience_replay(0.15,0.8,0.3) # TODO: dynaically link these values
+        self.rl_agent.experience_replay(self.alpha,self.gamma,self.Lamda) 
         return
 
     def phase_6(self):
@@ -211,7 +210,9 @@ class RoboticArmControllerNode:
             if self.phase == 4:
                 self.phase_4()
 
-            self.action, self.phase, self.terminated = self.rl_agent.train(exploration_factor = self.exploration_factor,real_time = True)
+            self.action, self.phase, self.terminated = self.rl_agent.train(learning_rate=self.alpha,discount_factor=self.gamma,
+                                                                           trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
+                                                                           real_time = True)
         else:
             self.phase_5()
             self.phase_6()
@@ -219,8 +220,6 @@ class RoboticArmControllerNode:
         if self.run:
             self.start_episode()
 
-
-             
     def convert_action_to_position(self, action):
         # TODO: Find correct values
         positions = {
@@ -234,7 +233,7 @@ class RoboticArmControllerNode:
     def reset(self):
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
-        self.exploration_factor = self.max_exploration_factor
+        self.exploration_factor = self.max_exploration_factor #TODO: decide if this factor needs to be decreased here
         return
             
         
@@ -242,7 +241,7 @@ if __name__ == '__main__':
     try:
         num_test_runs = 2  # Specify the number of test runs
         persistence_factor = 0.5
-        node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.9)
+        node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.25)
         q_table_path = Path('co_learning_robot_personalities/src/q_learning/Q_tables/q_table_solved_100000_38.npy')
         
         if q_table_path.exists():

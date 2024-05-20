@@ -6,15 +6,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pantograph import Pantograph
 from pyhapi import Board, Device, Mechanisms
-from pshape import PShape
-import serial
+from pshape import PShape          
 from serial.tools import list_ports
 import time
-import pandas as pd
 import os
-import uuid
 import random
-import sys
 import time
 import rospy
 from co_learning_messages.msg import secondary_task_message
@@ -54,8 +50,8 @@ class secondary_task():
         #self.rate = rospy.rate(50) #Hz
 
     def status_callback(self,msg):
-        rospy.loginfo("Secondary task starts: %s, Draining starts: %s, Draining success: %s, Handover success: %s", msg.secondary_task_start, msg.draining_starts, msg.draining_successfull, msg.handover_successfull)
-        self.handover_successfull = msg.handover_successfull
+        rospy.loginfo("Secondary task starts: %s, Draining starts: %s, Draining success: %s, Handover success: %s", msg.secondary_task_start, msg.draining_starts, msg.draining_successful, msg.handover_successful)
+        self.handover_successful = msg.handover_successful
 
     def initialise_pygame(self):
         ##initialize pygame window
@@ -134,7 +130,7 @@ class secondary_task():
         self.away_from_bone = True
         self.spinal_coord_collision = False
         self.toggle_visual = False
-        self.handover_successfull = False
+        self.handover_successful = False
         self.haptic_feedback = True
         self.proceed = False
         self.visual_feedback = True
@@ -312,8 +308,8 @@ class secondary_task():
             message = secondary_task_message()
             message.secondary_task_start = secondary_task_start
             message.draining_starts = start
-            message.draining_successfull = end
-            message.handover_successfull = success
+            message.draining_successful = end
+            message.handover_successful = success
             message.time_left = time
             self.pub.publish(message)
         else:
@@ -438,7 +434,7 @@ class secondary_task():
                 elif event.key == ord(' '):
                     self.render_bar = False
                 elif event.key == ord('p'):
-                    self.handover_successfull = True
+                    self.handover_successful = True
             elif event.type == pygame.KEYDOWN:
                 if event.key == ord(' '):
                     self.render_bar = True
@@ -447,62 +443,61 @@ class secondary_task():
                 elif event.key == ord('e'):
                     self.rotate_down = True
 
-    def run_simulation(self):   
-        self.send_task_status(secondary_task_start=True,start=0,end=0,success=0,time=self.max_time) 
+    def run_simulation(self):
+        self.send_task_status(secondary_task_start=True, start=0, end=0, success=0, time=self.max_time)
         while self.run:
-  
-            # Keyboard events
-            self.process_events()
-                
-            if self.rotate_up:
-                self.alpha += np.deg2rad(0.1)
-            if self.rotate_down:
-                self.alpha -= np.deg2rad(0.1)
-              
-            self.xh = np.array(self.haptic.center)
+            self.process_events()  # Keyboard events
             
-            ## Apply low pass filter to mouse position
-            if self.i != 0:
-                self.cursor = pygame.mouse.get_pos()
-                self.cursor = [self.smoothing_factor*self.cursor[0] + (1-self.smoothing_factor)*self.previous_cursor[0], self.smoothing_factor*self.cursor[1] + (1-self.smoothing_factor)*self.previous_cursor[1]]
-
-            else:
-                self.cursor = pygame.mouse.get_pos()
-
-            self.xm = np.array(self.cursor) 
+            self.update_rotation()
+            self.apply_low_pass_filter()
             
-         
-
+            self.xm = np.array(self.cursor)
             self.update_fe()
-            
             self.render_screen()
             
-            self.previous_cursor = self.cursor 
-
-            #Slow down the loop to match FPS
+            self.previous_cursor = self.cursor
             self.clock.tick(self.FPS)
-
-            if self.spinal_coord_collision or self.task_failed:
-                self.run = False
-                self.spine_hit_count += 1
-                time.sleep(0.5)
-                self.end_screen()
-                
-           
-            if self.time_left<=0 and self.start_handover:
-                self.run = False
-                time.sleep(0.5)
-                self.time_up = True
-                self.send_task_status(secondary_task_start=False,start=0,end=0,success=-1,time=0)
+            
+            if self.check_termination_conditions():
                 self.end_screen()
 
-            if self.handover_successfull: # check here for the message that the handover is successfull
-                self.send_task_status(secondary_task_start=False,start=0,end=0,success=1,time=self.time_left)
-                self.end_screen()
+    def update_rotation(self):
+        if self.rotate_up:
+            self.alpha += np.deg2rad(0.1)
+        if self.rotate_down:
+            self.alpha -= np.deg2rad(0.1)
+        self.xh = np.array(self.haptic.center)
+
+    def apply_low_pass_filter(self):
+        self.cursor = pygame.mouse.get_pos()
+        if self.i != 0:
+            self.cursor = [
+                self.smoothing_factor * self.cursor[0] + (1 - self.smoothing_factor) * self.previous_cursor[0],
+                self.smoothing_factor * self.cursor[1] + (1 - self.smoothing_factor) * self.previous_cursor[1]
+            ]
+
+    def check_termination_conditions(self):
+        if self.spinal_coord_collision or self.task_failed:
+            self.run = False
+            self.spine_hit_count += 1
+            time.sleep(0.5)
+            return True
+        
+        if self.time_left <= 0 and self.start_handover:
+            self.run = False
+            time.sleep(0.5)
+            self.time_up = True
+            self.send_task_status(secondary_task_start=False, start=0, end=0, success=-1, time=0)
+            return True
+        
+        if self.handover_successful:
+            self.send_task_status(secondary_task_start=False, start=0, end=0, success=1, time=self.time_left)
+            return True
+
+        return False
+
 
     def update_fe(self):
-        ######################################## COMPUTE COLLISIONS WITH ANY TISSUE #######################################
-        # Define haptic center and endpoint of our haptic (needle tip)
         cos_alpha = np.cos(self.alpha)
         sin_alpha = np.sin(self.alpha)
         self.haptic_endpoint = pygame.Rect(self.haptic.center[0] + cos_alpha * 250, self.haptic.center[1] + sin_alpha * 250, 1, 1)
@@ -596,8 +591,8 @@ class secondary_task():
 
             # Set forward velocity to zero if collision with bone is detected
             if not self.away_from_bone:
-                self.dxh[0] = 0 
-                buffer_distance = 5  
+                self.dxh = np.zeros(2)
+                buffer_distance = 20  
                
                 if self.xm[0] < self.phold[0] - buffer_distance:
                     self.away_from_bone = True
@@ -650,15 +645,6 @@ class secondary_task():
         self.t += self.dt
         self.haptic.center = self.xh
 
-
-
-
-
-
-
-
-
-                
     def render_screen(self):
         def draw_layers(screen, colors, layers, border_radius):
             for color, layer in zip(colors, layers):
@@ -793,8 +779,7 @@ class secondary_task():
         # Visualize toggles on display
         toggle_texts = [
             "Press 'e' to rotate needle up",
-            "Press 'r' to rotate needle down",
-            "Press 'v' to hide epidural space"
+            "Press 'r' to rotate needle down"
         ]
         y_offset = 0
         for text in toggle_texts:
@@ -894,28 +879,31 @@ class secondary_task():
 
                 if self.spinal_coord_collision:
                     self.screenHaptics.blit(texts[1][2].render(texts[1][0], True, texts[1][1]), (20, 120))
-                elif self.handover_successfull == 1:
+                elif self.handover_successful == 1:
                     self.screenHaptics.blit(texts[11][2].render(texts[11][0], True, texts[11][1]), (20, 120))
                 elif not self.time_up and not self.task_failed:
-                    self.screenHaptics.blit(texts[2][2].render(texts[2][0], True, texts[2][1]), (20, 120))
-                    self.screenHaptics.blit(texts[2][2].render(texts[2][0], True, texts[2][1]), (25, 150))
+                    split_lines = split_text(texts[2][0],texts[2][2],self.screenHaptics.get_width())
+                    y_offset = 120
+                    for line in split_lines:
+                        self.screenHaptics.blit(texts[2][2].render(line, True, texts[2][1]), (20, y_offset))
+                        y_offset += 30
                 elif self.needle_removed_too_soon:
+                    split_lines = split_text(texts[8][0], texts[8][2], self.screenHaptics.get_width())
+                    y_offset = 120
+                    for line in split_lines:
+                        self.screenHaptics.blit(texts[8][2].render(line, True, texts[8][1]), (20, y_offset))
+                        y_offset += 30
+                elif self.needle_removed_too_soon_2:
                     split_lines = split_text(texts[9][0], texts[9][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[9][2].render(line, True, texts[9][1]), (20, y_offset))
                         y_offset += 30
-                elif self.needle_removed_too_soon_2:
+                elif self.bar_released_too_soon and not self.time_up:
                     split_lines = split_text(texts[10][0], texts[10][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[10][2].render(line, True, texts[10][1]), (20, y_offset))
-                        y_offset += 30
-                elif self.bar_released_too_soon and not self.time_up:
-                    split_lines = split_text(texts[8][0], texts[8][2], self.screenHaptics.get_width())
-                    y_offset = 120
-                    for line in split_lines:
-                        self.screenHaptics.blit(texts[8][2].render(line, True, texts[8][1]), (20, y_offset))
                         y_offset += 30
                 else:
                     split_lines = split_text(texts[7][0], texts[7][2], self.screenHaptics.get_width())
