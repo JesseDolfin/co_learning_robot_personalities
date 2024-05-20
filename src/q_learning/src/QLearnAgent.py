@@ -45,6 +45,9 @@ class QLearningAgent():
         self.state, self.phase = self.env.reset()
         self.e_trace = np.zeros((self.env.observation_size, self.env.action_size))
         self.initialise = True
+        self.alpha = 0.15
+        self.gamma = 0.8 
+        self.Lambda = 0.3
 
     def train(self, n_steps = 100000, learning_rate=0.15, discount_factor=0.8, exploration_factor=0.25, trace_decay=0.3,real_time=False):
         # Hyperparameters

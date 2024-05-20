@@ -75,7 +75,8 @@ class RoboticArmControllerNode:
         self.rl_agent = QLearningAgent(env=self.env)
         self.hand_controller = SoftHandController()
 
-        self.event = threading.Event()
+        self.condition = threading.Condition()
+        self.relevant_part = None
 
         self.rate = rospy.Rate(1)
 
@@ -85,11 +86,16 @@ class RoboticArmControllerNode:
         Args:
             msg (secondary_task_message): The message containing task status updates.
         """
-        self.secondary_task_proceed: bool = msg.secondary_task_start
-        self.draining_starts: int = msg.draining_starts
-        self.draining_success: int = msg.draining_successfull
-        self.successfull_handover: int = msg.handover_successfull
-        self.event.set()
+        self.successfull_handover = msg.handover_successfull
+        with self.condition:
+            if self.phase == 1 and msg.draining_starts != 0:
+                self.relevant_part = {'draining_starts': msg.draining_starts}
+            elif self.phase == 1 and msg.draining_successfull != 0:
+                self.relevant_part = {'draining_successfull': msg.draining_successfull}
+            elif self.phase == 4 and msg.handover_successfull != 0:
+                self.relevant_part = {'handover_successfull': msg.handover_successfull}
+            if self.relevant_part is not None:
+                self.condition.notify()
 
     def create_goal(self, position):
         goal = ControllerGoal()
@@ -103,12 +109,12 @@ class RoboticArmControllerNode:
         goal.nullspace_reference = GOAL_NULLSPACE_REFERENCE
 
         if self.phase == 2:
-            self.save_position = position[0:2]
-            goal.reference[0:2] = self.save_position
-            goal.reference[3:5] = [np.pi, np.pi, np.pi]
+            self.save_position = position[0:3]
+            goal.reference[0:3] = self.save_position
+            goal.reference[3:6] = [np.pi, np.pi, np.pi]
         elif self.phase == 3:
-            goal.reference[0:2] = self.save_position
-            goal.reference[3:5] = position[3:5]
+            goal.reference[0:3] = self.save_position
+            goal.reference[3:6] = position[3:6]
         else:
             goal.reference = position
         goal.velocity_reference = np.zeros(6)
@@ -131,13 +137,10 @@ class RoboticArmControllerNode:
         return
        
     def phase_1(self):
-        self.event.wait()
-        if self.action == 1 and self.draining_starts == 1:
-            return
-        elif self.action == 2 and self.draining_success == 1:
-            return
+        with self.condition:
+            while not (self.relevant_part and (self.relevant_part.get('draining_starts') == 1 or self.relevant_part.get('draining_successfull') == 1)):
+                self.condition.wait()
         
-
     def phase_2(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
         position = self.convert_action_to_position(self.action)
@@ -150,20 +153,27 @@ class RoboticArmControllerNode:
         _= self.send_position_command(position)
         return
 
-    def phase_4(self): #TODO: Implement functionality
-        hand_open = self.hand_controller.set_percentage(100) #TODO: Functionality not yet implemented
-
-        self.event.wait()
-        if self.successfull_handover == 1 or self.successfull_handover == -1:
-            self.rl_agent.save_q_table(prefix="intermittend_q_table_")
+    def phase_4(self):
+        rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
+        hand_open = self.hand_controller.set_percentage(100) 
+        
+        if self.successfull_handover == -1:
             return
+        else:
+            with self.condition:
+                if self.relevant_part and self.relevant_part.get('handover_successfull') == -1:
+                    return
+                while not (self.relevant_part and self.relevant_part.get('handover_successfull') in [-1, 1]):
+                    self.condition.wait()
+    
+
 
     def phase_5(self):
-        self.rl_agent.experience_replay()
+        self.rl_agent.experience_replay(0.15,0.8,0.3) # TODO: dynaically link these values
         return
 
     def phase_6(self):
-        if self.num_test_runs < self.episode:
+        if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
             return
@@ -183,8 +193,7 @@ class RoboticArmControllerNode:
         - Phase 5: Update q-table with experience replay
         - Phase 6: If n_run < runs: Phase_0 else: end
         """
-        self.event.clear()
-        rospy.loginfo(f"Phase: {self.phase}")
+        self.relevant_part = None
     
         if not self.terminated:
             if self.phase == 0:
@@ -225,7 +234,6 @@ class RoboticArmControllerNode:
     def reset(self):
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
-        self.episode = 0
         self.exploration_factor = self.max_exploration_factor
         return
             

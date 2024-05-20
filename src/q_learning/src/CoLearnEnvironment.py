@@ -65,6 +65,8 @@ class CoLearn(Env):
         self.condition = threading.Condition()
         self.relevant_message = None
 
+        self.successfull_handover = 0
+
         self.initialise_ros()
 
     def status_callback(self, msg):
@@ -118,9 +120,6 @@ class CoLearn(Env):
 
         self.previous_state = self.state
 
-        if self.phase == 3:
-            self.handover_event.clear()
-
         if self.valid_transition:
             self.state = action
             if self.previous_state == 7 and self.state ==0:
@@ -130,32 +129,32 @@ class CoLearn(Env):
             self.save_previous_state(self.phase,self.state)
 
         reward = self.obtain_reward()
-
+        
         self.info['valid'] = self.valid_transition
         self.info['phase'] = self.phase
 
         self.episode_length -= 1
 
-        terminated = self.episode_length <= 0 or (self.previous_state == 7 and self.state == 0)
+        terminated = self.episode_length <= 0 or self.state == 7
 
         return self.state, reward, terminated, self.info 
 
     def obtain_reward(self):
         reward = 0
         if self.ros_running:
-            if not self.valid_transition: # Only valid transitions are rewarded
+            if not self.valid_transition:  # Only valid transitions are rewarded
                 reward = -10
             else:
                 reward += 10
 
-            if self.phase == 3: 
+            if self.phase == 4:
                 with self.condition:
-                    while self.relevant_part is None:
+                    while self.relevant_part is None or 'handover_successfull' not in self.relevant_part:
                         self.condition.wait()  # Ensures we obtain the reward only as soon as the handover is successful (or failed)
                     if self.relevant_part['handover_successfull'] == 1:
                         reward += self.relevant_part['time_left']
                     else:
-                        reward = 0  # -5
+                        reward = 0.123455  # -5
             
         else:
             if not self.valid_transition:
