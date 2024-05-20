@@ -53,8 +53,9 @@ class RoboticArmControllerNode:
         self.save_position = [0,0,0]
         self.max_exploration_factor = exploration_factor
         self.secondary_task_proceed = False
-        self.successfull_handover = 0
+        self.successful_handover = 0
         self.run = True
+        self.update = False
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
@@ -73,6 +74,7 @@ class RoboticArmControllerNode:
 
         self.condition = threading.Condition()
         self.relevant_part = None
+
         self.alpha = 0.15
         self.gamma = 0.8
         self.Lamda = 0.3
@@ -85,14 +87,14 @@ class RoboticArmControllerNode:
         Args:
             msg (secondary_task_message): The message containing task status updates.
         """
-        self.successfull_handover = msg.handover_successfull
+        self.successful_handover = msg.handover_successful
         with self.condition:
             if self.phase == 1 and msg.draining_starts != 0:
                 self.relevant_part = {'draining_starts': msg.draining_starts}
-            elif self.phase == 1 and msg.draining_successfull != 0:
-                self.relevant_part = {'draining_successfull': msg.draining_successfull}
-            elif self.phase == 4 and msg.handover_successfull != 0:
-                self.relevant_part = {'handover_successfull': msg.handover_successfull}
+            elif self.phase == 1 and msg.draining_successful != 0:
+                self.relevant_part = {'draining_successful': msg.draining_successful}
+            elif self.phase == 4 and msg.handover_successful != 0:
+                self.relevant_part = {'handover_successful': msg.handover_successful}
             if self.relevant_part is not None:
                 self.condition.notify()
 
@@ -136,9 +138,10 @@ class RoboticArmControllerNode:
         return
        
     def phase_1(self):
+        rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
         self.hand_controller.open(0)  # Close
         with self.condition:
-            while not (self.relevant_part and (self.relevant_part.get('draining_starts') == 1 or self.relevant_part.get('draining_successfull') == 1)):
+            while not (self.relevant_part and (self.relevant_part.get('draining_starts') == 1 or self.relevant_part.get('draining_successful') == 1)):
                 self.condition.wait()
         
     def phase_2(self):
@@ -158,20 +161,22 @@ class RoboticArmControllerNode:
         
         self.hand_controller.open(100) # Open
         
-        if self.successfull_handover == -1:
+        if self.successful_handover == -1:
             return
         else:
             with self.condition:
-                if self.relevant_part and self.relevant_part.get('handover_successfull') == -1:
+                if self.relevant_part and self.relevant_part.get('handover_successful') == -1:
                     return
-                while not (self.relevant_part and self.relevant_part.get('handover_successfull') in [-1, 1]):
+                while not (self.relevant_part and self.relevant_part.get('handover_successful') in [-1, 1]):
                     self.condition.wait()
 
     def phase_5(self):
+        rospy.loginfo(f"Episode:{self.episode}, Phase:5, Action:Experience replay")
         self.rl_agent.experience_replay(self.alpha,self.gamma,self.Lamda) 
         return
 
     def phase_6(self):
+        rospy.loginfo(f"Episode:{self.episode}, Phase:6, Action:Resume_experiment={self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
@@ -207,13 +212,12 @@ class RoboticArmControllerNode:
             if self.phase == 3:
                 self.phase_3()
 
-            if self.phase == 4:
-                self.phase_4()
-
             self.action, self.phase, self.terminated = self.rl_agent.train(learning_rate=self.alpha,discount_factor=self.gamma,
-                                                                           trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
-                                                                           real_time = True)
+                                                                        trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
+                                                                        real_time = True)
+          
         else:
+            self.phase_4()
             self.phase_5()
             self.phase_6()
 
@@ -234,6 +238,7 @@ class RoboticArmControllerNode:
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
         self.exploration_factor = self.max_exploration_factor #TODO: decide if this factor needs to be decreased here
+        self.update = False
         return
             
         

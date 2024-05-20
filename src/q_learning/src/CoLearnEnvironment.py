@@ -71,9 +71,9 @@ class CoLearn(Env):
 
     def status_callback(self, msg):
         with self.condition:
-            if msg.handover_successfull != 0:  # Check if handover_successfull is set to either -1 or 1
+            if msg.handover_successful != 0:  # Check if handover_successful is set to either -1 or 1
                 self.relevant_part = {
-                    'handover_successfull': msg.handover_successfull,
+                    'handover_successful': msg.handover_successful,
                     'time_left': msg.time_left
                 }
                 self.condition.notify()
@@ -92,7 +92,7 @@ class CoLearn(Env):
         else:
             print("ROS is offline! Environment proceeds in offline mode")
 
-        self.relevant_part = {'handover_successfull': 0, 'time_left': 0}
+        self.relevant_part = {'handover_successful': 0, 'time_left': 0}
 
     def check_valid_action(self,action):
         if self.state == 0:                             # 0
@@ -149,9 +149,9 @@ class CoLearn(Env):
 
             if self.phase == 4:
                 with self.condition:
-                    while self.relevant_part is None or 'handover_successfull' not in self.relevant_part:
+                    while self.relevant_part is None or 'handover_successful' not in self.relevant_part:
                         self.condition.wait()  # Ensures we obtain the reward only as soon as the handover is successful (or failed)
-                    if self.relevant_part['handover_successfull'] == 1:
+                    if self.relevant_part['handover_successful'] == 1:
                         reward += self.relevant_part['time_left']
                     else:
                         reward = 0.123455  # -5
