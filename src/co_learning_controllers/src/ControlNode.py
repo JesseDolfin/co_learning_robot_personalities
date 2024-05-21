@@ -212,12 +212,14 @@ class RoboticArmControllerNode:
             if self.phase == 3:
                 self.phase_3()
 
+            if self.phase == 4:
+                self.phase_4()
+
             self.action, self.phase, self.terminated = self.rl_agent.train(learning_rate=self.alpha,discount_factor=self.gamma,
                                                                         trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
                                                                         real_time = True)
           
         else:
-            self.phase_4()
             self.phase_5()
             self.phase_6()
 
@@ -252,13 +254,7 @@ if __name__ == '__main__':
         if q_table_path.exists():
             node.rl_agent.load_q_table(str(q_table_path))
             node.rl_agent.q_table *= persistence_factor
-            print("Q-Table:")
-            header = "".join([f"{'Action ' + str(i):<{12}}" for i in range(8)])
-            print(f"{'':<{12}}" + header)
-            for state in range(8):
-                row = f"State {state:<{12 - 6}}"  # Adjust for 'State ' prefix length
-                row += "".join([f"{node.rl_agent.q_table[state, action]:<{12}.2f}" for action in range(8)])
-                print(row)
+            node.rl_agent.print_q_table()
             node.start_episode()
         else:
             rospy.logerr(f"Q-table file not found: {q_table_path}")

@@ -135,7 +135,7 @@ class CoLearn(Env):
 
         self.episode_length -= 1
 
-        terminated = self.episode_length <= 0 or self.state == 7
+        terminated = self.episode_length <= 0 or self.previous_state == 7
 
         return self.state, reward, terminated, self.info 
 
@@ -154,7 +154,7 @@ class CoLearn(Env):
                     if self.relevant_part['handover_successful'] == 1:
                         reward += self.relevant_part['time_left']
                     else:
-                        reward = 0.123455  # -5
+                        reward = 0  # -5
             
         else:
             if not self.valid_transition:

@@ -115,12 +115,16 @@ class QLearningAgent():
         self.experience["reward"].append(reward)
 
     def experience_replay(self, alpha, gamma, Lambda):
+        last_reward = self.experience["reward"][-1]
         for i in range(len(self.experience["state"])):
             state = self.experience["state"][i]
             action = self.experience["action"][i]
             next_state = self.experience["next_state"][i]
             reward = self.experience["reward"][i]
 
+            if next_state != state: # When a valid action is taken
+                reward += last_reward / self.env.phase_size # Increase the reward for this transition by the final reward per phase (if handover was successfull this approach will reward the full trajectory)
+                                                           
             self.update_q_table(state, action, reward, next_state, alpha, gamma, Lambda)
 
     def reset_experience(self):
@@ -174,6 +178,15 @@ class QLearningAgent():
             rospy.loginfo(f"Q_table loaded from directory: {directory}")
         except Exception as e:
             rospy.logwarn(e)
+
+    def print_q_table(self,margin=12):
+        print("Q-Table:")
+        header = "".join([f"{'Action ' + str(i):<{margin}}" for i in range(self.env.action_size)])
+        print(f"{'':<{margin}}" + header)
+        for state in range(self.env.state_size):
+            row = f"State {state:<{margin - 6}}"  # Adjust for 'State ' prefix length
+            row += "".join([f"{self.q_table[state, action]:<{margin}.2f}" for action in range(self.env.action_size)])
+            print(row)
         
 if __name__ == '__main__':
     try:
