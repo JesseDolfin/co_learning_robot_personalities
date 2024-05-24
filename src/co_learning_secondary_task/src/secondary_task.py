@@ -23,6 +23,7 @@ class secondary_task():
         self.initialise_ros()
         self.initialise_pygame()
         self.initialise_others()
+
         self.start_screen()
  
     def signal_handler(self, sig, frame):
@@ -46,6 +47,7 @@ class secondary_task():
 
     def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()
+        self.msg = None
         
         if self.ros_running:
             self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
@@ -54,8 +56,10 @@ class secondary_task():
         #self.rate = rospy.rate(50) #Hz
 
     def status_callback(self,msg):
+        self.msg = msg
         rospy.loginfo("Secondary task starts: %s, Draining starts: %s, Draining success: %s, Handover success: %s", msg.secondary_task_start, msg.draining_starts, msg.draining_successful, msg.handover_successful)
         self.handover_successful = msg.handover_successful
+        self.phase = msg.phase
 
     def initialise_pygame(self):
         ##initialize pygame window
@@ -148,6 +152,7 @@ class secondary_task():
         self.update_draining_start = True
         self.update_collision = True
         self.bone_collision_flag = True
+        self.success = False
 
         self.window_scale = 3
 
@@ -161,7 +166,7 @@ class secondary_task():
         self.max_time = 30 # seconds
         self.time_left = self.max_time
 
-        self.max_needle_pressure = 5000
+        self.max_needle_pressure = 500
 
         self.task_failed = False
 
@@ -307,17 +312,31 @@ class secondary_task():
         self.Bones = {'Vertebrae one', 'Vertebrae two', 'Vertebrae three', 'Vertebrae four', 'Vertebrae five','Vertebrae six'}
 
 
-    def send_task_status(self,secondary_task_start,start,end,success,time):
+
+    def send_task_status(self, secondary_task_start=None, start=None, end=None, success=None, time=None):
         if self.ros_running:
-            message = secondary_task_message()
-            message.secondary_task_start = secondary_task_start
-            message.draining_starts = start
-            message.draining_successful = end
-            message.handover_successful = success
-            message.time_left = time
+            if self.msg is None:
+                message = secondary_task_message()
+            else:
+                message = self.msg
+            
+            if secondary_task_start is not None:
+                message.secondary_task_start = secondary_task_start
+            if start is not None:
+                message.draining_starts = start
+            if end is not None:
+                message.draining_successful = end
+            if success is not None:
+                message.handover_successful = success
+            if time is not None:
+                message.time_left = time
+            
             self.pub.publish(message)
+            self.msg = message  # Save the message for future updates
+
         else:
             return
+
 
     def start_screen(self):
         self.run = True
@@ -427,6 +446,8 @@ class secondary_task():
                     self.rotate_up = False
                 elif event.key == ord('e'):
                     self.rotate_down = False
+                elif event.key == ord('s'):
+                    self.success = True
                 elif event.key == ord('v'):
                     self.toggle_visual = not self.toggle_visual
                 elif event.key == ord('h'):
@@ -448,9 +469,12 @@ class secondary_task():
                     self.rotate_down = True
 
     def run_simulation(self):
-        self.send_task_status(secondary_task_start=True, start=0, end=0, success=0, time=self.max_time)
+        self.send_task_status(secondary_task_start=True)
         while self.run:
             self.process_events()  # Keyboard events
+
+            if self.success == True:
+                self.send_task_status(success=1)
             
             self.update_rotation()
             self.apply_low_pass_filter()
@@ -491,11 +515,11 @@ class secondary_task():
             self.run = False
             time.sleep(0.5)
             self.time_up = True
-            self.send_task_status(secondary_task_start=False, start=0, end=0, success=-1, time=0)
+            self.send_task_status(success=-1, time=0)
             return True
         
         if self.handover_successful:
-            self.send_task_status(secondary_task_start=False, start=0, end=0, success=1, time=self.time_left)
+            self.send_task_status(success=1, time=self.time_left)
             return True
 
         return False
@@ -673,7 +697,7 @@ class secondary_task():
                         self.draw_progress_bar(0)
                     if self.update_draining_start:
                         self.update_draining_start = False
-                        self.send_task_status(secondary_task_start=False, start=1, end=0, success=0, time=self.time_left)
+                        self.send_task_status(start=1)
                 elif not self.render_bar and not self.start_handover and not self.bar_pressed:
                     space_bar_text = self.font_low_time.render('Press space bar to start draining the fluid!', True, (20, 150, 40))
                     self.screenVR.blit(space_bar_text, (0, 60))
@@ -683,7 +707,7 @@ class secondary_task():
             self.time_left = self.max_time - time_elapsed
 
             if self.update_status:
-                self.send_task_status(secondary_task_start=False, start=0, end=1, success=0, time=self.time_left)
+                self.send_task_status(end=1)
                 self.update_status = False
 
             keep_mouse_in_fluid_texts = [
@@ -699,7 +723,7 @@ class secondary_task():
 
             if not self.collision_dict['Cerebrospinal fluid one']:
                 self.needle_removed_too_soon_2 = True
-                self.send_task_status(secondary_task_start=False, start=0, end=0, success=-1, time=self.time_left)
+                self.send_task_status(success=-1, time=self.time_left)
                 self.task_failed = True
 
             time_color = (255, 0, 0) if self.time_left <= 10 else (0, 0, 0)
@@ -806,6 +830,7 @@ class secondary_task():
 
 
     def end_screen(self):
+        self.send_task_status(secondary_task_start=False, start=0, end=0, success=0, time=0) # reset message
         def render_end_texts():
             return [
                 ("Restart Simulation", (0, 0, 0), pygame.font.Font(None, 24)),
@@ -859,24 +884,25 @@ class secondary_task():
                         else:
                             self.run = False
 
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and tries < 10:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and tries < 10 and self.phase == 1:
                     if button_rect.collidepoint(event.pos):
                         self.initialise_simulation_parameters()
                         self.run_simulation()
 
             if tries < 10:
-                if button_rect.collidepoint(pygame.mouse.get_pos()):
-                    pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
-                else:
-                    pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 150, 50))
-                    pygame.draw.rect(button_surface, (255, 255, 255), (1, 1, 148, 48))
-                    pygame.draw.rect(button_surface, (0, 0, 0), (1, 1, 148, 1), 2)
-                    pygame.draw.rect(button_surface, (0, 100, 0), (1, 48, 148, 10), 2)
+                if self.phase == 1:
+                    if button_rect.collidepoint(pygame.mouse.get_pos()):
+                        pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
+                    else:
+                        pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 150, 50))
+                        pygame.draw.rect(button_surface, (255, 255, 255), (1, 1, 148, 48))
+                        pygame.draw.rect(button_surface, (0, 0, 0), (1, 1, 148, 1), 2)
+                        pygame.draw.rect(button_surface, (0, 100, 0), (1, 48, 148, 10), 2)
 
-                text_surface = texts[0][2].render(texts[0][0], True, texts[0][1])
-                text_rect = text_surface.get_rect(center=(button_surface.get_width() / 2, button_surface.get_height() / 2))
-                button_surface.blit(text_surface, text_rect)
-                self.screenHaptics.blit(button_surface, (button_rect.x, button_rect.y))
+                    text_surface = texts[0][2].render(texts[0][0], True, texts[0][1])
+                    text_rect = text_surface.get_rect(center=(button_surface.get_width() / 2, button_surface.get_height() / 2))
+                    button_surface.blit(text_surface, text_rect)
+                    self.screenHaptics.blit(button_surface, (button_rect.x, button_rect.y))
 
                 self.screenHaptics.blit(texts[3][2].render(texts[3][0], True, texts[3][1]), (450, 20))
                 self.screenHaptics.blit(texts[4][2].render(texts[4][0], True, texts[4][1]), (450, 50))

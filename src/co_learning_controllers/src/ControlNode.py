@@ -4,6 +4,8 @@ import sys
 import os
 from pathlib import Path
 
+from sympy import sec
+
 # Get the absolute path of the workspace's 'src' directory
 workspace_src = os.path.join(os.path.dirname(__file__), '../../..', 'src')
 
@@ -62,6 +64,7 @@ class RoboticArmControllerNode:
         self.update = False
         self.stop = False
         self.action = 0
+        self.msg = None
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
@@ -74,6 +77,8 @@ class RoboticArmControllerNode:
         rospy.loginfo("Initializing client: Waiting for server")
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
+        
+        rospy.Rate(10).sleep() # gives time to start the fri overlay app
 
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
@@ -100,6 +105,7 @@ class RoboticArmControllerNode:
         Args:
             msg (secondary_task_message): The message containing task status updates.
         """
+        self.msg = msg
         self.successful_handover = msg.handover_successful
         with self.condition:
             if self.phase == 1 and msg.draining_starts != 0:
@@ -132,7 +138,7 @@ class RoboticArmControllerNode:
                 if self.previous_state == 3:
                     goal.reference[5] = -np.deg2rad(10)
                 else:
-                    print("here")
+       
                     goal.reference[1] -= np.deg2rad(15)
                     goal.reference[5] = np.deg2rad(45)
             elif self.action == 6:
@@ -143,7 +149,7 @@ class RoboticArmControllerNode:
                     goal.reference[5] = 0
                     goal.reference[6] = position[3]
                 else:
-                    print("here")
+     
                     goal.reference[1] -= np.deg2rad(15)
                     goal.reference[4] = position[2]
                     goal.reference[5] = 0
@@ -224,6 +230,15 @@ class RoboticArmControllerNode:
             _= self.send_position_command(INTERMEDIATE_POSITION)
             self.run = False
             return
+        
+    def send_message(self,phase=None):
+            if self.msg != None:
+                msg = self.msg
+            else:
+                msg = secondary_task_message()
+            if phase != None:
+                msg.phase = phase
+            self.pub.publish(msg)
 
     def start_episode(self):
         """
@@ -237,13 +252,11 @@ class RoboticArmControllerNode:
         - Phase 5: Update q-table with experience replay
         - Phase 6: If n_run < runs: Phase_0 else: end
         """
+
+ 
+        
         self.relevant_part = None
-        if self.action == 3:
-            self.action = 4
-
-        if self.action == 5:
-            self.action = 6
-
+        self.send_message(self.phase)
         if not self.terminated:
             if self.phase == 0:
                 self.home_position()
@@ -263,6 +276,8 @@ class RoboticArmControllerNode:
             self.action, self.phase, self.terminated = self.rl_agent.train(learning_rate=self.alpha,discount_factor=self.gamma,
                                                                         trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
                                                                         real_time = True)
+            
+
         elif self.run:
             self.phase_5()
             self.phase_6()

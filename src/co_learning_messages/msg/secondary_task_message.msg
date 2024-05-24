@@ -4,4 +4,5 @@ bool secondary_task_start
 int8 draining_starts 
 int8 draining_successful
 int8 handover_successful
+int8 phase
 float32 time_left

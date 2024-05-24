@@ -1,24 +1,33 @@
 #!/usr/bin/python3
-
+import rosgraph
 import rospy
 import trajectory_msgs.msg
+import sys
 
 
 class SoftHandController:
     def __init__(self):
-        rospy.init_node('robotic_arm_controller_node')
-        self.pub = rospy.Publisher('/qbhand1/control/qbhand1_synergy_trajectory_controller/command',
+        self.ros_running = rosgraph.is_master_online()
+        if self.ros_running:
+            self.pub = rospy.Publisher('/qbhand1/control/qbhand1_synergy_trajectory_controller/command',
                                             trajectory_msgs.msg.JointTrajectory, queue_size=10)
+            self.msg = trajectory_msgs.msg.JointTrajectory()
+            self.msg.header.seq = 0
+            self.msg.joint_names = ["qbhand1_synergy_joint"]
 
-        self.msg = trajectory_msgs.msg.JointTrajectory()
-        self.msg.header.seq = 0
-        self.msg.joint_names = ["qbhand1_synergy_joint"]
+            point = trajectory_msgs.msg.JointTrajectoryPoint()
+            point.positions = [0.0]
+            point.time_from_start = rospy.Time.from_sec(0.2)
 
-        point = trajectory_msgs.msg.JointTrajectoryPoint()
-        point.positions = [0.0]
-        point.time_from_start = rospy.Time.from_sec(0.2)
+            self.msg.points = [point]
+            try:
+                rospy.init_node('robotic_arm_controller_node')
+            except:
+                rospy.logwarn("Cannot initialize node 'robotic_arm_controller_node' as it has already been initialized at the top level as a ROS node.")
+        else:
+            print("ROS is offline! Shutting down")
+            sys.exti(0)
 
-        self.msg.points = [point]
         self.open()
 
     def _publish(self):
