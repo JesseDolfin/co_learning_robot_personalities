@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import signal
 import sys
 import os
 from pathlib import Path
@@ -23,17 +23,21 @@ from q_learning.src.CoLearnEnvironment import CoLearn
 from co_learning_messages.msg import secondary_task_message
 from HandController import SoftHandController
 
+
+
 # Constants
-HOME_POSITION = [-0.7, -0.7, 0.5, 0.0, 0.0, 0.0]
-RATE_HZ = 2
-GOAL_MODE = 'ee_cartesian_ds'
-GOAL_TIME = 3
+ROT = np.pi/4
+HOME_POSITION =         [np.pi/2, ROT, 0, -ROT, 0, ROT,0]
+INTERMEDIATE_POSITION = [np.pi/2,    0, 0, 0  , 0, 0 ,0]
+GOAL_MODE = 'joint_ds'
+GOAL_TIME = 5
 GOAL_PRECISION = 1e-1
-GOAL_RATE = 100
-GOAL_STIFFNESS = 10 * np.array([100.0, 100.0, 100.0, 10.0, 10.0, 10.0])
+GOAL_RATE = 10
+GOAL_STIFFNESS =  [100.0, 100.0, 50.0, 50.0, 25.0, 25.0, 10.0]
 GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
-GOAL_NULLSPACE_GAIN = [0] * 7
+GOAL_NULLSPACE_GAIN = 100 * [1,1,1,1,0,0,0]
 GOAL_NULLSPACE_REFERENCE = [0] * 7
+
 
 class RoboticArmControllerNode:
     def __init__(self, num_test_runs: int, exploration_factor: float = 0.8):
@@ -56,6 +60,8 @@ class RoboticArmControllerNode:
         self.successful_handover = 0
         self.run = True
         self.update = False
+        self.stop = False
+        self.action = 0
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
@@ -64,6 +70,7 @@ class RoboticArmControllerNode:
 
         ns = rospy.get_param('/namespaces')
         self.client = actionlib.SimpleActionClient(ns+'/torque_controller', ControllerAction)
+
         rospy.loginfo("Initializing client: Waiting for server")
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
@@ -79,7 +86,13 @@ class RoboticArmControllerNode:
         self.gamma = 0.8
         self.Lamda = 0.3
 
-        self.rate = rospy.Rate(1)
+        self.rate = rospy.Rate(5)
+
+        signal.signal(signal.SIGINT, self.signal_handler)
+
+    def signal_handler(self, sig, frame):
+        self.stop = True
+        sys.exit(0)
 
     def status_callback(self, msg):
         """
@@ -106,19 +119,40 @@ class RoboticArmControllerNode:
         goal.rate = GOAL_RATE
         goal.stiffness = GOAL_STIFFNESS
         goal.damping = GOAL_DAMPING
-        goal.nullspace_gain = GOAL_NULLSPACE_GAIN
-        goal.nullspace_reference = GOAL_NULLSPACE_REFERENCE
-
+        # goal.nullspace_gain = GOAL_NULLSPACE_GAIN
+        # goal.nullspace_reference = GOAL_NULLSPACE_REFERENCE
+        #TODO: build a controller that uses inverse kinematics to find the actual radians of the joints
         if self.phase == 2:
-            self.save_position = position[0:3]
-            goal.reference[0:3] = self.save_position
-            goal.reference[3:6] = [np.pi, np.pi, np.pi]
+            self.save_position = position
+            goal.reference = position 
+            self.previous_state = self.action
         elif self.phase == 3:
-            goal.reference[0:3] = self.save_position
-            goal.reference[3:6] = position[3:6]
+            goal.reference = self.save_position
+            if self.action == 5:
+                if self.previous_state == 3:
+                    goal.reference[5] = -np.deg2rad(10)
+                else:
+                    print("here")
+                    goal.reference[1] -= np.deg2rad(15)
+                    goal.reference[5] = np.deg2rad(45)
+            elif self.action == 6:
+                if self.previous_state == 3:
+                    goal.reference[1] += position[0] 
+                    goal.reference[2] += position[1]
+                    goal.reference[4] = position[2]
+                    goal.reference[5] = 0
+                    goal.reference[6] = position[3]
+                else:
+                    print("here")
+                    goal.reference[1] -= np.deg2rad(15)
+                    goal.reference[4] = position[2]
+                    goal.reference[5] = 0
+                    goal.reference[6] = position[3]
         else:
             goal.reference = position
-        goal.velocity_reference = np.zeros(6)
+            goal.velocity_reference = np.zeros(6)
+   
+            
         return goal
 
 
@@ -134,7 +168,8 @@ class RoboticArmControllerNode:
         return True
     
     def home_position(self):
-        _=self.send_position_command(HOME_POSITION)
+        _= self.send_position_command(INTERMEDIATE_POSITION)
+        _= self.send_position_command(HOME_POSITION)
         return
        
     def phase_1(self):
@@ -147,6 +182,7 @@ class RoboticArmControllerNode:
     def phase_2(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
         position = self.convert_action_to_position(self.action)
+        _= self.send_position_command(INTERMEDIATE_POSITION)
         _= self.send_position_command(position)
         return
 
@@ -155,6 +191,7 @@ class RoboticArmControllerNode:
         position = self.convert_action_to_position(self.action)
         _= self.send_position_command(position)
         return
+
 
     def phase_4(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
@@ -169,10 +206,12 @@ class RoboticArmControllerNode:
                     return
                 while not (self.relevant_part and self.relevant_part.get('handover_successful') in [-1, 1]):
                     self.condition.wait()
+            return
 
     def phase_5(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:5, Action:Experience replay")
         self.rl_agent.experience_replay(self.alpha,self.gamma,self.Lamda) 
+        self.rate.sleep()
         return
 
     def phase_6(self):
@@ -182,6 +221,7 @@ class RoboticArmControllerNode:
             self.reset()
             return
         else:
+            _= self.send_position_command(INTERMEDIATE_POSITION)
             self.run = False
             return
 
@@ -198,7 +238,12 @@ class RoboticArmControllerNode:
         - Phase 6: If n_run < runs: Phase_0 else: end
         """
         self.relevant_part = None
-    
+        if self.action == 3:
+            self.action = 4
+
+        if self.action == 5:
+            self.action = 6
+
         if not self.terminated:
             if self.phase == 0:
                 self.home_position()
@@ -218,8 +263,7 @@ class RoboticArmControllerNode:
             self.action, self.phase, self.terminated = self.rl_agent.train(learning_rate=self.alpha,discount_factor=self.gamma,
                                                                         trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
                                                                         real_time = True)
-          
-        else:
+        elif self.run:
             self.phase_5()
             self.phase_6()
 
@@ -227,28 +271,27 @@ class RoboticArmControllerNode:
             self.start_episode()
 
     def convert_action_to_position(self, action):
-        # TODO: Find correct values
         positions = {
-            3: [-0.7,  0.7, 0.5, 0, 0, 0],                 # Location A
-            4: [-0.7,  0.7, 0.7, 0, 0, 0],                 # Location B
-            5: [   0,    0,   0,     0, np.pi/2,       0], # Hand orientation A
-            6: [   0,    0,   0, np.pi,       0, np.pi/2], # Hand orientation B
+            3: [np.pi/2, np.deg2rad(-10), 0, np.deg2rad(50), 0, np.deg2rad(-35),0],                 # Location A
+            4: [np.pi/2, np.deg2rad(-40), 0, np.deg2rad(67.5), 0, np.deg2rad(-40),0],                 # Location B
+            5: [np.deg2rad(-10),np.deg2rad(30)],                    # Hand orientation A
+            6: [np.deg2rad(-10),np.deg2rad(10),np.deg2rad(-90),np.deg2rad(-90)]             # Hand orientation B
         }
         return positions.get(action, HOME_POSITION)
 
     def reset(self):
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
-        self.exploration_factor = self.max_exploration_factor #TODO: decide if this factor needs to be decreased here
+        #self.exploration_factor *= 0.8
         self.update = False
         return
             
         
 if __name__ == '__main__':
     try:
-        num_test_runs = 2  # Specify the number of test runs
+        num_test_runs = 10  # Specify the number of test runs
         persistence_factor = 0.5
-        node = RoboticArmControllerNode(num_test_runs, exploration_factor=0.25)
+        node = RoboticArmControllerNode(num_test_runs, exploration_factor=1)
         q_table_path = Path('co_learning_robot_personalities/src/q_learning/Q_tables/q_table_solved_100000_38.npy')
         
         if q_table_path.exists():
@@ -261,3 +304,4 @@ if __name__ == '__main__':
 
     except rospy.ROSInterruptException:
         pass
+  

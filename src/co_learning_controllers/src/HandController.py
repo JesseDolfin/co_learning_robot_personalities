@@ -6,6 +6,7 @@ import trajectory_msgs.msg
 
 class SoftHandController:
     def __init__(self):
+        rospy.init_node('robotic_arm_controller_node')
         self.pub = rospy.Publisher('/qbhand1/control/qbhand1_synergy_trajectory_controller/command',
                                             trajectory_msgs.msg.JointTrajectory, queue_size=10)
 
@@ -50,3 +51,10 @@ class SoftHandController:
         goal = percentage/100
         self._set_goal(goal)
         self._publish()
+
+if __name__ == '__main__':
+    hand = SoftHandController()
+    while True:
+        hand.open(0)
+
+        

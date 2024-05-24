@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-
+import signal
+import sys
 import pygame
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,11 +19,14 @@ import rosgraph
 
 class secondary_task():
     def __init__(self):
-
+        signal.signal(signal.SIGINT, self.signal_handler)
         self.initialise_ros()
         self.initialise_pygame()
         self.initialise_others()
         self.start_screen()
+ 
+    def signal_handler(self, sig, frame):
+        sys.exit(0)
 
     def initialise_others(self):
         self.SimpleActuatorMech = Mechanisms
@@ -157,7 +161,7 @@ class secondary_task():
         self.max_time = 30 # seconds
         self.time_left = self.max_time
 
-        self.max_needle_pressure = 500
+        self.max_needle_pressure = 5000
 
         self.task_failed = False
 
