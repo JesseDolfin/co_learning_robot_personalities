@@ -142,25 +142,26 @@ class CoLearn(Env):
     def obtain_reward(self):
         reward = 0
         if self.ros_running:
-            if not self.valid_transition:  # Only valid transitions are rewarded
-                reward = -10
-            else:
-                reward += 10
+            # if not self.valid_transition:  # Only valid transitions are rewarded
+            #     reward = -10
+            # else:
+            #     reward += 10
 
             if self.phase == 4:
                 with self.condition:
                     while self.relevant_part is None or 'handover_successful' not in self.relevant_part:
                         self.condition.wait()  # Ensures we obtain the reward only as soon as the handover is successful (or failed)
                     if self.relevant_part['handover_successful'] == 1:
-                        reward += self.relevant_part['time_left']
+                        reward += self.phase_size * 10 # Reward for finishing is 10 (for each state)
+                        reward += self.phase_size * self.relevant_part['time_left'] # Dynamic reward based on performance
                     else:
-                        reward = 0  # -5
+                        reward -= self.phase_size * 10 # If handover has failed the reward is -10 distributed for each state
             
         else:
-            if not self.valid_transition:
-                reward = -5
-            else:
-                reward += 5
+            # if not self.valid_transition:
+            #     reward = -5
+            # else:
+            #     reward += 5
 
             # if self.previous_state == self.action:
             #     reward -= 1

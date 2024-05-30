@@ -49,7 +49,7 @@ class QLearningAgent():
         self.gamma = 0.8 
         self.Lambda = 0.3
 
-    def train(self, n_steps = 100000, learning_rate=0.15, discount_factor=0.8, exploration_factor=0.25, trace_decay=0.3,real_time=False):
+    def train(self, n_steps = 100000, learning_rate=0.8, discount_factor=0.8, exploration_factor=0.25, trace_decay=0.3,real_time=False):
         # Hyperparameters
         alpha = learning_rate
         gamma = discount_factor
@@ -113,19 +113,24 @@ class QLearningAgent():
         self.experience["action"].append(action)
         self.experience["next_state"].append(next_state)
         self.experience["reward"].append(reward)
+        #print(f"Reward added to experience replay:{reward}")
 
     def experience_replay(self, alpha, gamma, Lambda):
-        last_reward = self.experience["reward"][-1]
+        last_reward = self.experience["reward"][-2] # TODO: Last reward is the reward going from phase 4 to home, so need second to last reward to get the handover completion reward
         for i in range(len(self.experience["state"])):
             state = self.experience["state"][i]
             action = self.experience["action"][i]
             next_state = self.experience["next_state"][i]
-            reward = self.experience["reward"][i]
+            #reward = self.experience["reward"][i]
+            
 
             if next_state != state: # When a valid action is taken
-                reward += last_reward / self.env.phase_size # Increase the reward for this transition by the final reward per phase (if handover was successfull this approach will reward the full trajectory)
+                reward = last_reward / self.env.phase_size # Increase the reward for this transition by the final reward per phase (if handover was successfull this approach will reward the full trajectory)
+                #print(f"State:{state}, Reward:{reward}")
+                self.update_q_table(state, action, reward, next_state, alpha, gamma, Lambda)
+                
                                                            
-            self.update_q_table(state, action, reward, next_state, alpha, gamma, Lambda)
+            
 
     def reset_experience(self):
         self.experience = {"state": [],

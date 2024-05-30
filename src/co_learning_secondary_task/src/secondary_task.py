@@ -64,6 +64,7 @@ class secondary_task():
     def initialise_pygame(self):
         ##initialize pygame window
         pygame.init()
+        pygame.mixer.init()
         self.window = pygame.display.set_mode((1700, 500)) 
         pygame.display.set_caption('Virtual Haptic Device')
 
@@ -153,6 +154,8 @@ class secondary_task():
         self.update_collision = True
         self.bone_collision_flag = True
         self.success = False
+        self.needle_removed_during_draining = True
+        self.border_rendered = False
 
         self.window_scale = 3
 
@@ -166,7 +169,7 @@ class secondary_task():
         self.max_time = 30 # seconds
         self.time_left = self.max_time
 
-        self.max_needle_pressure = 500
+        self.max_needle_pressure = 6500
 
         self.task_failed = False
 
@@ -177,6 +180,7 @@ class secondary_task():
         self.update_status = True
         self.start_handover = False
         self.update_time = True
+        self.needle_removed_too_soon_update = True
 
         self.xc,self.yc = self.screenVR.get_rect().center ##center of the screen
         self.center = np.array([self.xc,self.yc]) 
@@ -189,6 +193,13 @@ class secondary_task():
         self.icon_path = os.path.join(self.directory_path,"robot.png")
         self.vertebra_path = os.path.join(self.directory_path,"vertebra_test.png")
         self.syringe_path = os.path.join(self.directory_path,"syringe2_transparent.png")
+
+        sucess_sound_path = os.path.join(self.directory_path,"success_sound.mp3")
+        failure_sound_path = os.path.join(self.directory_path,"failure_sound.mp3")
+
+
+        self.success_chime = pygame.mixer.Sound(sucess_sound_path)
+        self.failure_claxon = pygame.mixer.Sound(failure_sound_path)
 
         ##add nice icon from https://www.flaticon.com/authors/vectors-market
         self.icon = pygame.image.load(self.icon_path)
@@ -313,15 +324,12 @@ class secondary_task():
 
 
 
-    def send_task_status(self, secondary_task_start=None, start=None, end=None, success=None, time=None):
+    def send_task_status(self, start=None, end=None, success=None, time=None):
         if self.ros_running:
             if self.msg is None:
                 message = secondary_task_message()
             else:
                 message = self.msg
-            
-            if secondary_task_start is not None:
-                message.secondary_task_start = secondary_task_start
             if start is not None:
                 message.draining_starts = start
             if end is not None:
@@ -435,12 +443,16 @@ class secondary_task():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.run = False
+                pygame.display.quit()
+                pygame.quit()
+                pygame.mixer.quit()
             elif event.type == pygame.KEYUP:
                 if event.key == ord('m'):
                     pygame.mouse.set_visible(not pygame.mouse.get_visible())
                 elif event.key == ord('q'):
                     self.run = False
                     pygame.display.quit()
+                    pygame.quit()
                     pygame.quit()
                 elif event.key == ord('r'):
                     self.rotate_up = False
@@ -469,13 +481,17 @@ class secondary_task():
                     self.rotate_down = True
 
     def run_simulation(self):
-        self.send_task_status(secondary_task_start=True)
+        self.send_task_status(start=0, end=0, success=0, time=self.max_time)  # reset message
         while self.run:
             self.process_events()  # Keyboard events
 
-            if self.success == True:
-                self.send_task_status(success=1)
-            
+            if self.success:
+                self.send_task_status(success=1, time=self.time_left)
+
+            if self.check_termination_conditions():
+                self.end_screen()
+                break  # Exit the loop after handling termination
+
             self.update_rotation()
             self.apply_low_pass_filter()
             
@@ -485,9 +501,6 @@ class secondary_task():
             
             self.previous_cursor = self.cursor
             self.clock.tick(self.FPS)
-            
-            if self.check_termination_conditions():
-                self.end_screen()
 
     def update_rotation(self):
         if self.rotate_up:
@@ -506,23 +519,33 @@ class secondary_task():
 
     def check_termination_conditions(self):
         if self.spinal_coord_collision or self.task_failed:
-            self.run = False
-            self.spine_hit_count += 1
-            time.sleep(0.5)
+            self.render_screen_border(False)
+            self.failure_claxon.play()  # Play failure sound
+            pygame.time.delay(1000)  # Add delay to make the border visible
+            self.time_left = 0
+            self.send_task_status(success=-1, time=0)
             return True
         
         if self.time_left <= 0 and self.start_handover:
-            self.run = False
-            time.sleep(0.5)
+            self.render_screen_border(False)
+            self.failure_claxon.play()  # Play failure sound
+            pygame.time.delay(1000)  # Add delay to make the border visible
             self.time_up = True
+            self.time_left = 0
             self.send_task_status(success=-1, time=0)
             return True
         
         if self.handover_successful:
+            self.render_screen_border(True)
+            self.success_chime.play()  # Play success sound
+            pygame.time.delay(1000)  # Add delay to make the border visible
             self.send_task_status(success=1, time=self.time_left)
             return True
 
         return False
+
+
+
 
 
     def update_fe(self):
@@ -707,7 +730,7 @@ class secondary_task():
             self.time_left = self.max_time - time_elapsed
 
             if self.update_status:
-                self.send_task_status(end=1)
+                self.send_task_status(start = 0,end=1)
                 self.update_status = False
 
             keep_mouse_in_fluid_texts = [
@@ -787,9 +810,15 @@ class secondary_task():
                 self.task_failed = True
                 self.needle_removed_too_soon = True
 
+        if self.needle_removed_too_soon and self.needle_removed_too_soon_update:
+            self.send_task_status(success = -1)
+            self.needle_removed_too_soon_update = False
+
         if self.bar_pressed and not self.render_bar and not self.start_handover:
             self.task_failed = True
             self.bar_released_too_soon = True
+            self.send_task_status(success = -1)
+            
 
         # Handles the logic of the handover phase
         if self.start_handover:
@@ -822,15 +851,26 @@ class secondary_task():
 
         if self.haptic_feedback and self.visual_feedback and self.collision_dict['Spinal cord']:
             self.spinal_coord_collision_hit = True
-            GB = min(255, max(0, round(255 * 0.5)))
-            self.window.fill((255, GB, GB), special_flags=pygame.BLEND_MULT)
+            
 
         pygame.display.flip()
 
+    def render_screen_border(self, status):
+        if status:
+            GB = min(255, max(0, round(255 * 0.5)))
+            self.window.fill((GB, 255, GB), special_flags=pygame.BLEND_MULT)
+        else:
+            GB = min(255, max(0, round(255 * 0.5)))
+            self.window.fill((255, GB, GB), special_flags=pygame.BLEND_MULT)
+        
+        self.update_screen()  # Update the display after setting the border color
 
+
+    def update_screen(self):
+        pygame.display.flip()
+        self.process_events()
 
     def end_screen(self):
-        self.send_task_status(secondary_task_start=False, start=0, end=0, success=0, time=0) # reset message
         def render_end_texts():
             return [
                 ("Restart Simulation", (0, 0, 0), pygame.font.Font(None, 24)),
@@ -844,7 +884,8 @@ class secondary_task():
                 ("Needle removed from epidural space without successfully draining the epidural space! Please try again", (240, 0, 0), pygame.font.Font(None, 38)),
                 ("Needle removed from epidural space without successful handover of the item!", (240, 0, 0), pygame.font.Font(None, 38)),
                 ("Spacebar was released before all of the fluid was drained, please try again!", (240, 0, 0), pygame.font.Font(None, 38)),
-                ("Item obtained! The procedure is successful", (20, 150, 40), pygame.font.Font(None, 38))
+                ("Item obtained! The procedure is successful", (20, 150, 40), pygame.font.Font(None, 38)),
+                (f"Score: {round(self.time_left, 2)}", (0, 0, 0), pygame.font.Font(None, 30))
             ]
 
         def split_text(text, font, max_width):
@@ -905,18 +946,13 @@ class secondary_task():
                     self.screenHaptics.blit(button_surface, (button_rect.x, button_rect.y))
 
                 self.screenHaptics.blit(texts[3][2].render(texts[3][0], True, texts[3][1]), (450, 20))
-                self.screenHaptics.blit(texts[4][2].render(texts[4][0], True, texts[4][1]), (450, 50))
+                self.screenHaptics.blit(texts[4][2].render(texts[4][0], True, texts[4][1]), (450, 40))
+                self.screenHaptics.blit(texts[12][2].render(texts[12][0], True, texts[12][1]), (450, 70))
 
                 if self.spinal_coord_collision:
                     self.screenHaptics.blit(texts[1][2].render(texts[1][0], True, texts[1][1]), (20, 120))
                 elif self.handover_successful == 1:
                     self.screenHaptics.blit(texts[11][2].render(texts[11][0], True, texts[11][1]), (20, 120))
-                elif not self.time_up and not self.task_failed:
-                    split_lines = split_text(texts[2][0],texts[2][2],self.screenHaptics.get_width())
-                    y_offset = 120
-                    for line in split_lines:
-                        self.screenHaptics.blit(texts[2][2].render(line, True, texts[2][1]), (20, y_offset))
-                        y_offset += 30
                 elif self.needle_removed_too_soon:
                     split_lines = split_text(texts[8][0], texts[8][2], self.screenHaptics.get_width())
                     y_offset = 120
@@ -946,7 +982,6 @@ class secondary_task():
                 self.screenHaptics.blit(texts[6][2].render(texts[6][0], True, texts[6][1]), (20, 140))
 
             pygame.display.update()
-
 
 
 if __name__ == '__main__':

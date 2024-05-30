@@ -77,9 +77,7 @@ class RoboticArmControllerNode:
         rospy.loginfo("Initializing client: Waiting for server")
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
-        
-        rospy.Rate(10).sleep() # gives time to start the fri overlay app
-
+ 
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
         self.hand_controller = SoftHandController()
@@ -87,9 +85,9 @@ class RoboticArmControllerNode:
         self.condition = threading.Condition()
         self.relevant_part = None
 
-        self.alpha = 0.15
-        self.gamma = 0.8
-        self.Lamda = 0.3
+        self.alpha = 0.15 # Can change dependend on desired learning speed
+        self.gamma = 0.8 # Needs to be the same as initial training
+        self.Lamda = 0.3 # Needs to be the same as initial training
 
         self.rate = rospy.Rate(5)
 
@@ -182,8 +180,13 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
         self.hand_controller.open(0)  # Close
         with self.condition:
-            while not (self.relevant_part and (self.relevant_part.get('draining_starts') == 1 or self.relevant_part.get('draining_successful') == 1)):
-                self.condition.wait()
+            if self.action == 1:
+                while not (self.relevant_part and self.relevant_part.get('draining_starts') == 1):
+                    self.condition.wait()
+            elif self.action == 2:
+                while not (self.relevant_part and self.relevant_part.get('draining_successful') == 1):
+                    self.condition.wait()
+
         
     def phase_2(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
@@ -225,6 +228,7 @@ class RoboticArmControllerNode:
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
+            self.rl_agent.print_q_table()
             return
         else:
             _= self.send_position_command(INTERMEDIATE_POSITION)
@@ -297,6 +301,8 @@ class RoboticArmControllerNode:
     def reset(self):
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
+        self.msg.draining_starts = 0
+        self.msg.draining_successful = 0
         #self.exploration_factor *= 0.8
         self.update = False
         return
