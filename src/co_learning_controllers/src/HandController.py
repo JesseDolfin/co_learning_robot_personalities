@@ -21,12 +21,12 @@ class SoftHandController:
 
             self.msg.points = [point]
             try:
-                rospy.init_node('robotic_arm_controller_node')
+                rospy.init_node('hand_controller')
             except:
-                rospy.logwarn("Cannot initialize node 'robotic_arm_controller_node' as it has already been initialized at the top level as a ROS node.")
+                rospy.logwarn("Cannot initialize node 'hand_controller' as it has already been initialized at the top level as a ROS node.")
         else:
             print("ROS is offline! Shutting down")
-            sys.exti(0)
+            sys.exit(0)
 
         self.open()
 
@@ -64,6 +64,6 @@ class SoftHandController:
 if __name__ == '__main__':
     hand = SoftHandController()
     while True:
-        hand.open(0)
+        hand.close(50)
 
         

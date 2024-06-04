@@ -47,7 +47,10 @@ Authors: Leandro de Souza Rosa <l.desouzarosa@tudelft.nl>
         </include>
     </group>
 
+    <!-- Launch secondary_task.py in a new terminal window -->
+    <node name="secondary_task" pkg="co_learning_secondary_task" type="secondary_task.py" output="screen"/>
 
-    
+    <!-- Launch ControlNode.py -->
+    <node name="control_node" pkg="co_learning_controllers" type="ControlNode.py" output="screen" launch-prefix="gnome-terminal -- bash -c"/>
 </launch>
 

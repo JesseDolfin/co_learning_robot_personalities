@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import signal
 import sys
@@ -5,12 +6,6 @@ import os
 from pathlib import Path
 
 from sympy import sec
-
-# Get the absolute path of the workspace's 'src' directory
-workspace_src = os.path.join(os.path.dirname(__file__), '../../..', 'src')
-
-# Append the workspace's 'src' directory to the Python path
-sys.path.append(workspace_src)
 
 import rospy
 import actionlib
@@ -20,10 +15,13 @@ import threading
 from std_msgs.msg import Float32MultiArray
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 
+# Add the root directory to sys.path
+sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
+
+from co_learning_messages.msg import secondary_task_message
+from co_learning_controllers.src.HandController import SoftHandController
 from q_learning.src.QLearnAgent import QLearningAgent
 from q_learning.src.CoLearnEnvironment import CoLearn
-from co_learning_messages.msg import secondary_task_message
-from HandController import SoftHandController
 
 
 
@@ -35,10 +33,10 @@ GOAL_MODE = 'joint_ds'
 GOAL_TIME = 5
 GOAL_PRECISION = 1e-1
 GOAL_RATE = 10
-GOAL_STIFFNESS =  [100.0, 100.0, 50.0, 50.0, 25.0, 25.0, 10.0]
+GOAL_STIFFNESS =   [100.0, 100.0, 50.0, 50.0, 25.0, 10.0, 10.0]
 GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
-GOAL_NULLSPACE_GAIN = 100 * [1,1,1,1,0,0,0]
-GOAL_NULLSPACE_REFERENCE = [0] * 7
+GOAL_NULLSPACE_GAIN =  [0,0,0,0,0,0,0]
+GOAL_NULLSPACE_REFERENCE = [0,0,0,0,0,0,0]
 
 
 class RoboticArmControllerNode:
@@ -155,10 +153,9 @@ class RoboticArmControllerNode:
         else:
             goal.reference = position
             goal.velocity_reference = np.zeros(6)
-   
             
         return goal
-
+    
 
     def send_position_command(self, position: list) -> bool:
         goal = self.create_goal(position)
@@ -308,14 +305,21 @@ class RoboticArmControllerNode:
         return
             
         
+import os
+from pathlib import Path
+import rospy
+import numpy as np
+
 if __name__ == '__main__':
     try:
         num_test_runs = 10  # Specify the number of test runs
         persistence_factor = 0.5
         node = RoboticArmControllerNode(num_test_runs, exploration_factor=1)
-        q_table_path = Path('co_learning_robot_personalities/src/q_learning/Q_tables/q_table_solved_100000_38.npy')
         
-        if q_table_path.exists():
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        q_table_path = base_dir / 'src/q_learning/Q_tables/q_table_solved_100000_38.npy'
+        
+        if os.path.isfile(q_table_path):
             node.rl_agent.load_q_table(str(q_table_path))
             node.rl_agent.q_table *= persistence_factor
             node.rl_agent.print_q_table()
@@ -325,4 +329,5 @@ if __name__ == '__main__':
 
     except rospy.ROSInterruptException:
         pass
-  
+
+
