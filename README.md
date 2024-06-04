@@ -97,24 +97,105 @@ Please follow the installation instructions from iiwa_ros before installing this
 
 ### Installation
 
-1. Clone the repo in the same workspace you defined during the installation of iiwa_ros, and update the submodules
+1. Install the qb_softhand repositories
    ```sh
    cd <work space>
-   git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
-   cd co_learning_robot_personalities
+   mkdir qb_hand/src
+   cd qb_hand/src
    ```
-2. Download the soft hand repositories
+   Clone the repositories and install them:
    ```sh
-   cd src
    git clone --recurse-submodules https://bitbucket.org/qbrobotics/qbdevice-ros.git
    git clone https://bitbucket.org/qbrobotics/qbhand-ros.git
    cd ..
-   ```
-3. Compile the workspace
-   ```sh
    catkin_make
-   source devel/setup.bash
    ```
+   Source the repository and add it to the path:
+   ```sh
+   source devel/setup.bash
+   echo "source <work space>/qb_hand/devel/setup.bash" >> ~/.bashrc
+   ```
+
+2. Install the realsense software:
+    - Register the server's public key:
+    ```sh
+    sudo mkdir -p /etc/apt/keyrings
+    curl -sSf https://librealsense.intel.com/Debian/librealsense.pgp | sudo tee /etc/apt/keyrings/librealsense.pgp > /dev/null
+    ```
+    
+    - Make sure apt HTTPS support is installed:
+    `sudo apt-get install apt-transport-https`
+    
+    - Add the server to the list of repositories:
+    ```sh
+    echo "deb [signed-by=/etc/apt/keyrings/librealsense.pgp] https://librealsense.intel.com/Debian/apt-repo `lsb_release -cs` main" | \
+    sudo tee /etc/apt/sources.list.d/librealsense.list
+    sudo apt-get update
+    ```
+    
+    - Install the libraries (see section below if upgrading packages):  
+      `sudo apt-get install librealsense2-dkms`
+      `sudo apt-get install librealsense2-utils`
+      The above two lines will deploy librealsense2 udev rules, build and activate kernel modules, runtime library and executable demos and tools.  
+    
+    - Install the developer and debug packages:  
+      `sudo apt-get install librealsense2-dev`
+      `sudo apt-get install librealsense2-dbg`
+      With `dev` package installed, you can compile an application with **librealsense** using `g++ -std=c++11 filename.cpp -lrealsense2` or an IDE of your choice.
+    
+    Reconnect the Intel RealSense depth camera and run: `realsense-viewer` to verify the installation.
+    
+    Verify that the kernel is updated :    
+    `modinfo uvcvideo | grep "version:"` should include `realsense` string
+
+3. Install the ros wrapper for the realsense camera
+   ```sh
+   cd <workspace>
+   mkdir -p <workspace>/intel_realsense/src
+   cd /intel_realsense/src
+   ```
+   
+   Clone the latest release:
+   ```sh
+   git clone https://github.com/IntelRealSense/realsense-ros.git
+   cd realsense-ros/
+   git checkout `git tag | sort -V | grep -P "^2.\d+\.\d+" | tail -1`
+   cd ..
+   ```
+
+   Make sure that ddynamic_reconfigure is installed, via apt-get
+   `apt-get install ddynamic_reconfigure`
+
+   Install the repository:
+   ```sh
+   catkin_init_workspace
+   cd ..
+   catkin_make clean
+   catkin_make -DCATKIN_ENABLE_TESTING=False -DCMAKE_BUILD_TYPE=Release
+   catkin_make install
+   ```
+
+   Source the repository and add it to the path:
+   ```sh
+   source devel/setup.bash
+   echo "source <workspace>/intel_realsense/devel/setup.bash" >> ~/.bashrc
+   ```
+
+4. Install the co_learning_personalities package
+   ```sh
+   cd <workspace>
+   git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
+   cd co_learning_robot_personalities
+   catkin_make
+   ```
+
+   Source the repository and add it to the path:
+   ```sh
+   source devel/setup.bash
+   echo "source <work space>/co_learning_robot_personalities/devel/setup.bash" >> ~/.bashrc
+   ```
+
+   
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -123,18 +204,17 @@ Please follow the installation instructions from iiwa_ros before installing this
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-After installing the repository navigate to src/launch and run roslaunch to launch the gazebo simulation.
+After installing and sourcing the software the simulation may be started using the following roslaunch command:
 ```sh
-cd src
-roslaunch launch/co_learning_test_setup.launch
+roslaunch co_learning_controllers co_learning_test_setup.launch
 ```
 
-Then you can start the control node and the secondary task node:
-```sh
-python ControlNode.py
-python Secondary_task/src/secondary_task.py
-```
+This will start the simulation and the required controller nodes / secondary task node.
 
+If you want to start this on the real robot run the command with the prefix `simulation:=false`:
+```sh
+roslaunch co_learning_controllers co_learning_test_setup.launch simulation:=false
+```
 
 _For more examples, please refer to the [Documentation](https://google.com)_
 
