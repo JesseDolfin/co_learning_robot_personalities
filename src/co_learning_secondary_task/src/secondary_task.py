@@ -63,7 +63,7 @@ class secondary_task():
 
     def status_callback(self,msg):
         self.msg = msg
-        rospy.loginfo("Secondary task starts: %s, Draining starts: %s, Draining success: %s, Handover success: %s", msg.secondary_task_start, msg.draining_starts, msg.draining_successful, msg.handover_successful)
+        rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful)
         self.handover_successful = msg.handover_successful
         self.phase = msg.phase
 

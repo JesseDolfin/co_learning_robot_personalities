@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!--|
-Authors: Leandro de Souza Rosa <l.desouzarosa@tudelft.nl>
+Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     Free for all, no warranties whatsoever.
 |-->
 <launch>
@@ -14,6 +14,10 @@ Authors: Leandro de Souza Rosa <l.desouzarosa@tudelft.nl>
     <arg name="simulation" default="true"/>
     <arg name="gzclient" default="false"/>
     <arg name="schunk_hand" default="false"/>
+    <arg name="device_type" default="d455"/>
+    <arg name="filters" default="colorizer,pointcloud"/>
+    <arg name="output" default="log"/> 
+
 
     <!-- Select the robot -->
     <arg name="robot_name" default="iiwa"/>
@@ -47,10 +51,24 @@ Authors: Leandro de Souza Rosa <l.desouzarosa@tudelft.nl>
         </include>
     </group>
 
+    <!-- Launch ControlNode.py in a new terminal window -->
+    <node name="control_node" pkg="co_learning_controllers" type="ControlNode.py" output="screen" launch-prefix="xterm -e"/>
+
     <!-- Launch secondary_task.py in a new terminal window -->
-    <node name="secondary_task" pkg="co_learning_secondary_task" type="secondary_task.py" output="screen"/>
+    <node name="secondary_task" pkg="co_learning_secondary_task" type="secondary_task.py" output="screen" launch-prefix="xterm -e"/>
 
-    <!-- Launch ControlNode.py -->
-    <node name="control_node" pkg="co_learning_controllers" type="ControlNode.py" output="screen" launch-prefix="gnome-terminal -- bash -c"/>
+     <!-- Launch RealSense camera in a new terminal window -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+        <arg name="device_type" value="$(arg device_type)"/>
+        <arg name="filters" value="$(arg filters)"/>
+        <arg name="output" value="$(arg output)"/>
+    </include>
+
+    <!-- Add RViz -->
+    <arg name="rviz_config" default="/home/jesse/Thesis/co_learning_robot_personalities/rviz_configs/camera_view.rviz"/>
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config)" output="screen"/>
+
+    <!-- Launch secondary_task.py in a new terminal window -->
+    <node name="pose_detection" pkg="co_learning_pose_detection" type="pose_detection.py" output="screen" launch-prefix="xterm -e"/>
+
 </launch>
-

@@ -317,7 +317,8 @@ if __name__ == '__main__':
         node = RoboticArmControllerNode(num_test_runs, exploration_factor=1)
         
         base_dir = Path(__file__).resolve().parent.parent.parent
-        q_table_path = base_dir / 'src/q_learning/Q_tables/q_table_solved_100000_38.npy'
+        print(base_dir)
+        q_table_path = base_dir / 'q_learning/Q_tables/q_table_solved_100000_38.npy'
         
         if os.path.isfile(q_table_path):
             node.rl_agent.load_q_table(str(q_table_path))
