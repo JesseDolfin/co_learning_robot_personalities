@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   secondary_task_message.msg
+  hand_pose.msg
 )
 
 ## Generate services in the 'srv' folder

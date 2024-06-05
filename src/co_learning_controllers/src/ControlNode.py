@@ -18,7 +18,7 @@ from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 # Add the root directory to sys.path
 sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
 
-from co_learning_messages.msg import secondary_task_message
+from co_learning_messages.msg import secondary_task_message,hand_pose
 from co_learning_controllers.src.HandController import SoftHandController
 from q_learning.src.QLearnAgent import QLearningAgent
 from q_learning.src.CoLearnEnvironment import CoLearn
@@ -66,6 +66,7 @@ class RoboticArmControllerNode:
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
+        rospy.Subscriber('hand_pose',hand_pose,self.hand_pose_callback)
 
         self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
 
@@ -112,6 +113,12 @@ class RoboticArmControllerNode:
                 self.relevant_part = {'handover_successful': msg.handover_successful}
             if self.relevant_part is not None:
                 self.condition.notify()
+
+    def hand_pose_callback(self,msg):
+        self.pose_x = msg.x
+        self.pose_y = msg.y
+        self.pose_z = msg.z
+        self.orientation = msg.orientation
 
     def create_goal(self, position):
         goal = ControllerGoal()

@@ -15,7 +15,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     <arg name="gzclient" default="false"/>
     <arg name="schunk_hand" default="false"/>
     <arg name="device_type" default="d455"/>
-    <arg name="filters" default="colorizer,pointcloud"/>
+    <arg name="filters" default=""/>
     <arg name="output" default="log"/> 
 
 
@@ -62,13 +62,14 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
         <arg name="device_type" value="$(arg device_type)"/>
         <arg name="filters" value="$(arg filters)"/>
         <arg name="output" value="$(arg output)"/>
+        <arg name="align_depth" value="true"/>
+        <arg name="initial_reset" value ="true"/>
     </include>
 
     <!-- Add RViz -->
     <arg name="rviz_config" default="/home/jesse/Thesis/co_learning_robot_personalities/rviz_configs/camera_view.rviz"/>
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config)" output="screen"/>
 
-    <!-- Launch secondary_task.py in a new terminal window -->
-    <node name="pose_detection" pkg="co_learning_pose_detection" type="pose_detection.py" output="screen" launch-prefix="xterm -e"/>
-
+    <!-- Launch pose_detection.py and suppress output-->
+    <node name="pose_detection" pkg="co_learning_pose_detection" type="pose_detection.py" output="log"/>
 </launch>
