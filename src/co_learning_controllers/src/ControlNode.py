@@ -4,26 +4,18 @@ import signal
 import sys
 import os
 from pathlib import Path
-
-from sympy import sec
-
 import rospy
 import actionlib
 import numpy as np
 import threading
-
-from std_msgs.msg import Float32MultiArray
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 
 # Add the root directory to sys.path
 sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
-
 from co_learning_messages.msg import secondary_task_message,hand_pose
 from co_learning_controllers.src.HandController import SoftHandController
 from q_learning.src.QLearnAgent import QLearningAgent
 from q_learning.src.CoLearnEnvironment import CoLearn
-
-
 
 # Constants
 ROT = np.pi/4
@@ -37,7 +29,6 @@ GOAL_STIFFNESS =   [100.0, 100.0, 50.0, 50.0, 25.0, 10.0, 10.0]
 GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
 GOAL_NULLSPACE_GAIN =  [0,0,0,0,0,0,0]
 GOAL_NULLSPACE_REFERENCE = [0,0,0,0,0,0,0]
-
 
 class RoboticArmControllerNode:
     def __init__(self, num_test_runs: int, exploration_factor: float = 0.8):
@@ -97,22 +88,8 @@ class RoboticArmControllerNode:
         sys.exit(0)
 
     def status_callback(self, msg):
-        """
-        Callback function to update secondary task states.
-        Args:
-            msg (secondary_task_message): The message containing task status updates.
-        """
         self.msg = msg
         self.successful_handover = msg.handover_successful
-        with self.condition:
-            if self.phase == 1 and msg.draining_starts != 0:
-                self.relevant_part = {'draining_starts': msg.draining_starts}
-            elif self.phase == 1 and msg.draining_successful != 0:
-                self.relevant_part = {'draining_successful': msg.draining_successful}
-            elif self.phase == 4 and msg.handover_successful != 0:
-                self.relevant_part = {'handover_successful': msg.handover_successful}
-            if self.relevant_part is not None:
-                self.condition.notify()
 
     def hand_pose_callback(self,msg):
         self.pose_x = msg.x
@@ -130,37 +107,8 @@ class RoboticArmControllerNode:
         goal.damping = GOAL_DAMPING
         # goal.nullspace_gain = GOAL_NULLSPACE_GAIN
         # goal.nullspace_reference = GOAL_NULLSPACE_REFERENCE
-        #TODO: build a controller that uses inverse kinematics to find the actual radians of the joints
-        if self.phase == 2:
-            self.save_position = position
-            goal.reference = position 
-            self.previous_state = self.action
-        elif self.phase == 3:
-            goal.reference = self.save_position
-            if self.action == 5:
-                if self.previous_state == 3:
-                    goal.reference[5] = -np.deg2rad(10)
-                else:
-       
-                    goal.reference[1] -= np.deg2rad(15)
-                    goal.reference[5] = np.deg2rad(45)
-            elif self.action == 6:
-                if self.previous_state == 3:
-                    goal.reference[1] += position[0] 
-                    goal.reference[2] += position[1]
-                    goal.reference[4] = position[2]
-                    goal.reference[5] = 0
-                    goal.reference[6] = position[3]
-                else:
-     
-                    goal.reference[1] -= np.deg2rad(15)
-                    goal.reference[4] = position[2]
-                    goal.reference[5] = 0
-                    goal.reference[6] = position[3]
-        else:
-            goal.reference = position
-            goal.velocity_reference = np.zeros(6)
-            
+        goal.reference = position
+        goal.velocity_reference = np.zeros(6)
         return goal
     
 
@@ -175,59 +123,36 @@ class RoboticArmControllerNode:
             return False
         return True
     
-    def home_position(self):
+    def phase_0(self):
         _= self.send_position_command(INTERMEDIATE_POSITION)
         _= self.send_position_command(HOME_POSITION)
         return
        
     def phase_1(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        self.hand_controller.open(0)  # Close
-        with self.condition:
-            if self.action == 1:
-                while not (self.relevant_part and self.relevant_part.get('draining_starts') == 1):
-                    self.condition.wait()
-            elif self.action == 2:
-                while not (self.relevant_part and self.relevant_part.get('draining_successful') == 1):
-                    self.condition.wait()
+        pass
 
         
     def phase_2(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        position = self.convert_action_to_position(self.action)
-        _= self.send_position_command(INTERMEDIATE_POSITION)
-        _= self.send_position_command(position)
+        pass
         return
+    
+    def move_towards_hand(self):
+        pass
 
     def phase_3(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        position = self.convert_action_to_position(self.action)
-        _= self.send_position_command(position)
+        pass
         return
 
-
-    def phase_4(self):
-        rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        
-        self.hand_controller.open(100) # Open
-        
-        if self.successful_handover == -1:
-            return
-        else:
-            with self.condition:
-                if self.relevant_part and self.relevant_part.get('handover_successful') == -1:
-                    return
-                while not (self.relevant_part and self.relevant_part.get('handover_successful') in [-1, 1]):
-                    self.condition.wait()
-            return
-
-    def phase_5(self):
+    def update_q_table(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:5, Action:Experience replay")
         self.rl_agent.experience_replay(self.alpha,self.gamma,self.Lamda) 
         self.rate.sleep()
         return
 
-    def phase_6(self):
+    def check_end_condition(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:6, Action:Resume_experiment={self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
@@ -252,53 +177,46 @@ class RoboticArmControllerNode:
         """
         Implements the finite state machine of the actions the robot has to take
         - Phase 0: Home
-        - Phase 1: Decide on a starting time
-        - Phase 2: Decide on a handover location
-        - Phase 3: Decide on a handover location
-        - Phase 4: Open the robotic hand
+        - Phase 1: Decide on handover moment
+        - Phase 2: Decide on a handover orientation
+        - Move end-effector to coordinates of human-hand
+        - Phase 3: Decide on when to open the hand
           After termination: 
-        - Phase 5: Update q-table with experience replay
-        - Phase 6: If n_run < runs: Phase_0 else: end
+        - Update q-table with experience replay
+        - If n_run < runs: Phase_0 else: end
         """
 
- 
-        
         self.relevant_part = None
         self.send_message(self.phase)
         if not self.terminated:
             if self.phase == 0:
-                self.home_position()
+                self.phase_0()
                 
             if self.phase == 1:
                 self.phase_1()
 
             if self.phase == 2:
                 self.phase_2()
+                self.move_towards_hand()
 
             if self.phase == 3:
                 self.phase_3()
-
-            if self.phase == 4:
-                self.phase_4()
-
+               
             self.action, self.phase, self.terminated = self.rl_agent.train(learning_rate=self.alpha,discount_factor=self.gamma,
                                                                         trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
                                                                         real_time = True)
             
-
         elif self.run:
-            self.phase_5()
-            self.phase_6()
+            self.update_q_table()
+            self.check_end_condition()
 
         if self.run:
             self.start_episode()
 
-    def convert_action_to_position(self, action):
+    def convert_action_to_orientation(self, action):
         positions = {
-            3: [np.pi/2, np.deg2rad(-10), 0, np.deg2rad(50), 0, np.deg2rad(-35),0],                 # Location A
-            4: [np.pi/2, np.deg2rad(-40), 0, np.deg2rad(67.5), 0, np.deg2rad(-40),0],                 # Location B
-            5: [np.deg2rad(-10),np.deg2rad(30)],                    # Hand orientation A
-            6: [np.deg2rad(-10),np.deg2rad(10),np.deg2rad(-90),np.deg2rad(-90)]             # Hand orientation B
+            3: [], # Orientation A
+            4: [], # Orientation B
         }
         return positions.get(action, HOME_POSITION)
 
@@ -312,11 +230,6 @@ class RoboticArmControllerNode:
         return
             
         
-import os
-from pathlib import Path
-import rospy
-import numpy as np
-
 if __name__ == '__main__':
     try:
         num_test_runs = 10  # Specify the number of test runs

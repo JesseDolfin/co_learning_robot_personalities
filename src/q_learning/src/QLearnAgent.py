@@ -16,20 +16,23 @@ from co_learning_messages.msg import secondary_task_message
 
 class QLearningAgent():
     def __init__(self, env):
-        """
-        Q-learning agent class, contains the functions:
+        self.env = env
 
-            - train:            Used to train the agent in simulation mode (for setting up a Q-table)
-            - evaluate:         Looks up the action in the Q-table to test the agent's performance
-            - train_real_time:  Unravels the training loop so that physical action commands can be 
-                                sent to the robot, allows for re-training of Q-table in real-time
+        self.q_table = np.random.rand(self.env.state_size, self.env.action_size) * 0.01  # Random initialization of Q-table
 
-        Args:
-            action_size:    Sets the size of the action space
-            state_size:     Sets the size of the state space
-            env:            Specifies the environment the agent operates on
-            phases:         Phases are used to reduce the size of the Q-table, see CoLearn() for more information
-        """
+        self.reset_experience()
+        self.state, self.phase = self.env.reset()
+        self.e_trace = np.zeros((self.env.observation_size, self.env.action_size))
+
+        self.initialise = True
+
+        self.alpha = 0.15
+        self.gamma = 0.8 
+        self.Lambda = 0.3
+
+        self.initialise_ros()
+    
+    def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()
         if self.ros_running:
             try:
@@ -39,18 +42,17 @@ class QLearningAgent():
         else:
             print("ROS is offline! Agent proceeds in offline mode")
 
-        self.env = env
-        self.q_table = np.random.rand(self.env.observation_size, self.env.action_size) * 0.01  # Random initialization of Q-table
-        self.reset_experience()
-        self.state, self.phase = self.env.reset()
-        self.e_trace = np.zeros((self.env.observation_size, self.env.action_size))
-        self.initialise = True
-        self.alpha = 0.15
-        self.gamma = 0.8 
-        self.Lambda = 0.3
-
     def train(self, n_steps = 100000, learning_rate=0.8, discount_factor=0.8, exploration_factor=0.25, trace_decay=0.3,real_time=False):
-        # Hyperparameters
+        '''
+        Trains the Q-learning agent.
+        :param n_steps: Number of training steps.
+        :param learning_rate: Learning rate for Q-learning.
+        :param discount_factor: Discount factor for future rewards.
+        :param exploration_factor: Exploration rate for epsilon-greedy policy.
+        :param trace_decay: Decay rate for eligibility traces.
+        :param real_time: If True, train in real-time mode.
+        '''
+
         alpha = learning_rate
         gamma = discount_factor
         epsilon = exploration_factor
@@ -130,8 +132,6 @@ class QLearningAgent():
                 self.update_q_table(state, action, reward, next_state, alpha, gamma, Lambda)
                 
                                                            
-            
-
     def reset_experience(self):
         self.experience = {"state": [],
                            "action": [],
@@ -195,7 +195,7 @@ class QLearningAgent():
         
 if __name__ == '__main__':
     try:
-        n_steps = 100000
+        n_steps = 10000
         Agent = QLearningAgent(env=CoLearn())
         Agent.train(n_steps=n_steps)
         Agent.save_q_table(prefix=f"q_table_solved_{n_steps}_")
