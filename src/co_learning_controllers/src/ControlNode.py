@@ -7,8 +7,9 @@ from pathlib import Path
 import rospy
 import actionlib
 import numpy as np
-import threading
+import time
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
+from sensor_msgs.msg import JointState
 
 # Add the root directory to sys.path
 sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
@@ -27,8 +28,7 @@ GOAL_PRECISION = 1e-1
 GOAL_RATE = 10
 GOAL_STIFFNESS =   [100.0, 100.0, 50.0, 50.0, 25.0, 10.0, 10.0]
 GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
-GOAL_NULLSPACE_GAIN =  [0,0,0,0,0,0,0]
-GOAL_NULLSPACE_REFERENCE = [0,0,0,0,0,0,0]
+NULLSPACE_GAIN = [1,1,1,1,1,1,1]
 
 class RoboticArmControllerNode:
     def __init__(self, num_test_runs: int, exploration_factor: float = 0.8):
@@ -58,6 +58,7 @@ class RoboticArmControllerNode:
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
         rospy.Subscriber('hand_pose',hand_pose,self.hand_pose_callback)
+        rospy.Subscriber("/iiwa7/joint_states", JointState, self.joint_callback, queue_size=10)
 
         self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
 
@@ -72,8 +73,8 @@ class RoboticArmControllerNode:
         self.rl_agent = QLearningAgent(env=self.env)
         self.hand_controller = SoftHandController()
 
-        self.condition = threading.Condition()
         self.relevant_part = None
+        self.orientation = 'None'
 
         self.alpha = 0.15 # Can change dependend on desired learning speed
         self.gamma = 0.8 # Needs to be the same as initial training
@@ -83,6 +84,10 @@ class RoboticArmControllerNode:
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
+    def joint_callback(self,msg):
+        self.q = msg.position
+        self.q_dot =msg.velocity
+
     def signal_handler(self, sig, frame):
         self.stop = True
         sys.exit(0)
@@ -90,6 +95,7 @@ class RoboticArmControllerNode:
     def status_callback(self, msg):
         self.msg = msg
         self.successful_handover = msg.handover_successful
+        self.start = msg.start
 
     def hand_pose_callback(self,msg):
         self.pose_x = msg.x
@@ -124,26 +130,48 @@ class RoboticArmControllerNode:
         return True
     
     def phase_0(self):
+        rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
         _= self.send_position_command(INTERMEDIATE_POSITION)
         _= self.send_position_command(HOME_POSITION)
+        self.hand_controller.open(0)
+
+        while self.start == 0:
+            self.wait()
+        return
+    
+    def wait(self):
+        self.rate.sleep()
         return
        
     def phase_1(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        pass
+        if self.action == 1:
+            return
+        if self.action == 2:
+            self.original_orientation = self.orientation 
+            while self.original_orientation == self.orientation:
+                self.rate.sleep() # wait for a state change
+            return
 
-        
     def phase_2(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        pass
+        position = self.convert_action_to_orientation(self.action)
+        _ = self.send_position_command(INTERMEDIATE_POSITION)
+        _ = self.send_position_command(position)
         return
     
     def move_towards_hand(self):
-        pass
+        rospy.Rate(5).sleep()
 
     def phase_3(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
-        pass
+        if self.action == 5:
+            self.hand_controller.open(100)
+        elif self.action == 6:
+            self.hand_controller.open(30)
+        elif self.action == 7:
+            pass
+        self.rate.sleep()
         return
 
     def update_q_table(self):
@@ -157,7 +185,7 @@ class RoboticArmControllerNode:
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
-            self.rl_agent.print_q_table()
+            #self.rl_agent.print_q_table()
             return
         else:
             _= self.send_position_command(INTERMEDIATE_POSITION)
@@ -201,10 +229,12 @@ class RoboticArmControllerNode:
 
             if self.phase == 3:
                 self.phase_3()
-               
+                
+
+            
             self.action, self.phase, self.terminated = self.rl_agent.train(learning_rate=self.alpha,discount_factor=self.gamma,
-                                                                        trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
-                                                                        real_time = True)
+                                                                           trace_decay=self.Lamda,exploration_factor = self.exploration_factor,
+                                                                           real_time = True)
             
         elif self.run:
             self.update_q_table()
@@ -215,8 +245,8 @@ class RoboticArmControllerNode:
 
     def convert_action_to_orientation(self, action):
         positions = {
-            3: [], # Orientation A
-            4: [], # Orientation B
+            3: np.deg2rad([107,-47,-11,100,-82,-82,-35]), # Serve
+            4: np.deg2rad([55 ,-40,-8 ,82 , 5 , 20, 0 ])  # Drop
         }
         return positions.get(action, HOME_POSITION)
 
@@ -225,6 +255,7 @@ class RoboticArmControllerNode:
         self.terminated = False
         self.msg.draining_starts = 0
         self.msg.draining_successful = 0
+        self.orientation = 'None'
         #self.exploration_factor *= 0.8
         self.update = False
         return
@@ -234,15 +265,15 @@ if __name__ == '__main__':
     try:
         num_test_runs = 10  # Specify the number of test runs
         persistence_factor = 0.5
-        node = RoboticArmControllerNode(num_test_runs, exploration_factor=1)
+        node = RoboticArmControllerNode(num_test_runs, exploration_factor=100)
         
         base_dir = Path(__file__).resolve().parent.parent.parent
         print(base_dir)
         q_table_path = base_dir / 'q_learning/Q_tables/q_table_solved_100000_38.npy'
         
         if os.path.isfile(q_table_path):
-            node.rl_agent.load_q_table(str(q_table_path))
-            node.rl_agent.q_table *= persistence_factor
+            #node.rl_agent.load_q_table(str(q_table_path))
+            #node.rl_agent.q_table *= persistence_factor
             node.rl_agent.print_q_table()
             node.start_episode()
         else:

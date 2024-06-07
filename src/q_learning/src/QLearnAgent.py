@@ -70,8 +70,9 @@ class QLearningAgent():
             while phase == self.phase:
                 action = self.epsilon_greedy(epsilon)
                 next_state, reward, terminated, info = self.env.step(action)
-                phase = info.get('phase', phase)
 
+                phase = info.get('phase', phase)
+    
                 self.experience_update(self.state,action,next_state,reward)
                 self.state = next_state
 

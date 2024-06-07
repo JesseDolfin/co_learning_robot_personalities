@@ -11,7 +11,7 @@ class CoLearn(Env):
         '''
         Defines action space containing 8 actions (0-7)
         - Move to home                      : 0, 0
-        - Initiate handover when human asks : 1, 1
+        - Initiate handover immediately     : 1, 1
         - Wait for state_change             : 1, 2
         - Go to Serve                       : 2, 3
         - Go to Drop                        : 2, 4
@@ -23,8 +23,8 @@ class CoLearn(Env):
         
         Defines an observation space containing 17 states (0-16)
         - Home                                          : 0, 0
-        - (human asks, hand in workspace)               : 1, 1
-        - (human asks, hand not in workspace)           : 1, 2
+        - (Immediately, hand in workspace)              : 1, 1
+        - (Immediately, hand not in workspace)          : 1, 2
         - (wait for state change, hand in workspace)    : 1, 3
         - (wait for state change, hand not in workspace): 1, 4
         - (Hand_h: serve, robot: serve)                 : 2, 5
@@ -40,8 +40,7 @@ class CoLearn(Env):
         - (No human_input, Hand partial)                : 3, 15
         - (No human_input, Wait 0.5 seconds)            : 3, 16
         '''
-
-        
+ 
         self.action_size = 8
         self.action_space = Discrete(self.action_size)
         
@@ -72,16 +71,14 @@ class CoLearn(Env):
         self.human_input = False
         self.orientation = 'None'
 
+        self.terminated = False
+
+        self.hand_open = False
+
         self.initialise_ros()
 
     def status_callback(self, msg):
-        with self.condition:
-            if msg.handover_successful != 0:  # Check if handover_successful is set to either -1 or 1
-                self.relevant_part = {
-                    'handover_successful': msg.handover_successful,
-                    'time_left': msg.time_left
-                }
-                self.condition.notify()
+        self.handover_successful= msg.handover_successful
 
     def hand_pose_callback(self,msg):
         self.orientation = msg.orientation
@@ -113,7 +110,9 @@ class CoLearn(Env):
         elif self.phase == 2:
             return action in [5,6,7]
         elif self.phase == 3:
-            return action == 0
+            if action == 5:
+                self.hand_open=True
+            return (action == 0 and self.hand_open)
         else: return False
 
     def update_state(self,action):
@@ -151,44 +150,61 @@ class CoLearn(Env):
                 if action == 7:
                     return 16
         elif self.phase == 3:
-            return action # 0 for valid transition
-                
-
+            if action == 0: 
+                return action
+            elif self.human_input:
+                if action == 6:
+                    return 12
+                if action == 7:
+                    return 13
+            elif not self.human_input:
+                if action == 6:
+                    return 15
+                if action == 7:
+                    return 16
+            
     def step(self, action=None):
         action = self.action_space.sample() if action is None else action
         valid_transition = self.check_valid_action(action)
 
         self.episode_length -= 1
-        terminated = self.episode_length <= 0 or (self.phase == 3 and valid_transition)
-       
+        self.terminated = self.episode_length <= 0 
+
         if valid_transition:
+            self.phase += 1
+        if valid_transition or (self.phase == 3 and action in [6,7]):
             self.state = self.update_state(action)
-            if terminated:
-                self.phase = 0
-            else:
-                self.phase += 1
             self.save_previous_state()
 
         reward = self.obtain_reward()
-        
+
+        if self.phase == 4:
+            self.terminated = True
+            self.phase = 0
+
         self.info['valid'] = valid_transition
         self.info['phase'] = self.phase
 
-        return self.state, reward, terminated, self.info 
+        return self.state, reward, self.terminated, self.info
+    
+    def wait_for_handover(self):
+        rospy.Rate(1).sleep()
+        return
 
+        
     def obtain_reward(self):
         reward = 0
         if self.ros_running:
             if self.phase == 4:
-                with self.condition:
-                    while self.relevant_part is None or 'handover_successful' not in self.relevant_part:
-                        self.condition.wait()  # Ensures we obtain the reward only as soon as the handover is successful (or failed)
-                    if self.relevant_part['handover_successful'] == 1:
-                        reward += self.phase_size * 10 # Reward for finishing is 10 (for each state)
-                        reward += self.phase_size * self.relevant_part['time_left'] # Dynamic reward based on performance
-                    else:
-                        reward -= self.phase_size * 10 
-            
+                print(self.handover_successful)
+                if self.handover_successful == 1:
+                    reward += self.phase_size * 10 # Reward for finishing is 10 (for each state)
+                    reward += self.phase_size * self.relevant_part['time_left'] # Dynamic reward based on performance
+                elif self.handover_successful == -1:
+                    reward -= self.phase_size * 10 
+                while self.handover_successful == 0:
+                    self.wait_for_handover()
+
         else:
             if self.phase_1_state == 2 and self.phase_2_state == 9 and self.phase_3_state == 14:
                 reward += 20
@@ -209,6 +225,7 @@ class CoLearn(Env):
         self.state = 0
         self.phase = 0
         self.episode_length = self.max_episode_length 
+        self.hand_open = False
         return self.state, self.phase
 
     def close(self):

@@ -64,6 +64,6 @@ class SoftHandController:
 if __name__ == '__main__':
     hand = SoftHandController()
     while True:
-        hand.close(50)
+        hand.close(10)
 
         
