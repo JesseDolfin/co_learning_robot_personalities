@@ -23,10 +23,10 @@ ROT = np.pi/4
 HOME_POSITION =         [np.pi/2, ROT, 0, -ROT, 0, ROT,0]
 INTERMEDIATE_POSITION = [np.pi/2,    0, 0, 0  , 0, 0 ,0]
 GOAL_MODE = 'joint_ds'
-GOAL_TIME = 5
+GOAL_TIME = 0.5
 GOAL_PRECISION = 1e-1
 GOAL_RATE = 10
-GOAL_STIFFNESS =   [100.0, 100.0, 50.0, 50.0, 25.0, 10.0, 10.0]
+GOAL_STIFFNESS =   [150.0, 150.0, 75.0, 75.0, 40.0, 15.0, 10.0]
 GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
 NULLSPACE_GAIN = [1,1,1,1,1,1,1]
 
@@ -54,6 +54,8 @@ class RoboticArmControllerNode:
         self.stop = False
         self.action = 0
         self.msg = None
+        self.start = 0 
+        self.q = None
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
@@ -76,6 +78,8 @@ class RoboticArmControllerNode:
         self.relevant_part = None
         self.orientation = 'None'
 
+        self.msg = secondary_task_message()
+
         self.alpha = 0.15 # Can change dependend on desired learning speed
         self.gamma = 0.8 # Needs to be the same as initial training
         self.Lamda = 0.3 # Needs to be the same as initial training
@@ -95,7 +99,8 @@ class RoboticArmControllerNode:
     def status_callback(self, msg):
         self.msg = msg
         self.successful_handover = msg.handover_successful
-        self.start = msg.start
+        self.start = msg.draining_starts
+
 
     def hand_pose_callback(self,msg):
         self.pose_x = msg.x
@@ -109,10 +114,11 @@ class RoboticArmControllerNode:
         goal.time = GOAL_TIME
         goal.precision = GOAL_PRECISION
         goal.rate = GOAL_RATE
-        goal.stiffness = GOAL_STIFFNESS
-        goal.damping = GOAL_DAMPING
-        # goal.nullspace_gain = GOAL_NULLSPACE_GAIN
-        # goal.nullspace_reference = GOAL_NULLSPACE_REFERENCE
+        if self.episode == 0 and self.phase == 0:
+            goal.stiffness = GOAL_STIFFNESS
+            goal.damping = GOAL_DAMPING
+        goal.nullspace_gain = NULLSPACE_GAIN
+        goal.nullspace_reference = self.q
         goal.reference = position
         goal.velocity_reference = np.zeros(6)
         return goal
@@ -131,26 +137,39 @@ class RoboticArmControllerNode:
     
     def phase_0(self):
         rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
+        if self.episode == 0 and self.q != None:
+            _= self.send_position_command(self.q)  
         _= self.send_position_command(INTERMEDIATE_POSITION)
         _= self.send_position_command(HOME_POSITION)
         self.hand_controller.open(0)
 
-        while self.start == 0:
-            self.wait()
-        return
-    
     def wait(self):
         self.rate.sleep()
         return
        
     def phase_1(self):
-        rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}")
+        rospy.loginfo(f"Episode:{self.episode}, Phase:{self.phase}, Action:{self.action}, self.start:{self.start}")
         if self.action == 1:
-            return
+            while self.start == 0:
+                self.msg.reset = True
+                self.send_message()
+                self.wait()
+                if self.successful_handover == -1:
+                    break
         if self.action == 2:
+            while self.start == 0:
+                self.msg.reset = True
+                self.send_message()
+                self.wait()
+                if self.successful_handover == -1:
+                    break
+
+            self.msg.reset = False
+            self.send_message()
+
             self.original_orientation = self.orientation 
-            while self.original_orientation == self.orientation:
-                self.rate.sleep() # wait for a state change
+            while self.original_orientation == self.orientation and not self.successful_handover == -1:
+                self.wait() # wait for a state change
             return
 
     def phase_2(self):
@@ -175,13 +194,13 @@ class RoboticArmControllerNode:
         return
 
     def update_q_table(self):
-        rospy.loginfo(f"Episode:{self.episode}, Phase:5, Action:Experience replay")
+        rospy.loginfo(f"Episode:{self.episode}, Phase:4, Action:Experience replay")
         self.rl_agent.experience_replay(self.alpha,self.gamma,self.Lamda) 
         self.rate.sleep()
         return
 
     def check_end_condition(self):
-        rospy.loginfo(f"Episode:{self.episode}, Phase:6, Action:Resume_experiment={self.num_test_runs > self.episode}")
+        rospy.loginfo(f"Episode:{self.episode}, Phase:4, Action:Resume_experiment={self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
@@ -215,7 +234,6 @@ class RoboticArmControllerNode:
         """
 
         self.relevant_part = None
-        self.send_message(self.phase)
         if not self.terminated:
             if self.phase == 0:
                 self.phase_0()
@@ -253,11 +271,20 @@ class RoboticArmControllerNode:
     def reset(self):
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
+        self.reset_msg()
+        #self.exploration_factor *= 0.8
+        return
+    
+    def reset_msg(self):
+        self.msg = secondary_task_message()
         self.msg.draining_starts = 0
         self.msg.draining_successful = 0
+        self.msg.reset = False
+        self.msg.phase = 0
+        self.start = 0
         self.orientation = 'None'
-        #self.exploration_factor *= 0.8
-        self.update = False
+        self.successful_handover = 0
+        self.send_message()
         return
             
         

@@ -196,7 +196,6 @@ class CoLearn(Env):
         reward = 0
         if self.ros_running:
             if self.phase == 4:
-                print(self.handover_successful)
                 if self.handover_successful == 1:
                     reward += self.phase_size * 10 # Reward for finishing is 10 (for each state)
                     reward += self.phase_size * self.relevant_part['time_left'] # Dynamic reward based on performance

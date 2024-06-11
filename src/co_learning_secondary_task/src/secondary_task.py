@@ -39,6 +39,7 @@ class secondary_task():
         self.SimpleActuatorMech = Mechanisms
         self.pantograph = Pantograph
         self.robot = PShape
+        
 
         self.spine_hit_count = 0
         self.success_count = 0
@@ -63,9 +64,11 @@ class secondary_task():
 
     def status_callback(self,msg):
         self.msg = msg
-        rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful)
+        rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s reset: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful,msg.reset)
         self.handover_successful = msg.handover_successful
-        self.phase = msg.phase
+        self.reset = msg.reset
+        
+    
 
     def initialise_pygame(self):
         ##initialize pygame window
@@ -162,6 +165,7 @@ class secondary_task():
         self.success = False
         self.needle_removed_during_draining = True
         self.border_rendered = False
+        self.reset = False
 
         self.window_scale = 3
 
@@ -530,6 +534,7 @@ class secondary_task():
             pygame.time.delay(1000)  # Add delay to make the border visible
             self.time_left = 0
             self.send_task_status(success=-1, time=0)
+            self.reset = False
             return True
         
         if self.time_left <= 0 and self.start_handover:
@@ -539,6 +544,7 @@ class secondary_task():
             self.time_up = True
             self.time_left = 0
             self.send_task_status(success=-1, time=0)
+            self.reset = False
             return True
         
         if self.handover_successful:
@@ -753,6 +759,7 @@ class secondary_task():
             if not self.collision_dict['Cerebrospinal fluid one']:
                 self.needle_removed_too_soon_2 = True
                 self.send_task_status(success=-1, time=self.time_left)
+                self.reset = False
                 self.task_failed = True
 
             time_color = (255, 0, 0) if self.time_left <= 10 else (0, 0, 0)
@@ -818,12 +825,14 @@ class secondary_task():
 
         if self.needle_removed_too_soon and self.needle_removed_too_soon_update:
             self.send_task_status(success = -1)
+            self.reset = False
             self.needle_removed_too_soon_update = False
 
         if self.bar_pressed and not self.render_bar and not self.start_handover:
             self.task_failed = True
             self.bar_released_too_soon = True
             self.send_task_status(success = -1)
+            self.reset = False
             
 
         # Handles the logic of the handover phase
@@ -931,13 +940,13 @@ class secondary_task():
                         else:
                             self.run = False
 
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and tries < 10 and self.phase == 1:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and tries < 10 and self.reset:
                     if button_rect.collidepoint(event.pos):
                         self.initialise_simulation_parameters()
                         self.run_simulation()
 
             if tries < 10:
-                if self.phase == 1:
+                if self.reset:
                     if button_rect.collidepoint(pygame.mouse.get_pos()):
                         pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
                     else:
