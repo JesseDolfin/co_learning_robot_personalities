@@ -22,8 +22,8 @@ catkin_package(
 catkin_python_setup()
 
 catkin_install_python(PROGRAMS
-  src/ControlNode.py
-  src/HandController.py
-  src/ManualController.py
+  src/control_node.py
+  src/hand_controller.py
+  src/robot_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

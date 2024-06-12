@@ -136,8 +136,8 @@ class HandPoseNode:
                 self.pose_pub.publish(hand_pose_msg)
                 self.pose = 'None'  # Ensure self.pose is set to 'None'
 
-        # cv2.imshow('Hand Pose Result', cv_image)
-        # cv2.waitKey(3)
+        cv2.imshow('Hand Pose Result', cv_image)
+        cv2.waitKey(3)
 
 
     def determine_hand_pose(self, hand_landmarks):

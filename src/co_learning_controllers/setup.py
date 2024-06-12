@@ -3,7 +3,7 @@ from distutils.core import setup
 from catkin_pkg.python_setup import generate_distutils_setup
 
 d = generate_distutils_setup(
-   packages=['ControlNode','HandController','ManualController'],
+   packages=['control_node','hand_controller','robot_controller'],
    package_dir={'':'src'},
 )
 
