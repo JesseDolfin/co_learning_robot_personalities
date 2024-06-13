@@ -47,7 +47,7 @@ class RoboticArmControllerNode:
 
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
-        self.hand_controller = SoftHandController()
+        #self.hand_controller = SoftHandController()
         self.robot_arm_controller = RoboticArmController()  
 
         self.alpha = 0.15  
@@ -73,16 +73,14 @@ class RoboticArmControllerNode:
 
     def phase_0(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
-        if self.episode == 0 and self.robot_arm_controller.q is not None:
-            _ = self.robot_arm_controller.send_position_command(self.robot_arm_controller.q)
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION)
-        self.hand_controller.open(0)
+        #self.hand_controller.send_goal('close',2)
 
     def phase_1(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}, self.start: {self.start}")
         if self.action == 1:
-            while self.start == 0:
+            while self.start == 0: # Alsways wait untill the human has at least started thed draining process
                 self.msg.reset = True
                 self.send_message()
                 self.rate.sleep()
@@ -114,9 +112,9 @@ class RoboticArmControllerNode:
     def phase_3(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         if self.action == 5:
-            self.hand_controller.open(100)
+            self.hand_controller.send_goal('open',2)
         elif self.action == 6:
-            self.hand_controller.open(30)
+            self.hand_controller.send_goal('partial',2)
         elif self.action == 7:
             pass
         self.rate.sleep()
@@ -185,8 +183,8 @@ class RoboticArmControllerNode:
 
     def convert_action_to_orientation(self, action):
         positions = {
-            3: np.deg2rad([107, -47, -11, 100, -82, -82, -35]),
-            4: np.deg2rad([55, -40, -8, 82, 5, 20, 0])
+            3: np.deg2rad([107, -47, -11, 100, -82, -82, -35]), # Serve
+            4: np.deg2rad([55, -40, -8, 82, 5, 20, 0]) # Drop
         }
         return positions.get(action, HOME_POSITION)
 

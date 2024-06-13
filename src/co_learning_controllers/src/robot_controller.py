@@ -1,5 +1,6 @@
 # robotic_arm_control.py
 
+from torch import cartesian_prod
 import rospy
 import actionlib
 import numpy as np
@@ -14,27 +15,31 @@ ROT = np.pi/4
 HOME_POSITION = [np.pi/2, ROT, 0, -ROT, 0, ROT, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 GOAL_MODE = 'joint_ds'
-GOAL_TIME = 1
+GOAL_TIME = 20
 GOAL_PRECISION = 1e-1
-GOAL_RATE = 10
+GOAL_RATE = 20
 GOAL_STIFFNESS = [150.0, 150.0, 75.0, 75.0, 40.0, 15.0, 10.0]
 GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
-NULLSPACE_GAIN = [1, 1, 1, 1, 1, 1, 1]
+NULLSPACE_GAIN = [0, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmController:
     def __init__(self):
         self.q = None
         self.goal_time = GOAL_TIME
         self.ee_pose = [0, 0, 0, 0, 0, 0]
-        self.robot = Robot(model='iiwa7')
+        ns = rospy.get_param('/namespaces')
 
-        self.client = actionlib.SimpleActionClient('/iiwa7/torque_controller', ControllerAction)
-        rospy.Subscriber('/iiwa7/joint_states', JointState, self.joint_callback, queue_size=10)
+        self.robot = Robot(model=ns.replace('/',''))
+        self.client = actionlib.SimpleActionClient(ns+'/torque_controller', ControllerAction)
+        rospy.Subscriber(ns+'/joint_states', JointState, self.joint_callback, queue_size=10)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
         rospy.loginfo("Initializing client: Waiting for server")
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
+
+        self.goal_time = GOAL_TIME
+        self.hand_pose = [0,0,1.3]
 
     def joint_callback(self, msg):
         self.q = msg.position
@@ -44,8 +49,8 @@ class RoboticArmController:
             translation = [ee_T[0, 3], ee_T[1, 3], ee_T[2, 3]]
             rot_mat = ee_T[0:3, 0:3]
             r = R.from_matrix(rot_mat)
-            euler_angles = r.as_euler('xyz', degrees=False)
-            self.ee_pose = translation + euler_angles.tolist()
+            euler_angles = r.as_euler('xyz', degrees=False).tolist()
+            self.ee_pose = translation + euler_angles[::-1] # reverses the list
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
@@ -53,19 +58,19 @@ class RoboticArmController:
     def create_goal(self, position, nullspace=None):
         if not isinstance(position, list):
             position = list(position)
-
+  
         goal = ControllerGoal()
         # Auto select correct goal-mode based on input arguments
         if len(position) == 7:
             goal.mode = 'joint_ds'
-            stiffness = [150.0, 150.0, 75.0, 75.0, 40.0, 15.0, 10.0]
+            stiffness = [100.0, 100.0, 50.0, 50.0, 25.0, 10.0, 10.0]
             goal.stiffness = stiffness
-            goal.damping = 2 * np.sqrt(stiffness)
+            goal.damping = (2 * np.sqrt(stiffness)).tolist()
         elif len(position) == 6:
             goal.mode = 'ee_cartesian_ds'
-            stiffness = [100.0, 100.0, 100.0, 10.0, 10.0, 10.0]
+            stiffness = [80.0, 800.0, 80.0, 5.0, 5.0, 5.0]
             goal.stiffness = stiffness
-            goal.damping = 2 * np.sqrt(stiffness)
+            goal.damping = (2 * np.sqrt(stiffness)).tolist()
 
         goal.time = self.goal_time
         goal.precision = GOAL_PRECISION
@@ -73,7 +78,7 @@ class RoboticArmController:
         goal.nullspace_gain = NULLSPACE_GAIN
 
         if nullspace is None:
-            goal.nullspace_reference = self.q # tries to minimize movements from starting position
+            goal.nullspace_reference = self.q
         else:
             goal.nullspace_reference = nullspace
 
@@ -115,7 +120,51 @@ class RoboticArmController:
             self.goal_time = 1  # Cant be lower than 1, it will interfere with the controller and the arm will not move
             target_pose = target_position.tolist() + fixed_orientation
             self.send_position_command(target_pose, nullspace)
-            rospy.sleep(0.2)  # Replace with self.rate.sleep() if using ROS rate
+
+
 
         rospy.loginfo("Reached the hand position")
         return
+    
+    def test(self):
+        rot= np.deg2rad([107, -47, -11, 100, -82, -82, -35])
+        count = 0
+        while not rospy.is_shutdown():
+            if count == 0:
+                rospy.loginfo("Sending pre-defined position command")
+                self.send_position_command(rot)
+
+            target = self.ee_pose
+     
+            # for some reason this axis is flipped (KUKA 14 only?)
+            target[4] = -target[4] 
+        
+            # Modify values to test if arm orientation changes
+            target[0] += 0.1
+            target[1] -= 0.1
+            target[2] += 0.1
+
+            rospy.loginfo("sending dynamic position command, forward")
+            self.send_position_command(target)
+
+            target = self.ee_pose
+            target[4] = -target[4] 
+
+            # Move back to original position
+            target[0] -= 0.1
+            target[1] += 0.1
+            target[2] -= 0.1
+
+            rospy.loginfo("sending dynamic position command, backwards")
+            self.send_position_command(target)
+
+            count += 1
+    
+
+            
+
+
+if __name__=='__main__':
+    rospy.init_node("tet")
+    controller = RoboticArmController()
+    controller.test()

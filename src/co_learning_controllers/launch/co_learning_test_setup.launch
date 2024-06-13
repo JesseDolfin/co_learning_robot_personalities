@@ -77,6 +77,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
             <arg name="align_depth" value="true"/>
             <arg name="initial_reset" value ="true"/>
         </include>
+        <node name="pose_detection" pkg="co_learning_pose_detection" type="pose_detection.py" output="log"/>
     </group>
 
     <!-- Conditionally Add RViz -->
@@ -85,10 +86,6 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
         <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config)" output="screen"/>
     </group>
 
-    <!-- Conditionally Launch pose_detection.py and suppress output -->
-    <group if="$(arg pose_detection)">
-        <node name="pose_detection" pkg="co_learning_pose_detection" type="pose_detection.py" output="log"/>
-    </group>
 
     <group if="$(arg qb_hand)">
         <include file="$(find qb_hand_control)/launch/control_qbhand.launch">

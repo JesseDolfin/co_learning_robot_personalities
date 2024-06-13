@@ -58,7 +58,7 @@ class Robot(ERobot):
 
 
 if __name__ == "__main__":
-    robot = iiwa('iiwa7')
+    robot = iiwa('iiwa14')
     print(robot)
 
     for link in robot.grippers[0].links:
