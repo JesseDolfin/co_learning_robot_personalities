@@ -31,6 +31,7 @@ class QLearningAgent():
         self.Lambda = 0.3
 
         self.initialise_ros()
+
     
     def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()

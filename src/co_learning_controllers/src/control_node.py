@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import signal
+import string
 import sys
 import rospy
 import numpy as np
@@ -19,15 +20,16 @@ HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
-    def __init__(self, num_test_runs: int, exploration_factor: float = 0.8):
+    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, personality_type: string = 'baseline'):
         self.num_test_runs = num_test_runs
-        self.exploration_factor = exploration_factor
+        if personality_type == 'independent':
+            self.exploration_factor = 0.8
+        else:
+            self.exploration_factor = exploration_factor
+
         self.phase = 0
         self.terminated = False
         self.episode = 0
-        self.save_position = [0, 0, 0]
-        self.max_exploration_factor = exploration_factor
-        self.secondary_task_proceed = False
         self.successful_handover = 0
         self.run = True
         self.update = False
@@ -38,6 +40,7 @@ class RoboticArmControllerNode:
         self.q = None
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
+        self.type = personality_type
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
@@ -46,6 +49,8 @@ class RoboticArmControllerNode:
         self.pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
 
         self.env = CoLearn()
+        if personality_type == 'independent':
+            self.env.type = 'independent'
         self.rl_agent = QLearningAgent(env=self.env)
         self.hand_controller = SoftHandController()
         self.robot_arm_controller = RoboticArmController()  
@@ -79,6 +84,7 @@ class RoboticArmControllerNode:
 
     def phase_1(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
+        count = 0
         if self.action == 1:
             while self.start == 0: # Alsways wait untill the human has at least started thed draining process
                 self.msg.reset = True
@@ -98,6 +104,17 @@ class RoboticArmControllerNode:
             self.send_message()
             self.original_orientation = self.orientation
             while self.original_orientation == self.orientation and self.successful_handover != -1:
+
+                if self.type == 'impatient':
+                    count += 1
+                    if count > 10:
+                        #TODO: implement: shake arm, send message (hurry up), make beeping sound, pulse light
+                        count = 0
+                elif self.type == 'leader':
+                    if count > 10:
+                        count = 0
+                        #TODO: implement: send instructions like: start handover now or 'remember to maximise score', have led be green
+
                 self.rate.sleep()
             return
 
@@ -111,12 +128,14 @@ class RoboticArmControllerNode:
 
     def phase_3(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
+    
         if self.action == 5:
             self.hand_controller.send_goal('open',2)
         elif self.action == 6:
             self.hand_controller.send_goal('partial',2)
         elif self.action == 7:
             pass
+
         self.rate.sleep()
         self.robot_arm_controller.move_towards_hand()
         return
@@ -132,6 +151,9 @@ class RoboticArmControllerNode:
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
+            if self.type == 'leader':
+                pass
+                #TODO: implement; send message to secondary task: 'well done!', 'nice score', '
             return
         else:
             _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
@@ -195,6 +217,8 @@ class RoboticArmControllerNode:
         self.terminated = False
         self.reset_msg()
         self.rl_agent.print_q_table()
+        if self.type == 'independent':
+            self.exploration_factor = max(self.exploration_factor *.9, 0.20)
         return
 
     def reset_msg(self):

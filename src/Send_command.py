@@ -8,7 +8,7 @@ import actionlib
 # Mesages to and from our KUKA baby
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 from sensor_msgs.msg import JointState
-from robot.robot import Robot
+from co_learning_controllers.src.robot.robot import Robot
 
 class arm_controller():
     def __init__(self):
