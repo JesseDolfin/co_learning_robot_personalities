@@ -57,7 +57,8 @@ class CoLearn(Env):
         self.episode_length = self.max_episode_length 
 
         self.info = {'valid':None,
-                     'phase':0}
+                     'phase':0,
+                     'break':False}
         
         self.phase_0_state = 0
         self.phase_1_state = 0
@@ -67,7 +68,7 @@ class CoLearn(Env):
         self.condition = threading.Condition()
         self.relevant_message = None
 
-        self.successfull_handover = 0
+        self.handover_successful = 0
         self.human_input = False
         self.orientation = 'None'
 
@@ -79,12 +80,13 @@ class CoLearn(Env):
 
     def status_callback(self, msg):
         self.handover_successful= msg.handover_successful
+        self.time_left = msg.time_left
 
     def hand_pose_callback(self,msg):
         self.orientation = msg.orientation
 
     def human_input_callback(self, msg):
-        self.human_input = msg.data
+        self.human_input = msg.data #TODO: implement this
 
     def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()
@@ -100,25 +102,24 @@ class CoLearn(Env):
         else:
             print("ROS is offline! Environment proceeds in offline mode")
 
-        self.relevant_part = {'handover_successful': 0, 'time_left': 0}
-
-    def check_valid_action(self,action):
+    def check_valid_action(self, action):
         if self.phase == 0:
-            return action in [1,2]
+            return action in [1, 2]
         elif self.phase == 1:
-            return action in [3,4]
+            return action in [3, 4]
         elif self.phase == 2:
-            return action in [5,6,7]
+            return action in [5, 6, 7]
         elif self.phase == 3:
             if action == 5:
-                self.hand_open=True
-            return (action == 0 and self.hand_open)
-        else: return False
+                self.hand_open = True
+            return action == 0 and self.hand_open
+        else:
+            return False
 
-    def update_state(self,action):
+    def update_state(self, action):
         if self.phase == 0:
             if action == 1:
-                return 2 if self.orientation == 'None' else 1 # self.orientation == 'None' means that the hand is not in the workspace
+                return 2 if self.orientation == 'None' else 1  # self.orientation == 'None' means that the hand is not in the workspace
             elif action == 2:
                 return 4 if self.orientation == 'None' else 2
         elif self.phase == 1:
@@ -127,13 +128,15 @@ class CoLearn(Env):
                     return 5
                 elif self.orientation == 'Drop':
                     return 7
-                else: return 9
-            if action == 4:
+                else:
+                    return 9
+            elif action == 4:
                 if self.orientation == 'Serve':
                     return 6
                 elif self.orientation == 'Drop':
                     return 8
-                else: return 10
+                else:
+                    return 10
         elif self.phase == 2:
             if self.human_input:
                 if action == 5:
@@ -142,68 +145,77 @@ class CoLearn(Env):
                     return 12
                 elif action == 7:
                     return 13
-            elif not self.human_input:
-                if action ==5:
+            else:
+                if action == 5:
                     return 14
                 if action == 6:
                     return 15
                 if action == 7:
                     return 16
         elif self.phase == 3:
-            if action == 0: 
+            if action == 0:
                 return action
             elif self.human_input:
                 if action == 6:
                     return 12
                 if action == 7:
                     return 13
-            elif not self.human_input:
+            else:
                 if action == 6:
                     return 15
                 if action == 7:
                     return 16
+        return self.state  # Default to current state if no transition found
+
             
     def step(self, action=None):
         action = self.action_space.sample() if action is None else action
         valid_transition = self.check_valid_action(action)
 
         self.episode_length -= 1
-        self.terminated = self.episode_length <= 0 
+        self.terminated = self.episode_length <= 0
 
-        if valid_transition:
-            self.phase += 1
-        if valid_transition or (self.phase == 3 and action in [6,7]):
+        if valid_transition or (self.phase == 3 and action in [6, 7]):
             self.state = self.update_state(action)
             self.save_previous_state()
-
+        if valid_transition or (self.phase == 3 and self.handover_successful in [-1, 1]):
+            self.phase += 1
+        
         reward = self.obtain_reward()
 
         if self.phase == 4:
             self.terminated = True
             self.phase = 0
 
-        self.info['valid'] = valid_transition
+        
+
+        if self.phase == 3 and action in [5, 6, 7]:
+            self.info['break'] = True
+        else:
+            self.info['break'] = False
+
+        self.info['valid'] = valid_transition or self.info['break']
         self.info['phase'] = self.phase
 
         return self.state, reward, self.terminated, self.info
-    
+
     def wait_for_handover(self):
         rospy.Rate(1).sleep()
         return
 
-        
     def obtain_reward(self):
         reward = 0
         if self.ros_running:
             if self.phase == 4:
-                if self.handover_successful == 1:
-                    reward += self.phase_size * 10 # Reward for finishing is 10 (for each state)
-                    reward += self.phase_size * self.relevant_part['time_left'] # Dynamic reward based on performance
-                elif self.handover_successful == -1:
-                    reward -= self.phase_size * 10 
                 while self.handover_successful == 0:
                     self.wait_for_handover()
+                if self.handover_successful == 1:
+                    reward += self.phase_size * 10 # Reward for finishing is 10 (for each state)
+                    reward += self.phase_size * self.time_left * 2 # Dynamic reward based on performance
 
+                elif self.handover_successful == -1:
+                    reward -= self.phase_size * 10 
+                
         else:
             if self.phase_1_state == 2 and self.phase_2_state == 9 and self.phase_3_state == 14:
                 reward += 20

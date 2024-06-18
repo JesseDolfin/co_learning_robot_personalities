@@ -47,14 +47,14 @@ class RoboticArmControllerNode:
 
         self.env = CoLearn()
         self.rl_agent = QLearningAgent(env=self.env)
-        #self.hand_controller = SoftHandController()
+        self.hand_controller = SoftHandController()
         self.robot_arm_controller = RoboticArmController()  
 
         self.alpha = 0.15  
         self.gamma = 0.8  
         self.Lamda = 0.3  
 
-        self.rate = rospy.Rate(5)
+        self.rate = rospy.Rate(.5)
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -75,10 +75,10 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION)
-        #self.hand_controller.send_goal('close',2)
+        self.hand_controller.send_goal('close',2)
 
     def phase_1(self):
-        rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}, self.start: {self.start}")
+        rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         if self.action == 1:
             while self.start == 0: # Alsways wait untill the human has at least started thed draining process
                 self.msg.reset = True
@@ -118,6 +118,7 @@ class RoboticArmControllerNode:
         elif self.action == 7:
             pass
         self.rate.sleep()
+        self.robot_arm_controller.move_towards_hand()
         return
 
     def update_q_table(self):
@@ -167,6 +168,7 @@ class RoboticArmControllerNode:
                 self.phase_2()
             if self.phase == 3:
                 self.phase_3()
+                
             self.action, self.phase, self.terminated = self.rl_agent.train(
                 learning_rate=self.alpha,
                 discount_factor=self.gamma,
@@ -192,6 +194,7 @@ class RoboticArmControllerNode:
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
         self.reset_msg()
+        self.rl_agent.print_q_table()
         return
 
     def reset_msg(self):

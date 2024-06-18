@@ -67,13 +67,18 @@ class QLearningAgent():
                 self.initialise = False
 
             phase = self.phase
-            while phase == self.phase:
+            count = 0
+            stop = False
+            while (phase == self.phase and not stop):
                 action = self.epsilon_greedy(epsilon)
                 next_state, reward, terminated, info = self.env.step(action)
+                count+=1
 
                 phase = info.get('phase', phase)
+                stop = info.get('break',False)
+                valid = info.get('valid',False)
     
-                self.experience_update(self.state,action,next_state,reward)
+                self.experience_update(self.state,action,next_state,reward,valid,phase)
                 self.state = next_state
 
             self.phase = phase
@@ -95,9 +100,10 @@ class QLearningAgent():
 
                     # Perform a step
                     next_state, reward, terminated, info = self.env.step(action)
-                    self.experience_update(self.state, action, next_state, reward)
-                    self.state = next_state
+                    valid = info.get('valid',False)
                     self.phase = info.get('phase', self.phase)
+                    self.experience_update(self.state, action, next_state, reward,valid,self.phase)
+                    self.state = next_state
 
                 if i > 1:
                     self.experience_replay(alpha, gamma, Lambda)
@@ -111,23 +117,23 @@ class QLearningAgent():
 
         return action
 
-    def experience_update(self, state, action, next_state, reward):
+    def experience_update(self, state, action, next_state, reward,valid,phase):
         self.experience["state"].append(state)
         self.experience["action"].append(action)
         self.experience["next_state"].append(next_state)
         self.experience["reward"].append(reward)
-        #print(f"Reward added to experience replay:{reward}")
+        self.experience["valid"].append(valid)
 
     def experience_replay(self, alpha, gamma, Lambda):
-        last_reward = self.experience["reward"][-2] # TODO: Last reward is the reward going from phase 4 to home, so need second to last reward to get the handover completion reward
+        print(f"experience is:{self.experience}")
+        last_reward = self.experience["reward"][-1] 
         for i in range(len(self.experience["state"])):
             state = self.experience["state"][i]
             action = self.experience["action"][i]
             next_state = self.experience["next_state"][i]
-            #reward = self.experience["reward"][i]
+            valid = self.experience["valid"][i]
             
-
-            if next_state != state: # When a valid action is taken
+            if valid: # When a valid action is taken
                 reward = last_reward / self.env.phase_size # Increase the reward for this transition by the final reward per phase (if handover was successfull this approach will reward the full trajectory)
                 #print(f"State:{state}, Reward:{reward}")
                 self.update_q_table(state, action, reward, next_state, alpha, gamma, Lambda)
@@ -137,7 +143,9 @@ class QLearningAgent():
         self.experience = {"state": [],
                            "action": [],
                            "next_state": [],
-                           "reward": []}
+                           "reward": [],
+                           "valid":[],
+                           "phase":[]}
 
     def reset(self):
         self.reset_experience()

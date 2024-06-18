@@ -60,7 +60,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
 
     <!-- Conditionally Launch ControlNode.py in a new terminal window -->
     <group if="$(arg control_node)">
-        <node name="control_node" pkg="co_learning_controllers" type="ControlNode.py" output="screen" launch-prefix="gnome-terminal -- bash -c"/>
+        <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen" launch-prefix="xterm -e"/>
     </group>
 
     <!-- Conditionally Launch secondary_task.py in a new terminal window -->

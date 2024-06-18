@@ -15,7 +15,7 @@ ROT = np.pi/4
 HOME_POSITION = [np.pi/2, ROT, 0, -ROT, 0, ROT, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 GOAL_MODE = 'joint_ds'
-GOAL_TIME = 20
+GOAL_TIME = 0.1
 GOAL_PRECISION = 1e-1
 GOAL_RATE = 20
 GOAL_STIFFNESS = [150.0, 150.0, 75.0, 75.0, 40.0, 15.0, 10.0]
@@ -105,7 +105,7 @@ class RoboticArmController:
         fixed_orientation = self.ee_pose[3:]
 
         if target_position.all() == 0:
-            target_position = np.array([0, 0, 1.3])
+            target_position = current_position
 
         nullspace = self.q
         position_threshold = 0.1
