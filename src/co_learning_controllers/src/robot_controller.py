@@ -9,6 +9,7 @@ from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 from scipy.spatial.transform import Rotation as R
 from robot.robot import Robot
 from co_learning_messages.msg import hand_pose
+from std_msgs.msg import Bool
 
 # Constants
 ROT = np.pi/4
@@ -34,9 +35,13 @@ class RoboticArmController:
         rospy.Subscriber(ns+'/joint_states', JointState, self.joint_callback, queue_size=10)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
+        self.publish_human_input = rospy.Publisher('human_input', Bool, queue_size=1)
+
         rospy.loginfo("Initializing client: Waiting for server")
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
+
+        rospy.Rate(0.1).sleep() # Give enough time for the FRIoverlay app to start up
 
         self.goal_time = GOAL_TIME
         self.hand_pose = [0,0,1.3]
@@ -46,6 +51,17 @@ class RoboticArmController:
         self.q_dot = msg.velocity
         if self.robot is not None:
             ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
+            ee_T_dot = np.array(self.robot.fkine(self.q_dot, end='iiwa_link_7', start='iiwa_link_0'))
+
+            ee_vel = [ee_T_dot[0, 3], ee_T_dot[1, 3], ee_T_dot[2, 3]]
+
+            rospy.logfatal("CHECK IMPLEMENTATION")
+            if np.linalg.norm(ee_vel) > 10:
+                self.publish_human_input(True)
+            else:
+                self.publish_human_input(False)
+
+
             translation = [ee_T[0, 3], ee_T[1, 3], ee_T[2, 3]]
             rot_mat = ee_T[0:3, 0:3]
             r = R.from_matrix(rot_mat)
@@ -68,7 +84,7 @@ class RoboticArmController:
             goal.damping = (2 * np.sqrt(stiffness)).tolist()
         elif len(position) == 6:
             goal.mode = 'ee_cartesian_ds'
-            stiffness = [80.0, 800.0, 80.0, 5.0, 5.0, 5.0]
+            stiffness = [80.0, 80.0, 80.0, 5.0, 5.0, 5.0]
             goal.stiffness = stiffness
             goal.damping = (2 * np.sqrt(stiffness)).tolist()
 

@@ -86,7 +86,7 @@ class CoLearn(Env):
         self.orientation = msg.orientation
 
     def human_input_callback(self, msg):
-        self.human_input = msg.data #TODO: implement this
+        self.human_input = msg.data
 
     def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()
