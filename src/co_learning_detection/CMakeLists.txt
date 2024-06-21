@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(co_learning_pose_detection)
+project(co_learning_detection)
 
 find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs # controller action server 
@@ -23,5 +23,6 @@ catkin_python_setup()
 
 catkin_install_python(PROGRAMS
   src/pose_detection.py
+  src/object_detection.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

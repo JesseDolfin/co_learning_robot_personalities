@@ -77,7 +77,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
             <arg name="align_depth" value="true"/>
             <arg name="initial_reset" value ="true"/>
         </include>
-        <node name="pose_detection" pkg="co_learning_pose_detection" type="pose_detection.py" output="log"/>
+        <node name="pose_detection" pkg="co_learning_detection" type="pose_detection.py" output="log"/>
     </group>
 
     <!-- Conditionally Add RViz -->

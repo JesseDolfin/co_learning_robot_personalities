@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>co_learning_pose_detection</name>
+  <name>co_learning_detection</name>
   <version>0.0.1</version>
   <description>Defines the package that handles the pose of the hand</description>
 

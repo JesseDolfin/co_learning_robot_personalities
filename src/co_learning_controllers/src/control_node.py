@@ -52,7 +52,7 @@ class RoboticArmControllerNode:
         if personality_type == 'independent':
             self.env.type = 'independent'
         self.rl_agent = QLearningAgent(env=self.env)
-        self.hand_controller = SoftHandController()
+        #self.hand_controller = SoftHandController()
         self.robot_arm_controller = RoboticArmController()  
 
         self.alpha = 0.15  
@@ -80,7 +80,14 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION)
-        self.hand_controller.send_goal('close',2)
+        #self.hand_controller.send_goal('close',2)
+
+        if self.type == 'impatient':
+            # Implement: Reduce delay between commands, flash LED, send reminder to human
+            pass
+        elif self.type == 'leader':
+            # Implement: Send preparatory message, give instructions on next steps
+            pass
 
     def phase_1(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
@@ -114,6 +121,11 @@ class RoboticArmControllerNode:
                     if count > 10:
                         count = 0
                         #TODO: implement: send instructions like: start handover now or 'remember to maximise score', have led be green
+                elif self.type == 'cautious':
+                    if count > 10:
+                        count = 0
+                        # Implement: Wait for confirmation signal, slow movement, provide continuous feedback
+                        pass
 
                 self.rate.sleep()
             return
@@ -124,6 +136,17 @@ class RoboticArmControllerNode:
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
         _ = self.robot_arm_controller.send_position_command(position)
         self.robot_arm_controller.move_towards_hand()
+
+        if self.type == 'impatient':
+            # Implement: Move quickly, skip non-essential checks
+            pass
+        elif self.type == 'leader':
+            # Implement: Send updates to human, provide guidance on positioning
+            pass
+        elif self.type == 'cautious':
+            # Implement: Move slowly and steadily, provide continuous feedback
+            pass
+
         return
 
     def phase_3(self):

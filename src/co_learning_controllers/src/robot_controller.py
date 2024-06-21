@@ -1,5 +1,6 @@
 # robotic_arm_control.py
 
+from math import floor
 from torch import cartesian_prod
 import rospy
 import actionlib
@@ -10,13 +11,14 @@ from scipy.spatial.transform import Rotation as R
 from robot.robot import Robot
 from co_learning_messages.msg import hand_pose
 from std_msgs.msg import Bool
+import matplotlib.pyplot as plt
 
 # Constants
 ROT = np.pi/4
 HOME_POSITION = [np.pi/2, ROT, 0, -ROT, 0, ROT, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 GOAL_MODE = 'joint_ds'
-GOAL_TIME = 0.1
+GOAL_TIME = 5
 GOAL_PRECISION = 1e-1
 GOAL_RATE = 20
 GOAL_STIFFNESS = [150.0, 150.0, 75.0, 75.0, 40.0, 15.0, 10.0]
@@ -41,7 +43,7 @@ class RoboticArmController:
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
 
-        rospy.Rate(0.1).sleep() # Give enough time for the FRIoverlay app to start up
+        #rospy.Rate(0.5).sleep() # Give enough time for the FRIoverlay app to start up
 
         self.goal_time = GOAL_TIME
         self.hand_pose = [0,0,1.3]
@@ -55,11 +57,11 @@ class RoboticArmController:
 
             ee_vel = [ee_T_dot[0, 3], ee_T_dot[1, 3], ee_T_dot[2, 3]]
 
-            rospy.logfatal("CHECK IMPLEMENTATION")
+            #rospy.logfatal("CHECK IMPLEMENTATION")
             if np.linalg.norm(ee_vel) > 10:
-                self.publish_human_input(True)
+                self.publish_human_input.publish(True)
             else:
-                self.publish_human_input(False)
+                self.publish_human_input.publish(False)
 
 
             translation = [ee_T[0, 3], ee_T[1, 3], ee_T[2, 3]]
@@ -68,13 +70,29 @@ class RoboticArmController:
             euler_angles = r.as_euler('xyz', degrees=False).tolist()
             self.ee_pose = translation + euler_angles[::-1] # reverses the list
 
+    def shake_arm(self,amplitude,frequency):
+        num_points = 20 * frequency
+        x = np.linspace(0, 2*np.pi, num=int(np.ceil(num_points)))
+        y = amplitude * np.sin(frequency * x) * 360
+        y = np.deg2rad(y)
+
+        total_time = GOAL_TIME #s
+        time_per_segment = total_time / num_points
+
+        for p in y:
+            target = [0,p,0,p,0,p,0]
+            goal = self.create_goal(target)
+            goal.time = time_per_segment
+            goal.mode = 'joint'
+            self.send_position_command(goal)
+            rospy.Rate(25).sleep()
+            
+
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
 
     def create_goal(self, position, nullspace=None):
-        if not isinstance(position, list):
-            position = list(position)
-  
+
         goal = ControllerGoal()
         # Auto select correct goal-mode based on input arguments
         if len(position) == 7:
@@ -103,7 +121,10 @@ class RoboticArmController:
         return goal
 
     def send_position_command(self, position, nullspace=None):
-        goal = self.create_goal(position, nullspace)
+        if not isinstance(position,ControllerGoal):
+            goal = self.create_goal(position, nullspace)
+        else:
+            goal = position
         try:
             self.client.wait_for_server()
             self.client.send_goal(goal)
@@ -183,4 +204,4 @@ class RoboticArmController:
 if __name__=='__main__':
     rospy.init_node("tet")
     controller = RoboticArmController()
-    controller.test()
+    controller.shake_arm(0.05,1)
