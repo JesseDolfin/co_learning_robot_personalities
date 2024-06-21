@@ -264,16 +264,16 @@ Project Link: [https://github.com/JesseDolfin/Co-Learning-KUKA-RL](https://githu
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/JesseDolfin/Co-Learning-KUKA-RL.svg?style=for-the-badge
-[contributors-url]: https://github.com/JesseDolfin/Co-Learning-KUKA-RL/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/JesseDolfin/Co-Learning-KUKA-RL.svg?style=for-the-badge
-[forks-url]: https://github.com/JesseDolfin/Co-Learning-KUKA-RL/network/members
-[stars-shield]: https://img.shields.io/github/stars/JesseDolfin/Co-Learning-KUKA-RL.svg?style=for-the-badge
-[stars-url]: https://github.com/JesseDolfin/Co-Learning-KUKA-RL/stargazers
-[issues-shield]: https://img.shields.io/github/issues/JesseDolfin/Co-Learning-KUKA-RL.svg?style=for-the-badge
-[issues-url]: https://github.com/JesseDolfin/Co-Learning-KUKA-RL/issues
-[license-shield]: https://img.shields.io/github/license/JesseDolfin/Co-Learning-KUKA-RL.svg?style=for-the-badge
-[license-url]: https://github.com/JesseDolfin/Co-Learning-KUKA-RL/blob/master/LICENSE.txt
+[contributors-shield]: https://img.shields.io/github/contributors/JesseDolfin/co_learning_robot_personalities.svg?style=for-the-badge
+[contributors-url]: https://github.com/JesseDolfin/co_learning_robot_personalities/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/JesseDolfin/co_learning_robot_personalities.svg?style=for-the-badge
+[forks-url]: https://github.com/JesseDolfin/co_learning_robot_personalities/network/members
+[stars-shield]: https://img.shields.io/github/stars/JesseDolfin/co_learning_robot_personalities.svg?style=for-the-badge
+[stars-url]: https://github.com/JesseDolfin/co_learning_robot_personalities/stargazers
+[issues-shield]: https://img.shields.io/github/issues/JesseDolfin/co_learning_robot_personalities.svg?style=for-the-badge
+[issues-url]: https://github.com/JesseDolfin/co_learning_robot_personalities/issues
+[license-shield]: https://img.shields.io/github/license/JesseDolfin/co_learning_robot_personalities.svg?style=for-the-badge
+[license-url]: https://github.com/JesseDolfin/co_learning_robot_personalities/blob/master/LICENSE.txt
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/Jesse-Dolfin
 [product-screenshot]: https://preview.free3d.com/img/2015/06/2205987029685109856/qyz27g5f.jpg
