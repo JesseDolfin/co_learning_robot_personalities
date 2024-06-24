@@ -48,6 +48,9 @@ class HandPoseNode:
         self.wrist_pixel = None
         self.pose = None
         self.intrinsics = None
+        self.rate = rospy.Rate(1)
+        self.depth_image = None
+        self.rgb_image = None
 
     def camera_info_callback(self, camera_info):
         # Convert the CameraInfo message to pyrealsense2 intrinsics
@@ -64,15 +67,60 @@ class HandPoseNode:
     def depth_image_callback(self, data):
         if self.intrinsics is None:
             rospy.logwarn_once("Camera intrinsics not yet available")
-        else:
-            rospy.loginfo_once("Camera intrinsics received")
+            return
+        try:
+            # Convert the depth image to a numpy array
+            self.depth_image = self.bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')
+            self.depth_image_time = data.header.stamp
+        except CvBridgeError as e:
+            rospy.logerr(f"CVBridge Error: {e}")
+            return
+        
+        self.process_image()
+        
+    def image_callback(self, data):
+        try:
+            # Convert ROS Image message to OpenCV image
+            self.rgb_image = self.bridge.imgmsg_to_cv2(data, 'bgr8')
+            self.rgb_image_time = data.header.stamp
+        except CvBridgeError as e:
+            rospy.logerr(f"CVBridge Error: {e}")
+            return
+        
+        self.process_image()
+        
+        
+    def process_image(self):
+        if self.rgb_image is None or self.depth_image is None:
+            return
+
+        # Check if the images have the same timestamp
+        if self.rgb_image_time != self.depth_image_time:
+            return
+        
+        hand_pose_msg = hand_pose()
+        hand_pose_msg.header = Header()
+        
+        cv_image = self.rgb_image.copy()
+        depth_image = self.depth_image.copy()
+        
+        results = self.mp_hands.process(cv_image)
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                self.mp_drawing.draw_landmarks(cv_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+                self.pose = self.determine_hand_pose(hand_landmarks)
+
+                # Get wrist pixel coordinates
+                wrist = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.WRIST]
+                self.wrist_pixel = (int(wrist.x * cv_image.shape[1]), int(wrist.y * cv_image.shape[0]))
+        else:   
+            hand_pose_msg.orientation = 'None'
+
 
         if self.wrist_pixel is None:
             rospy.logwarn_once("Wrist pixel coordinates not yet available")
         else:
             try:
-                # Convert the depth image to a numpy array
-                depth_image = self.bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')
                 height, width = depth_image.shape[:2]
 
                 # Check if wrist_pixel is within the bounds of depth_image
@@ -84,18 +132,14 @@ class HandPoseNode:
                     wrist_pixel_floats = [float(self.wrist_pixel[0]), float(self.wrist_pixel[1])]
                     point = rs.rs2_deproject_pixel_to_point(self.intrinsics, wrist_pixel_floats, float(depth))
 
-                    if self.pose != 'None':
-                        hand_pose_msg = hand_pose()
-                        hand_pose_msg.header = Header()
-                        hand_pose_msg.header.stamp = rospy.Time.now()
-                        hand_pose_msg.header.frame_id = "camera_link"  # Replace with the correct frame ID
-                        hand_pose_msg.x = point[0]
-                        hand_pose_msg.y = point[1]
-                        hand_pose_msg.z = point[2]
-                        hand_pose_msg.orientation = self.pose
-                        self.pose_pub.publish(hand_pose_msg)
+                    hand_pose_msg.header.stamp = rospy.Time.now()
+                    hand_pose_msg.header.frame_id = "camera_link"  # Replace with the correct frame ID
+                    hand_pose_msg.x = point[0]
+                    hand_pose_msg.y = point[1]
+                    hand_pose_msg.z = point[2]
+                    hand_pose_msg.orientation = self.pose
+                    self.pose_pub.publish(hand_pose_msg)
                 else:
-                    # Handle the case where the wrist pixel is out of bounds
                     rospy.logerr_once("Wrist pixel is out of bounds")
 
             except CvBridgeError as e:
@@ -103,42 +147,7 @@ class HandPoseNode:
             except TypeError as e:
                 rospy.logerr("TypeError: {}".format(e))
 
-
-
-        
-    def image_callback(self, data):
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(data, 'bgr8')
-        except CvBridgeError as e:
-            rospy.logerr(e)
-            return
-
-        image_rgb = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
-
-        results = self.mp_hands.process(image_rgb)
-
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                self.mp_drawing.draw_landmarks(cv_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
-                self.pose = self.determine_hand_pose(hand_landmarks)
-
-                # Get wrist pixel coordinates
-                wrist = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.WRIST]
-                self.wrist_pixel = (int(wrist.x * cv_image.shape[1]), int(wrist.y * cv_image.shape[0]))
-        else:
-            # Only publish 'None' orientation if there are no hands detected
-            if self.pose != 'None':
-                hand_pose_msg = hand_pose()
-                hand_pose_msg.header = Header()
-                hand_pose_msg.header.stamp = rospy.Time.now()
-                hand_pose_msg.header.frame_id = "camera_link"  # Replace with the correct frame ID
-                hand_pose_msg.orientation = 'None'
-                self.pose_pub.publish(hand_pose_msg)
-                self.pose = 'None'  # Ensure self.pose is set to 'None'
-
-        cv2.imshow('Hand Pose Result', cv_image)
-        cv2.waitKey(3)
-
+        self.rate.sleep()
 
     def determine_hand_pose(self, hand_landmarks):
         wrist = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.WRIST]

@@ -76,8 +76,12 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
             <arg name="output" value="$(arg output)"/>
             <arg name="align_depth" value="true"/>
             <arg name="initial_reset" value ="true"/>
+            <arg name="color_width" value="640"/>
+            <arg name="color_height" value="480"/>
+            <arg name="color_fps" value ="15"/>
         </include>
         <node name="pose_detection" pkg="co_learning_detection" type="pose_detection.py" output="log"/>
+        <node name="object_detection" pkg="co_learning_detection" type="object_detection.py" output="log"/>
     </group>
 
     <!-- Conditionally Add RViz -->

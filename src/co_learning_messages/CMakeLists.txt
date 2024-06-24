@@ -16,6 +16,8 @@ add_message_files(
   FILES
   secondary_task_message.msg
   hand_pose.msg
+  Database.msg
+  Detection.msg
 )
 
 ## Generate services in the 'srv' folder
