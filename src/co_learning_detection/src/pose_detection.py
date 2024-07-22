@@ -86,14 +86,14 @@ class HandPoseNode:
         except CvBridgeError as e:
             rospy.logerr(f"CVBridge Error: {e}")
             return
-        
+          
         self.process_image()
         
         
     def process_image(self):
         if self.rgb_image is None or self.depth_image is None:
             return
-
+     
         # Check if the images have the same timestamp
         if self.rgb_image_time != self.depth_image_time:
             return
@@ -101,8 +101,8 @@ class HandPoseNode:
         hand_pose_msg = hand_pose()
         hand_pose_msg.header = Header()
         
-        cv_image = self.rgb_image.copy()
-        depth_image = self.depth_image.copy()
+        cv_image = self.rgb_image
+        depth_image = self.depth_image
         
         results = self.mp_hands.process(cv_image)
         if results.multi_hand_landmarks:
@@ -110,12 +110,12 @@ class HandPoseNode:
                 self.mp_drawing.draw_landmarks(cv_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
                 self.pose = self.determine_hand_pose(hand_landmarks)
 
+
                 # Get wrist pixel coordinates
                 wrist = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.WRIST]
                 self.wrist_pixel = (int(wrist.x * cv_image.shape[1]), int(wrist.y * cv_image.shape[0]))
         else:   
             hand_pose_msg.orientation = 'None'
-
 
         if self.wrist_pixel is None:
             rospy.logwarn_once("Wrist pixel coordinates not yet available")

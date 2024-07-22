@@ -6,6 +6,8 @@ import rospy
 import numpy as np
 import os
 from pathlib import Path
+from std_msgs.msg import String
+from typing import Literal
 
 # Add the root directory to sys.path
 sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
@@ -20,10 +22,13 @@ HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
-    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, personality_type: string = 'baseline'):
+    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, personality_type: Literal['leader', 'follower', 'cautious','impatient','baseline'] = 'baseline'):
         self.num_test_runs = num_test_runs
-        if personality_type == 'independent':
-            self.exploration_factor = 0.8
+        
+        if personality_type == 'leader':
+            self.exploration_factor = 0.8 # Leader handles on own initiative (high exploration in the beginning with decaying exploration factor)
+        elif personality_type == 'follower':
+            self.exploration_factor = 0.2 # Follower relies more on the input from the human (will follow the actions of the human quicker)
         else:
             self.exploration_factor = exploration_factor
 
@@ -40,26 +45,35 @@ class RoboticArmControllerNode:
         self.q = None
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
-        self.type = personality_type
+        self.type = personality_type # Leader, Follower, Cautious, Impatient, Baseline
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
         self.pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
+        self.pub_text = rospy.Publisher('Task_text', String, queue_size=1)
 
         self.env = CoLearn()
-        if personality_type == 'independent':
-            self.env.type = 'independent'
+        if personality_type == 'leader':
+            self.env.type = 'leader'  # Has preference for a 'serve' orientation and thus has increased reward for entering this state
+        
         self.rl_agent = QLearningAgent(env=self.env)
+        if personality_type == 'follower':
+            self.rl_agent.type = 'follower' # Follower has increased learning rate which means that it will more quickly change its decisions based on the human
+
         #self.hand_controller = SoftHandController()
         self.robot_arm_controller = RoboticArmController()  
+        if personality_type == 'impatient':
+            self.robot_arm_controller.type = 'fast' 
+        elif personality_type == 'cautious':
+            self.robot_arm_controller.type = 'slow'
 
         self.alpha = 0.15  
         self.gamma = 0.8  
         self.Lamda = 0.3  
 
-        self.rate = rospy.Rate(.5)
+        self.rate = rospy.Rate(.5) # Hz
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -82,18 +96,10 @@ class RoboticArmControllerNode:
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION)
         #self.hand_controller.send_goal('close',2)
 
-        if self.type == 'impatient':
-            # Implement: Reduce delay between commands, flash LED, send reminder to human
-            pass
-        elif self.type == 'leader':
-            # Implement: Send preparatory message, give instructions on next steps
-            pass
-
     def phase_1(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
-        count = 0
         if self.action == 1:
-            while self.start == 0: # Alsways wait untill the human has at least started thed draining process
+            while self.start == 0: # Always wait untill the human has at least started thed draining process
                 self.msg.reset = True
                 self.send_message()
                 self.rate.sleep()
@@ -111,23 +117,20 @@ class RoboticArmControllerNode:
             self.send_message()
             self.original_orientation = self.orientation
             while self.original_orientation == self.orientation and self.successful_handover != -1:
-
+                message = String()
                 if self.type == 'impatient':
-                    count += 1
-                    if count > 10:
-                        #TODO: implement: shake arm, send message (hurry up), make beeping sound, pulse light
-                        count = 0
+                    message.data = 'Please hurry up!' #AND VARIATIONS
                 elif self.type == 'leader':
-                    if count > 10:
-                        count = 0
-                        #TODO: implement: send instructions like: start handover now or 'remember to maximise score', have led be green
+                    message.data = 'Good job, please present your arm to me when you are ready' #AND VARIATIONS
                 elif self.type == 'cautious':
-                    if count > 10:
-                        count = 0
-                        # Implement: Wait for confirmation signal, slow movement, provide continuous feedback
-                        pass
+                    message.data = 'Take your time!' #AND VARIATIONS
+                elif self.type == 'follower':
+                    message.data = 'What should we do now?' #AND VARIATIONS
+                 
+                self.pub_text.publish(message)
 
                 self.rate.sleep()
+                # read leader follower papers? role shifting? -> ayse kuchukyilmaz. 
             return
 
     def phase_2(self):
@@ -136,18 +139,6 @@ class RoboticArmControllerNode:
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
         _ = self.robot_arm_controller.send_position_command(position)
         self.robot_arm_controller.move_towards_hand()
-
-        if self.type == 'impatient':
-            # Implement: Move quickly, skip non-essential checks
-            pass
-        elif self.type == 'leader':
-            # Implement: Send updates to human, provide guidance on positioning
-            pass
-        elif self.type == 'cautious':
-            # Implement: Move slowly and steadily, provide continuous feedback
-            pass
-
-        return
 
     def phase_3(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
@@ -174,10 +165,17 @@ class RoboticArmControllerNode:
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
-            if self.type == 'leader':
-                pass
-                #TODO: implement; send message to secondary task: 'well done!', 'nice score', '
-            return
+            message = String()
+            if self.type == 'impatient':
+                message.data = 'Quickly press \'restart\' when I am back in my home position' #AND VARIATIONS
+            elif self.type == 'leader':
+                message.data = 'Well done! Lets try this again' #AND VARIATIONS
+            elif self.type == 'cautious':
+                message.data = 'Please make sure that you are ready before pressing \'restart\'!' #AND VARIATIONS
+            elif self.type == 'follower':
+                message.data = 'Should we start another run? I will follow your lead' #AND VARIATIONS
+            self.pub_text.publish(message)
+            
         else:
             _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
             self.run = False
@@ -203,6 +201,7 @@ class RoboticArmControllerNode:
         - Update q-table with experience replay
         - If n_run < runs: Phase_0 else: end
         """
+     
         self.relevant_part = None
         if not self.terminated:
             if self.phase == 0:
@@ -240,7 +239,7 @@ class RoboticArmControllerNode:
         self.terminated = False
         self.reset_msg()
         self.rl_agent.print_q_table()
-        if self.type == 'independent':
+        if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor *.9, 0.20)
         return
 
@@ -260,7 +259,7 @@ if __name__ == '__main__':
     try:
         num_test_runs = 10
         persistence_factor = 0.5
-        node = RoboticArmControllerNode(num_test_runs, exploration_factor=100)
+        node = RoboticArmControllerNode(num_test_runs, exploration_factor=100, personality_type='leader')
 
         base_dir = Path(__file__).resolve().parent.parent.parent
         print(base_dir)

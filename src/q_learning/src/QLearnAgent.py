@@ -30,6 +30,8 @@ class QLearningAgent():
         self.gamma = 0.8 
         self.Lambda = 0.3
 
+        self.type = 'none'
+
         self.initialise_ros()
 
     
@@ -54,7 +56,11 @@ class QLearningAgent():
         :param real_time: If True, train in real-time mode.
         '''
 
-        alpha = learning_rate
+        if self.type == 'follower':
+            alpha = 0.5
+        else:
+            alpha = learning_rate
+
         gamma = discount_factor
         epsilon = exploration_factor
         Lambda = trace_decay

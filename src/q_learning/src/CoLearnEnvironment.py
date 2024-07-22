@@ -217,8 +217,8 @@ class CoLearn(Env):
 
                 elif self.handover_successful == -1:
                     reward -= self.phase_size * 10 
-        if (self.type == 'independent' and self.state in [5,7]):
-            reward += 10 # robot prefers the independent state
+        if (self.type == 'leader' and self.state in [5,7]):
+            reward += 10 # robot prefers the state 'serve'
                 
         else:
             if self.phase_1_state == 2 and self.phase_2_state == 9 and self.phase_3_state == 14:

@@ -15,6 +15,8 @@ import time
 import rospy
 import rosgraph
 
+from std_msgs.msg import String
+
 # Add the root directory to sys.path
 sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
 
@@ -39,36 +41,55 @@ class secondary_task():
         self.SimpleActuatorMech = Mechanisms
         self.pantograph = Pantograph
         self.robot = PShape
-        
-
+    
         self.spine_hit_count = 0
         self.success_count = 0
 
         pygame.mouse.set_visible(True)     ##Hide cursor by default. 'm' toggles it
         
         ##initialize "real-time" clock
-        self.FPS = 400   #in Hertz
-
- 
-
+        self.FPS = 400   #in Hertz (maybe)
 
     def initialise_ros(self):
         self.ros_running = rosgraph.is_master_online()
         self.msg = None
+        self.display_text = None
         
         if self.ros_running:
             self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
             rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
+            rospy.Subscriber('Task_text',String,self.text_callback)
             rospy.init_node("secondary_task")
-        #self.rate = rospy.rate(50) #Hz
 
     def status_callback(self,msg):
         self.msg = msg
         rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s reset: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful,msg.reset)
         self.handover_successful = msg.handover_successful
         self.reset = msg.reset
+
+    def text_callback(self,msg):
+        self.display_text = msg.data
+        self.display_text_flag = True
         
-    
+    def check_print_text(self):
+        if self.display_text_flag and self.display_text is not None:
+            lines = self.split_text("Robot: " + "\"" + self.display_text + "\"", self.font, max_width = 500)
+            y_offset = 450
+            
+            for line in lines:
+                text_surface = self.font.render(line, True, (0, 0, 0), (255, 255, 255))
+                self.screenVR.blit(text_surface, (10, y_offset))
+                y_offset += self.font.get_linesize()  # Move to the next line height
+
+            if self.get_the_time:
+                self.time_init = pygame.time.get_ticks()
+                self.get_the_time = False
+
+            time_current = pygame.time.get_ticks() - self.time_init
+
+            if time_current > 1000:
+                self.get_the_time = True
+                self.display_text_flag = False
 
     def initialise_pygame(self):
         ##initialize pygame window
@@ -166,8 +187,10 @@ class secondary_task():
         self.needle_removed_during_draining = True
         self.border_rendered = False
         self.reset = False
-
+        self.display_text_flag = False
+        self.get_the_time = True
         self.window_scale = 3
+        self.time_init = 0
 
         self.previous_cursor = None
         self.smoothing_factor = 0.1
@@ -710,6 +733,7 @@ class secondary_task():
 
     def render_screen(self):
         def draw_layers(screen, colors, layers, border_radius):
+            pygame.draw.rect(self.screenVR, (0,0,0), pygame.Rect(0, 440, 550, 60),  2)
             for color, layer in zip(colors, layers):
                 pygame.draw.rect(screen, color, layer, border_radius=border_radius)
 
@@ -859,6 +883,9 @@ class secondary_task():
             self.screenVR.blit(text_surface, (0, y_offset))
             y_offset += 20
 
+        self.check_print_text()
+            
+            
         # Fuse it back together
         self.window.blit(self.screenHaptics, (0, 0))
         self.window.blit(self.screenBlank, (800, 0))
@@ -885,6 +912,19 @@ class secondary_task():
         pygame.display.flip()
         self.process_events()
 
+    def split_text(self,text, font, max_width):
+            words = text.split(' ')
+            lines = []
+            current_line = words[0]
+            for word in words[1:]:
+                if font.size(current_line + ' ' + word)[0] <= max_width:
+                    current_line += ' ' + word
+                else:
+                    lines.append(current_line)
+                    current_line = word
+            lines.append(current_line)
+            return lines
+
     def end_screen(self):
         def render_end_texts():
             return [
@@ -903,19 +943,7 @@ class secondary_task():
                 (f"Score: {round(self.time_left, 2)}", (0, 0, 0), pygame.font.Font(None, 30))
             ]
 
-        def split_text(text, font, max_width):
-            words = text.split(' ')
-            lines = []
-            current_line = words[0]
-            for word in words[1:]:
-                if font.size(current_line + ' ' + word)[0] <= max_width:
-                    current_line += ' ' + word
-                else:
-                    lines.append(current_line)
-                    current_line = word
-            lines.append(current_line)
-            return lines
-
+        
         self.run = True
 
         button_surface = pygame.Surface((150, 50))
@@ -969,25 +997,25 @@ class secondary_task():
                 elif self.handover_successful == 1:
                     self.screenHaptics.blit(texts[11][2].render(texts[11][0], True, texts[11][1]), (20, 120))
                 elif self.needle_removed_too_soon:
-                    split_lines = split_text(texts[8][0], texts[8][2], self.screenHaptics.get_width())
+                    split_lines = self.split_text(texts[8][0], texts[8][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[8][2].render(line, True, texts[8][1]), (20, y_offset))
                         y_offset += 30
                 elif self.needle_removed_too_soon_2:
-                    split_lines = split_text(texts[9][0], texts[9][2], self.screenHaptics.get_width())
+                    split_lines = self.split_text(texts[9][0], texts[9][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[9][2].render(line, True, texts[9][1]), (20, y_offset))
                         y_offset += 30
                 elif self.bar_released_too_soon and not self.time_up:
-                    split_lines = split_text(texts[10][0], texts[10][2], self.screenHaptics.get_width())
+                    split_lines = self.split_text(texts[10][0], texts[10][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[10][2].render(line, True, texts[10][1]), (20, y_offset))
                         y_offset += 30
                 else:
-                    split_lines = split_text(texts[7][0], texts[7][2], self.screenHaptics.get_width())
+                    split_lines = self.split_text(texts[7][0], texts[7][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[7][2].render(line, True, texts[7][1]), (20, y_offset))
