@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from std_msgs.msg import String
 from typing import Literal
+import random
 
 # Add the root directory to sys.path
 sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
@@ -75,6 +76,32 @@ class RoboticArmControllerNode:
 
         self.rate = rospy.Rate(.5) # Hz
 
+        self.messages = {
+                            'impatient': [
+                                'Please hurry up!',
+                                'We need to move faster!',
+                                'Speed it up, please!'
+                            ],
+                            'leader': [
+                                'Good job, please present your arm to me when you are ready',
+                                'Looking forward to your next move!',
+                                'Excellent work, keep it up!'
+                            ],
+                            'cautious': [
+                                'Take your time!',
+                                'No rush, proceed at your pace',
+                                'Make sure everything is ready before proceeding'
+                            ],
+                            'follower': [
+                                'What should we do now?',
+                                'I am ready to follow your lead',
+                                'Let me know the next step'
+                            ],
+                            'baseline': [
+                                ''
+                            ]
+                        }
+
         signal.signal(signal.SIGINT, self.signal_handler)
 
     def signal_handler(self, sig, frame):
@@ -90,6 +117,13 @@ class RoboticArmControllerNode:
         self.hand_pose = [msg.x, msg.y, msg.z]
         self.orientation = msg.orientation
 
+    def get_random_message(self, personality_type):
+        if personality_type in self.messages:
+            messages = self.messages[personality_type]
+            if random.random() < 0.5:  
+                return random.choice(messages)
+        return None
+
     def phase_0(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
@@ -99,7 +133,7 @@ class RoboticArmControllerNode:
     def phase_1(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         if self.action == 1:
-            while self.start == 0: # Always wait untill the human has at least started thed draining process
+            while self.start == 0: # Always wait until the human has at least started the draining process
                 self.msg.reset = True
                 self.send_message()
                 self.rate.sleep()
@@ -117,21 +151,16 @@ class RoboticArmControllerNode:
             self.send_message()
             self.original_orientation = self.orientation
             while self.original_orientation == self.orientation and self.successful_handover != -1:
-                message = String()
-                if self.type == 'impatient':
-                    message.data = 'Please hurry up!' #AND VARIATIONS
-                elif self.type == 'leader':
-                    message.data = 'Good job, please present your arm to me when you are ready' #AND VARIATIONS
-                elif self.type == 'cautious':
-                    message.data = 'Take your time!' #AND VARIATIONS
-                elif self.type == 'follower':
-                    message.data = 'What should we do now?' #AND VARIATIONS
-                 
-                self.pub_text.publish(message)
+                message_text = self.get_random_message(self.type)
+                if message_text:
+                    message = String()
+                    message.data = message_text
+                    self.pub_text.publish(message)
 
                 self.rate.sleep()
                 # read leader follower papers? role shifting? -> ayse kuchukyilmaz. 
             return
+
 
     def phase_2(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
@@ -160,21 +189,17 @@ class RoboticArmControllerNode:
         self.rate.sleep()
         return
 
+
     def check_end_condition(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
-            message = String()
-            if self.type == 'impatient':
-                message.data = 'Quickly press \'restart\' when I am back in my home position' #AND VARIATIONS
-            elif self.type == 'leader':
-                message.data = 'Well done! Lets try this again' #AND VARIATIONS
-            elif self.type == 'cautious':
-                message.data = 'Please make sure that you are ready before pressing \'restart\'!' #AND VARIATIONS
-            elif self.type == 'follower':
-                message.data = 'Should we start another run? I will follow your lead' #AND VARIATIONS
-            self.pub_text.publish(message)
+            message_text = self.get_random_message(self.type)
+            if message_text:
+                message = String()
+                message.data = message_text
+                self.pub_text.publish(message)
             
         else:
             _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
