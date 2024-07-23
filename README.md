@@ -100,7 +100,7 @@ Please follow the installation instructions from iiwa_ros before installing this
 1. Install the qb_softhand repositories
    ```sh
    cd <work space>
-   mkdir qb_hand/src
+   mkdir -p qb_hand/src
    cd qb_hand/src
    ```
    Clone the repositories and install them:
