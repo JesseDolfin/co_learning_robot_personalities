@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from tabnanny import verbose
 import rospy
 from sensor_msgs.msg import Image, CameraInfo
