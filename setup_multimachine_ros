@@ -15,4 +15,4 @@ To test if they correctly recognise rosmaster A you can type rostopic list on ma
 
 NOTE: Make sure that machine B ipv4 address is somewhere in the range 192.180.1.x!, I am unsure if the subnet mask needs to be set but to be safe set it to: 255.255.255.0
 
-Practical use case: The worker PC is machine A, which runs roscore and the real-sense software. The laptop is machine B, which runs the rest of the programs. 
+Practical use case: The worker PC is machine A, which runs roscore, the real-sense software, and the detection package. The laptop is machine B, which runs the rest of the packages. 
