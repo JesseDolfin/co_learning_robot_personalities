@@ -91,7 +91,7 @@ To get a local copy up and running follow these simple example steps.
 
 ### Prerequisites
 
-This repository requires access to the TU Delft CoR gitlab iiwa repository: https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros.
+This repository requires access to the TU Delft CoR gitlab iiwa [repository](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros).
 Please follow the installation instructions from iiwa_ros before installing this package.
 
 
@@ -116,70 +116,8 @@ Please follow the installation instructions from iiwa_ros before installing this
    echo "source <work space>/qb_hand/devel/setup.bash" >> ~/.bashrc
    ```
 
-2. Install the realsense software:
-    - Register the server's public key:
-    ```sh
-    sudo mkdir -p /etc/apt/keyrings
-    curl -sSf https://librealsense.intel.com/Debian/librealsense.pgp | sudo tee /etc/apt/keyrings/librealsense.pgp > /dev/null
-    ```
-    
-    - Make sure apt HTTPS support is installed:
-    `sudo apt-get install apt-transport-https`
-    
-    - Add the server to the list of repositories:
-    ```sh
-    echo "deb [signed-by=/etc/apt/keyrings/librealsense.pgp] https://librealsense.intel.com/Debian/apt-repo `lsb_release -cs` main" | \
-    sudo tee /etc/apt/sources.list.d/librealsense.list
-    sudo apt-get update
-    ```
-    
-    - Install the libraries (see section below if upgrading packages):  
-      `sudo apt-get install librealsense2-dkms`
-      `sudo apt-get install librealsense2-utils`
-      The above two lines will deploy librealsense2 udev rules, build and activate kernel modules, runtime library and executable demos and tools.  
-    
-    - Install the developer and debug packages:  
-      `sudo apt-get install librealsense2-dev`
-      `sudo apt-get install librealsense2-dbg`
-      With `dev` package installed, you can compile an application with **librealsense** using `g++ -std=c++11 filename.cpp -lrealsense2` or an IDE of your choice.
-    
-    Reconnect the Intel RealSense depth camera and run: `realsense-viewer` to verify the installation.
-    
-    Verify that the kernel is updated :    
-    `modinfo uvcvideo | grep "version:"` should include `realsense` string
-
-3. Install the ros wrapper for the realsense camera
-   ```sh
-   cd <workspace>
-   mkdir -p <workspace>/intel_realsense/src
-   cd /intel_realsense/src
-   ```
-   
-   Clone the latest release:
-   ```sh
-   git clone https://github.com/IntelRealSense/realsense-ros.git
-   cd realsense-ros/
-   git checkout `git tag | sort -V | grep -P "^2.\d+\.\d+" | tail -1`
-   cd ..
-   ```
-
-   Make sure that ddynamic_reconfigure is installed, via apt-get
-   `apt-get install ddynamic_reconfigure`
-
-   Install the repository:
-   ```sh
-   catkin_init_workspace
-   cd ..
-   catkin_make clean
-   catkin_make -DCATKIN_ENABLE_TESTING=False -DCMAKE_BUILD_TYPE=Release
-   catkin_make install
-   ```
-
-   Source the repository and add it to the path:
-   ```sh
-   source devel/setup.bash
-   echo "source <workspace>/intel_realsense/devel/setup.bash" >> ~/.bashrc
-   ```
+2. Install the realsense software inside of your workspace.
+    Follow the installation steps from their [repo](https://github.com/IntelRealSense/realsense-ros/tree/ros1-legacy?tab=readme-ov-file).
 
 4. Install the co_learning_personalities package
    ```sh
