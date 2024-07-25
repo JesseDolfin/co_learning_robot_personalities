@@ -6,7 +6,7 @@ export ROS_IP=192.180.1.5
 
 On machine B we need to let ros know where to look for a rosmaster to do this we set the ROS_MASTER_URI variable:
 ```sh
-export ROS_MASTER_URI:http://192.180.1.5:11311
+export ROS_MASTER_URI=http://192.180.1.5:11311
 ```
 
 After exporting the variables start roscore (alone or via roslaunch) on machine A in the same terminal you exported the variables in
