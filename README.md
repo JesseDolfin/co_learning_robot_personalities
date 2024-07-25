@@ -76,27 +76,20 @@
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-
 [![Product Name Screen Shot][product-screenshot]](https://preview.free3d.com/img/2015/06/2205987029685109856/qyz27g5f.jpg)
-
-
 
 
 
 <!-- GETTING STARTED -->
 ## Getting Started
-
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
+This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3.8. Other configurations are not tested, and the code might not run on different versions.
 
 ### Prerequisites
-
 This repository requires access to the TU Delft CoR gitlab iiwa [repository](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros).
 Please follow the installation instructions from iiwa_ros before installing this package.
 
 
 ### Installation
-
 1. Install the qb_softhand repositories
    ```sh
    cd <work space>
@@ -153,7 +146,6 @@ Please follow the installation instructions from iiwa_ros before installing this
 
 <!-- USAGE EXAMPLES -->
 ## Usage
-
 After installing and sourcing the software the simulation may be started using the following roslaunch command:
 ```sh
 roslaunch co_learning_controllers co_learning_test_setup.launch
@@ -180,7 +172,6 @@ _For more examples, please refer to the [Documentation](https://google.com)_
 
 <!-- CONTRIBUTING -->
 ## Contributing
-
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
 
 If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
@@ -198,7 +189,6 @@ Don't forget to give the project a star! Thanks again!
 
 <!-- LICENSE -->
 ## License
-
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -207,7 +197,6 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <!-- CONTACT -->
 ## Contact
-
 Jesse Dolfin - jesse.dolfin@gmail.com
 
 Project Link: [https://github.com/JesseDolfin/Co-Learning-KUKA-RL](https://github.com/JesseDolfin/Co-Learning-KUKA-RL)
