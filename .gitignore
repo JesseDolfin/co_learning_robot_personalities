@@ -12,3 +12,4 @@ qbdevice-ros/
 maxq/
 .vscode/
 install/
+yolov10m.pt
