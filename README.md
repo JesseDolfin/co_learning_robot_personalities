@@ -139,6 +139,8 @@ Please follow the installation instructions from iiwa_ros before installing this
    pip install pyrealsense2
    pip install ultralytics
    pip install gymnasium
+   pip install pygame
+   pip install pyserial
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
