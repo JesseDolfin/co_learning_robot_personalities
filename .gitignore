@@ -10,3 +10,4 @@ logs/
 qbhand-ros/
 qbdevice-ros/
 maxq/
+.vscode/
