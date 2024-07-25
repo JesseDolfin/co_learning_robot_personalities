@@ -1,8 +1,0 @@
-prefix=/home/worker-20/jesse/co_learning_robot_personalities/install
-
-Name: q_learning
-Description: Description of q_learning
-Version: 0.0.1
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 
