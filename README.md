@@ -139,7 +139,7 @@ Please follow the installation instructions from iiwa_ros before installing this
    ```
 
 5. Posterior installations:
-   ```sh
+  ```sh
   pip install numpy==1.21
   pip install python-dateutill==2.8.2
   pip install mediapipe
