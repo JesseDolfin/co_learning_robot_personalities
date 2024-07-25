@@ -103,6 +103,11 @@ Please follow the installation instructions from iiwa_ros before installing this
    mkdir -p qb_hand/src
    cd qb_hand/src
    ```
+   Install the combined robot hw package:
+   ```sh
+   sudo apt install ros-noetic-combined-robot-hw
+   ```
+   
    Clone the repositories and install them:
    ```sh
    git clone --recurse-submodules https://bitbucket.org/qbrobotics/qbdevice-ros.git
@@ -116,7 +121,7 @@ Please follow the installation instructions from iiwa_ros before installing this
    echo "source <work space>/qb_hand/devel/setup.bash" >> ~/.bashrc
    ```
 
-2. Install the realsense software inside of your workspace.
+1. Install the realsense software inside of your workspace.
     Follow the installation steps from their [repo](https://github.com/IntelRealSense/realsense-ros/tree/ros1-legacy?tab=readme-ov-file).
 
 4. Install the co_learning_personalities package
@@ -133,7 +138,14 @@ Please follow the installation instructions from iiwa_ros before installing this
    echo "source <work space>/co_learning_robot_personalities/devel/setup.bash" >> ~/.bashrc
    ```
 
-   
+5. Posterior installations:
+   ```sh
+  pip install numpy==1.21
+  pip install python-dateutill==2.8.2
+  pip install mediapipe
+  pip install pyrealsense2
+  pip install ultralytics
+   ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
