@@ -10,8 +10,11 @@ from std_msgs.msg import String
 from typing import Literal
 import random
 
-# Add the root directory to sys.path
-sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
+# I give up, modifying the python path to recognise the package.
+script_dir = os.path.dirname(os.path.abspath(__file__))
+workspace_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
+if workspace_root not in sys.path:
+    sys.path.append(workspace_root)
 
 from co_learning_messages.msg import secondary_task_message, hand_pose
 from co_learning_controllers.src.hand_controller import SoftHandController
