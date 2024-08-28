@@ -13,3 +13,5 @@ maxq/
 .vscode/
 install/
 yolov10m.pt
+*.pt
+*.task

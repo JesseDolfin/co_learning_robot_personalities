@@ -1,15 +1,19 @@
 #!/usr/bin/env python
-
 import rospy
 from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import String, Header
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
+
 import mediapipe as mp
+from mediapipe import solutions
+from mediapipe.framework.formats import landmark_pb2
+
 import numpy as np
 import pyrealsense2 as rs
-
+import os
 from co_learning_messages.msg import hand_pose
+
 
 
 class HandPoseNode:
@@ -40,11 +44,21 @@ class HandPoseNode:
 
         self.bridge = CvBridge()
         rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback)
-        self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=10)
         rospy.Subscriber('/camera/aligned_depth_to_color/camera_info', CameraInfo, self.camera_info_callback)
         rospy.Subscriber('/camera/aligned_depth_to_color/image_raw', Image, self.depth_image_callback)
-        self.mp_hands = mp.solutions.hands.Hands(static_image_mode=True, max_num_hands=2, min_detection_confidence=0.5)
-        self.mp_drawing = mp.solutions.drawing_utils
+
+        self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=10)
+
+        self.mode = False
+        self.maxHands = 1
+        self.modelComplex = 1
+        self.detectionCon = 0.5
+        self.trackCon = 0.5
+
+        self.mpHands = mp.solutions.hands
+        self.hands = self.mpHands.Hands(self.mode,self.maxHands,self.modelComplex,self.detectionCon,self.trackCon)
+        self.mpDraw = mp.solutions.drawing_utils
+
         self.wrist_pixel = None
         self.pose = None
         self.intrinsics = None
@@ -88,6 +102,38 @@ class HandPoseNode:
             return
           
         self.process_image()
+
+    def findHands(self,img,draw=True):
+        img = cv2.flip(img,1)
+        imgRGB = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+        self.results = self.hands.process(imgRGB)
+        #print(results.multi_hand_landmarks)
+
+        if self.results.multi_hand_landmarks:
+            for handlms in self.results.multi_hand_landmarks:   
+                '''
+                
+                    '''
+                if draw:
+                    self.mpDraw.draw_landmarks(img,handlms,self.mpHands.HAND_CONNECTIONS)
+
+        return img
+    
+    def findPosition(self,img,handNo=0,draw=True):
+        
+        lmlist = []
+        if self.results.multi_hand_landmarks:
+            myHand=self.results.multi_hand_landmarks[handNo]
+
+            for id,lm in enumerate(myHand.landmark):
+                h,w,c = img.shape
+                cx,cy = int(lm.x*w),int(lm.y*h)
+                #print(id,cx,cy)
+                lmlist.append([id,cx,cy])
+                if draw:
+                    cv2.circle(img,(cx,cy),5,(255,0,255),cv2.FILLED)
+
+        return lmlist
         
         
     def process_image(self):
@@ -98,46 +144,46 @@ class HandPoseNode:
         if self.rgb_image_time != self.depth_image_time:
             return
         
+        hand = self.findHands(self.rgb_image,draw=True)
+        cv2.imshow("result",hand)
+        cv2.waitKey(0)
+        
         hand_pose_msg = hand_pose()
         hand_pose_msg.header = Header()
-        
-        cv_image = self.rgb_image
-        depth_image = self.depth_image
-        
-        results = self.mp_hands.process(cv_image)
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                self.mp_drawing.draw_landmarks(cv_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
-                self.pose = self.determine_hand_pose(hand_landmarks)
 
+        position = self.findPosition(self.rgb_image)
 
-                # Get wrist pixel coordinates
-                wrist = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.WRIST]
-                self.wrist_pixel = (int(wrist.x * cv_image.shape[1]), int(wrist.y * cv_image.shape[0]))
-        else:   
-            hand_pose_msg.orientation = 'None'
+        if position:
+            pose = self.determine_hand_pose(position)
 
-        if self.wrist_pixel is None:
+            wrist = position[0]
+            middle_finger_mcp = position[1]
+            self.palm = [(wrist[1] + middle_finger_mcp[1])/2,(wrist[2] + middle_finger_mcp[2])/2]
+
+            self.find_3d_palm(pose)
+            
+
+    def find_3d_palm(self,pose):
+        if self.palm is None:
             rospy.logwarn_once("Wrist pixel coordinates not yet available")
         else:
             try:
+                depth_image = self.depth_image
                 height, width = depth_image.shape[:2]
 
                 # Check if wrist_pixel is within the bounds of depth_image
                 if 0 <= self.wrist_pixel[1] < height and 0 <= self.wrist_pixel[0] < width:
                     # Get the depth value at the wrist pixel
-                    depth = depth_image[self.wrist_pixel[1], self.wrist_pixel[0]]
+                    depth = depth_image[self.palm[1], self.palm[0]]
+                    point = rs.rs2_deproject_pixel_to_point(self.intrinsics, self.palm, depth)
 
-                    # Deproject the pixel to a 3D point
-                    wrist_pixel_floats = [float(self.wrist_pixel[0]), float(self.wrist_pixel[1])]
-                    point = rs.rs2_deproject_pixel_to_point(self.intrinsics, wrist_pixel_floats, float(depth))
-
+                    hand_pose_msg = hand_pose()
                     hand_pose_msg.header.stamp = rospy.Time.now()
                     hand_pose_msg.header.frame_id = "camera_link"  # Replace with the correct frame ID
                     hand_pose_msg.x = point[0]
                     hand_pose_msg.y = point[1]
                     hand_pose_msg.z = point[2]
-                    hand_pose_msg.orientation = self.pose
+                    hand_pose_msg.orientation = pose
                     self.pose_pub.publish(hand_pose_msg)
                 else:
                     rospy.logerr_once("Wrist pixel is out of bounds")
@@ -150,16 +196,16 @@ class HandPoseNode:
         self.rate.sleep()
 
     def determine_hand_pose(self, hand_landmarks):
-        wrist = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.WRIST]
-        index_mcp = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_MCP]
-        pinky_mcp = hand_landmarks.landmark[mp.solutions.hands.HandLandmark.PINKY_MCP]
+        wrist = hand_landmarks[0] 
+        index_mcp = hand_landmarks[5] 
+        pinky_mcp = hand_landmarks[17] 
 
-        vector1 = np.array([index_mcp.x - wrist.x, index_mcp.y - wrist.y, index_mcp.z - wrist.z])
-        vector2 = np.array([pinky_mcp.x - wrist.x, pinky_mcp.y - wrist.y, pinky_mcp.z - wrist.z])
+        vector1 = np.array([index_mcp[1] - wrist[1], index_mcp[2] - wrist[2]])
+        vector2 = np.array([pinky_mcp[1] - wrist[1], pinky_mcp[2] - wrist[2]])
 
-        normal_vector = np.cross(vector1, vector2)
+        normal_vector = np.cross(vector1, vector2) # produces a scalar that represents the magnitude of the z-component of the two vectors, hence the sign determines the orientation of the palm
 
-        if normal_vector[2] > 0:
+        if normal_vector > 0:
             return 'drop'  # Palm facing away from the camera
         else:
             return 'serve'  # Palm facing the camera

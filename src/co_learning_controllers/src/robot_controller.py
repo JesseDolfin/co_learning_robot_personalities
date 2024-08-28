@@ -111,12 +111,11 @@ class RoboticArmController:
             goal.nullspace_gain = [0,0,0,0,0,0,0]
         else:
             goal.nullspace_reference = nullspace
-            goal.nullspace_gain = np.array([100,100,100,100,100,100,100])
-
+            goal.nullspace_gain = np.array([10,10,10,10,10,10,10])
 
         goal.reference = position
         goal.velocity_reference = np.zeros(6)
-        print("goal:",goal)
+
         return goal
 
     def send_position_command(self, position, nullspace,goal_time = None):
@@ -135,13 +134,15 @@ class RoboticArmController:
 
     def move_towards_hand(self):
         rospy.loginfo("Moving towards hand")
+        print(self.hand_pose)
         fixed_orientation = self.ee_pose[3:]
         fixed_orientation[1] = -fixed_orientation[1] #BUG
 
         target_position = np.array(self.hand_pose) / 1000
+        target_position = self.frame_transform(target_position)
         current_position = np.array(self.ee_pose[:3])
 
-        if target_position.all() == 0: # When no hand is detected current position is target
+        if target_position[:2].all() == 0: # When no hand is detected current position is target
             target_position = current_position
 
         position_threshold = 0.1
@@ -150,7 +151,7 @@ class RoboticArmController:
             if np.array(self.hand_pose).all() == 0:
                 target_position = target_position # If initialiy a hand was detect but then hand disapears the target pose is previous target pose
             else:
-                target_position = np.array(self.hand_pose) / 1000
+                target_position = self.frame_transform(np.array(self.hand_pose) / 1000)
 
             current_position = np.array(self.ee_pose[:3])
             #rospy.loginfo(f"target reached: {not np.linalg.norm(target_position - current_position) > position_threshold}, currentpos: {np.round(current_position, 3)}, target: {np.round(target_position, 3)}")
@@ -161,22 +162,28 @@ class RoboticArmController:
         rospy.loginfo("Reached the hand position")
         return
     
-    def frame_transform(self,rot_rads,translation,target):
-        rot = np.array([[np.cos(rot_rads), -np.sin(rot_rads)],
-                      [np.sin(rot_rads),  np.cos(rot_rads)]])
-        
-        if translation.shape != (2,):
-            raise ValueError("Translation must be a 2-dimensional vector")
-        
-        transform = np.column_stack((rot,translation))
-        transform = np.vstack((transform,np.array([0,0,1])))
+    def frame_transform(self,target):
+        """
+        Manual calibration camera kuka iiwa7:
 
-        target_hom = np.append(target[0:2],1)
-        height = 2.5 - target[-1]
-        
-        V_2d = np.dot(transform,target_hom)
+        translation: x=0.276, y=0.146, z=2.643
 
-        return np.hstack((V_2d[0:2],height))
+        180 deg rotation about x then 90 deg rotation about z
+        """
+        offset = np.array([0.276, 0.146,2.643]) # x,y,z
+
+        rot_x_180 = np.array([[1,0,0],[0,-1,0],[0,0,-1]]) 
+        rot_z_90 = np.array([[0,-1,0],[1,0,0],[0,0,1]])
+        rot_tot = np.dot(rot_x_180,rot_z_90)
+        
+        transform = np.column_stack((rot_tot,offset))
+        transform = np.vstack((transform,np.array([0,0,0,1])))
+
+        target_hom = np.append(target[0:3],1)
+
+        return np.dot(transform,target_hom)[:3]
+    
+         
     
     def test(self,experiment):
         rot= np.deg2rad([107, -47, -11, 100, -82, -82, -35])
@@ -199,7 +206,7 @@ class RoboticArmController:
 
                 target = self.ee_pose
         
-                # for some reason this axis is flipped (KUKA 14 only?)
+                # for some reason this axis is inverted
                 target[4] = -target[4] 
             
                 # Modify values to test if arm orientation changes
@@ -234,10 +241,7 @@ class RoboticArmController:
                     
                 print("ee_pose at handover orientation:",orientation)
 
-                a = np.deg2rad(90)
-                t = np.array([0,0]).T
-                v = positions[count,:]
-                xyz = self.frame_transform(a,t,v)
+                xyz = self.frame_transform()
 
                 target = np.hstack((xyz,orientation))
 
@@ -262,8 +266,13 @@ class RoboticArmController:
 
                 self.send_position_command(saved_pose,None)
 
+            
+
 
 if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
-    controller.test(1)
+    while True:
+        controller.move_towards_hand()
+    #controller.test(1)
+    #print(controller.frame_transform(np.array([0.8,0.2,2.6])))
