@@ -84,7 +84,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
             <arg name="depth_fps" value ="5"/>
         </include>
         <group if="$(arg pose_detection)">
-            <node name="pose_detection_api" pkg="co_learning_detection" type="pose_detection_api.py" output="log"/>
+            <node name="pose_detection" pkg="co_learning_detection" type="pose_detection.py" output="log"/>
             <node name="object_detection" pkg="co_learning_detection" type="object_detection.py" output="log"/>
         </group>
     </group>
