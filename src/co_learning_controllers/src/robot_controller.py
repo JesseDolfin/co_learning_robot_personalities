@@ -170,7 +170,8 @@ class RoboticArmController:
 
         180 deg rotation about x then 90 deg rotation about z
         """
-        offset = np.array([0.276, 0.146,2.643]) # x,y,z
+        
+        offset = np.array([0.276, 0.146,2.643]) # x,y,z 
 
         rot_x_180 = np.array([[1,0,0],[0,-1,0],[0,0,-1]]) 
         rot_z_90 = np.array([[0,-1,0],[1,0,0],[0,0,1]])
