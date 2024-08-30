@@ -6,7 +6,7 @@ import mediapipe as mp
 from co_learning_messages.msg import hand_pose
 
 class HandPoseDetector():
-    def __init__(self, width=640, height=480, fps=30):
+    def __init__(self, width=1280, height=720, fps=30):
         '''
         This node takes the camera image from the realsense camera and uses mediapipe to determine hand markers.
         These markers are used to determine the orientation of the hand "serve vs drop" which is determined by checking if the palm vector points towards or away from the camera.
@@ -52,7 +52,7 @@ class HandPoseDetector():
     def setup_realsense(self):
         self.pipeline = rs.pipeline()
         self.config = rs.config()
-        
+
         # Configure the pipeline to stream different resolutions of color and depth streams
         self.config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
         self.config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
@@ -68,7 +68,7 @@ class HandPoseDetector():
         self.clipping_distance = self.depth_clipping_distance / self.depth_scale
 
         # Create an align object
-        self.align_to = rs.stream.color
+        self.align_to = rs.stream.depth
         self.align = rs.align(self.align_to)
 
         # Intrinsics and extrinsics
@@ -97,13 +97,13 @@ class HandPoseDetector():
         
         # Deproject from pixel to 3D point using camera intrinsics
         depth_point_3d = rs.rs2_deproject_pixel_to_point(self.depth_intrin, pixel_coords, depth_value)
+
         return np.array(depth_point_3d)
     
     def findHands(self, img, draw=True):
-        img = cv2.flip(img, 1)
         imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.results = self.hands.process(imgRGB)
-
+       
         if self.results.multi_hand_landmarks:
             for handlms in self.results.multi_hand_landmarks:   
                 if draw:
@@ -167,9 +167,14 @@ class HandPoseDetector():
                 color_frame, depth_frame = self.get_frames()
 
                 if draw:
+                    depth_image = np.asanyarray(depth_frame.get_data())
+                    depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
+                    depth_image_normalized = np.uint8(depth_image_normalized)
+                    cv2.imshow("Depth Image", depth_image_normalized)
+
                     color_image = np.asanyarray(color_frame.get_data())
                     hand = self.findHands(color_image)
-                    cv2.imshow("result", hand) 
+                    cv2.imshow("Hand Image", hand) 
                     cv2.waitKey(1)
 
                 positions = self.findPosition(color_image, False)
@@ -179,6 +184,7 @@ class HandPoseDetector():
                     wrist = positions[0]
                     middle_finger_mcp = positions[9]
                     palm = (int((wrist[1] + middle_finger_mcp[1]) / 2), int((wrist[2] + middle_finger_mcp[2]) / 2))
+
                     point_3d = self.get_3d_point(palm, depth_frame)
                     
                     if point_3d is not None:

@@ -41,7 +41,7 @@ class RoboticArmController:
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
 
-        #rospy.Rate(0.5).sleep() # Give enough time for the FRIoverlay app to start up
+        rospy.Rate(0.5).sleep() # Give enough time for the FRIoverlay app to start up
 
         self.goal_time = GOAL_TIME
         self.hand_pose = [0,0,1.3]
@@ -134,30 +134,34 @@ class RoboticArmController:
 
     def move_towards_hand(self):
         rospy.loginfo("Moving towards hand")
-        print(self.hand_pose)
         fixed_orientation = self.ee_pose[3:]
         fixed_orientation[1] = -fixed_orientation[1] #BUG
 
-        target_position = np.array(self.hand_pose) / 1000
-        target_position = self.frame_transform(target_position)
+        print("hand pose in camera frame:",self.hand_pose)
+
+        target_position_cam = np.array(self.hand_pose)
+        target_position_arm = self.frame_transform(target_position_cam)
+
+        print("hand pose in robot frame:",target_position_arm)
+        target_position_arm[2] += 0.1 # make sure the arm does not hit hand
         current_position = np.array(self.ee_pose[:3])
 
-        if target_position[:2].all() == 0: # When no hand is detected current position is target
-            target_position = current_position
+        if target_position_arm.all() == 0: # When no hand is detected current position is target
+            target_position_arm = current_position
 
-        position_threshold = 0.1
-        while np.linalg.norm(target_position - current_position) > position_threshold:
+        position_threshold = 0.04 # 4 cm
+        while np.linalg.norm(target_position_arm - current_position) > position_threshold:
 
             if np.array(self.hand_pose).all() == 0:
-                target_position = target_position # If initialiy a hand was detect but then hand disapears the target pose is previous target pose
+                target_position_arm = target_position_arm # If initialiy a hand was detect but then hand disapears the target pose is previous target pose
             else:
-                target_position = self.frame_transform(np.array(self.hand_pose) / 1000)
+                target_position_arm = self.frame_transform(np.array(self.hand_pose))
 
             current_position = np.array(self.ee_pose[:3])
             #rospy.loginfo(f"target reached: {not np.linalg.norm(target_position - current_position) > position_threshold}, currentpos: {np.round(current_position, 3)}, target: {np.round(target_position, 3)}")
-            target_pose = target_position.tolist() + fixed_orientation
-            goal_time = 1
-            self.send_position_command(target_pose, None)
+            target_pose = target_position_arm.tolist() + fixed_orientation
+            goal_time = 5 
+            self.send_position_command(target_pose, None, goal_time)
 
         rospy.loginfo("Reached the hand position")
         return
@@ -267,6 +271,15 @@ class RoboticArmController:
 
                 self.send_position_command(saved_pose,None)
 
+            if experiment == 3:
+                if initialise:
+                    self.send_position_command(rot,None)
+                    rospy.Rate(0.5).sleep()
+                    self.move_towards_hand()
+            
+                   
+
+
             
 
 
@@ -274,6 +287,6 @@ if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
     while True:
-        controller.move_towards_hand()
+        controller.test(3)
     #controller.test(1)
     #print(controller.frame_transform(np.array([0.8,0.2,2.6])))
