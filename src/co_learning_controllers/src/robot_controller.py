@@ -12,21 +12,13 @@ from std_msgs.msg import Bool
 import matplotlib.pyplot as plt
 
 # Constants
-ROT = np.pi/4
-HOME_POSITION = [np.pi/2, ROT, 0, -ROT, 0, ROT, 0]
+HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
-GOAL_MODE = 'joint_ds'
-GOAL_TIME = 5.0
-GOAL_PRECISION = 1e-1
-GOAL_RATE = 20
-GOAL_STIFFNESS = [150.0, 150.0, 75.0, 75.0, 40.0, 15.0, 10.0]
-GOAL_DAMPING = 2 * np.sqrt(GOAL_STIFFNESS)
-NULLSPACE_GAIN = [0, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmController:
     def __init__(self):
         self.q = None
-        self.goal_time = GOAL_TIME
+        self.goal_time = 5.0
         self.ee_pose = [0, 0, 0, 0, 0, 0]
         ns = rospy.get_param('/namespaces')
 
@@ -43,8 +35,8 @@ class RoboticArmController:
 
         rospy.Rate(0.5).sleep() # Give enough time for the FRIoverlay app to start up
 
-        self.goal_time = GOAL_TIME
-        self.hand_pose = [0,0,1.3]
+        self.goal_time = 5.0
+        self.hand_pose = None
 
         self.type = 'none'
 
@@ -72,20 +64,19 @@ class RoboticArmController:
             euler_angles = r.as_euler('xyz', degrees=False).tolist()
             self.ee_pose = translation + euler_angles[::-1] # reverses the list
 
-
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
 
-    def create_goal(self, position, nullspace=None, goal_time = None):
-
+    def create_goal(self, position, nullspace=None, goal_time = None, mode = None):
         goal = ControllerGoal()
+
         if goal_time == None:
             if self.type == 'fast':
-                goal.time = GOAL_TIME - 2.0
+                goal.time = 5 - 2.0
             elif self.type == 'slow':
-                goal.time = GOAL_TIME + 2.0
+                goal.time = 5 + 2.0
             else:
-                goal.time = GOAL_TIME
+                goal.time = 5
         else:
             goal.time = goal_time
 
@@ -96,15 +87,20 @@ class RoboticArmController:
             goal.stiffness = stiffness
             goal.damping = (2 * np.sqrt(stiffness)).tolist()
         elif len(position) == 6:
-            goal.mode = 'ee_cartesian_ds'
-            stiffness = [80.0, 80.0, 80.0, 5.0, 5.0, 5.0]
+            if mode == None:
+                goal.mode = 'ee_cartesian_ds'
+                stiffness = [80.0, 80.0, 80.0, 5.0, 5.0, 5.0]
+            elif mode == 'ee_cartesian':
+                goal.mode = mode
+                stiffness = [80.0, 80.0, 80.0, 5.0, 3.0, 3.0]
+                rospy.Rate(1).sleep()
             goal.stiffness = stiffness
             goal.damping = (2 * np.sqrt(stiffness)).tolist()
-        if len(position) not in [6,7]:
+        elif len(position) not in [6,7]:
             raise ValueError("Requested position MUST be either all joint angles or the full cartesian position [x,y,z,rx,ry,rz]")
 
-        goal.precision = GOAL_PRECISION
-        goal.rate = GOAL_RATE
+        goal.precision = 1e-1
+        goal.rate = 20
 
         if nullspace == None:
             goal.nullspace_reference = [0,0,0,0,0,0,0]
@@ -118,9 +114,9 @@ class RoboticArmController:
 
         return goal
 
-    def send_position_command(self, position, nullspace,goal_time = None):
+    def send_position_command(self, position, nullspace,goal_time = None, mode=None):
         if not isinstance(position,ControllerGoal):
-            goal = self.create_goal(position, nullspace,goal_time)
+            goal = self.create_goal(position, nullspace,goal_time,mode)
         else:
             goal = position
         try:
@@ -136,34 +132,44 @@ class RoboticArmController:
         rospy.loginfo("Moving towards hand")
         fixed_orientation = self.ee_pose[3:]
         fixed_orientation[1] = -fixed_orientation[1] #BUG
+        fixed_position = self.ee_pose[0:3]
 
-        print("hand pose in camera frame:",self.hand_pose)
+        if self.hand_pose == None:
+            target_position_arm = fixed_position
+        else:
+            target_position_cam = np.array(self.hand_pose)
+            target_position_arm = self.frame_transform(target_position_cam)
 
-        target_position_cam = np.array(self.hand_pose)
-        target_position_arm = self.frame_transform(target_position_cam)
-
-        print("hand pose in robot frame:",target_position_arm)
-        target_position_arm[2] += 0.1 # make sure the arm does not hit hand
         current_position = np.array(self.ee_pose[:3])
 
-        if target_position_arm.all() == 0: # When no hand is detected current position is target
-            target_position_arm = current_position
+        position_threshold = 0.3
 
-        position_threshold = 0.04 # 4 cm
-        while np.linalg.norm(target_position_arm - current_position) > position_threshold:
+        if self.hand_pose == None:
+            wait_for_hand = True
 
-            if np.array(self.hand_pose).all() == 0:
-                target_position_arm = target_position_arm # If initialiy a hand was detect but then hand disapears the target pose is previous target pose
+        while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand:
+            if self.hand_pose != None:
+                wait_for_hand = False
+
+            if self.hand_pose is None:
+                rospy.loginfo(f"hand_pose=:{self.hand_pose}")
+            else:
+                transformed_pose = self.frame_transform(np.array(self.hand_pose))
+                rospy.loginfo(f"hand_pose=:{[f'{x:.3f}' for x in transformed_pose]}")
+
+
+            if self.hand_pose == None:
+                target_position_arm = np.array(fixed_position) 
             else:
                 target_position_arm = self.frame_transform(np.array(self.hand_pose))
 
             current_position = np.array(self.ee_pose[:3])
-            #rospy.loginfo(f"target reached: {not np.linalg.norm(target_position - current_position) > position_threshold}, currentpos: {np.round(current_position, 3)}, target: {np.round(target_position, 3)}")
             target_pose = target_position_arm.tolist() + fixed_orientation
-            goal_time = 5 
+            goal_time = 2
             self.send_position_command(target_pose, None, goal_time)
 
         rospy.loginfo("Reached the hand position")
+       
         return
     
     def frame_transform(self,target):
@@ -175,7 +181,7 @@ class RoboticArmController:
         180 deg rotation about x then 90 deg rotation about z
         """
         
-        offset = np.array([0.276, 0.146,2.643]) # x,y,z 
+        offset = np.array([0.356, 0.256, 2.643]) # experimental values obtained around operating region
 
         rot_x_180 = np.array([[1,0,0],[0,-1,0],[0,0,-1]]) 
         rot_z_90 = np.array([[0,-1,0],[1,0,0],[0,0,1]])
@@ -190,17 +196,18 @@ class RoboticArmController:
     
          
     
-    def test(self,experiment):
+    def test(self,experiment,positions = None):
         rot= np.deg2rad([107, -47, -11, 100, -82, -82, -35])
         count = 0
 
         initialise = True
 
         #random set of x,y,z coordinates from simulated camera:
-        positions= np.array([[-0.6,0.5,2.1],
-                             [-0.7,0.4,2.0],
-                             [-0.6,0.3,2.1],
-                             [-0.5,0.4,2.0]])
+        if positions == None:
+            positions= np.array([[-0.6,0.5,2.1],
+                                [-0.7,0.4,2.0],
+                                [-0.6,0.3,2.1],
+                                [-0.5,0.4,2.0]])
                            
 
         while not rospy.is_shutdown():
@@ -264,6 +271,7 @@ class RoboticArmController:
                     initialise = False
                     saved_pose = self.ee_pose
                     saved_pose[4] = -saved_pose[4] 
+                    initialise = False
 
                 print("current pose:",self.ee_pose)
 
@@ -273,19 +281,48 @@ class RoboticArmController:
 
             if experiment == 3:
                 if initialise:
+                    initialise = False
                     self.send_position_command(rot,None)
-                    rospy.Rate(0.5).sleep()
+                    rospy.Rate(1).sleep()
                     self.move_towards_hand()
+
+
+            if experiment == 4:
+                 if initialise:
+                     self.send_position_command(rot,None)
+
+                     fixed_orientation = self.ee_pose[3:]
+                     fixed_orientation[1] = -fixed_orientation[1] #BUG
+                     
+                     initialise = False
+
+                 
+                 target_positions= {0: [-0.32212266, -0.53631857,  0.42099988],
+                                    1: [-0.36131503, -0.5264838,   0.49599993],
+                                    2: [-0.33462706, -0.65330973,  0.26599991],
+                                    3: [-0.49206611, -0.63994768,  0.14599978],
+                                    4: [-0.28143831, -0.39959577,  0.33499991],
+                                    5: [-0.14201932, -0.28211292,  0.1739999 ],
+                                    6: [-0.21154168, -0.2970249,   0.08799993]}
+                 
+                 goal = target_positions[count] + fixed_orientation
+
+                 print(target_positions[count])
+                 
+                 self.send_position_command(goal,None,mode='ee_cartesian')
+
+                 count += 1
+
+                 if count == 7:
+                     count = 0
+
+
+
             
-                   
-
-
-            
-
-
 if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
+   
     while True:
         controller.test(3)
     #controller.test(1)

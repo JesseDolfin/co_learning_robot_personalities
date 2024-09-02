@@ -129,8 +129,8 @@ class RoboticArmControllerNode:
 
     def phase_0(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
-        _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
-        _ = self.robot_arm_controller.send_position_command(HOME_POSITION)
+        _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
+        _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
         #self.hand_controller.send_goal('close',2)
 
     def phase_1(self):
@@ -168,8 +168,8 @@ class RoboticArmControllerNode:
     def phase_2(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         position = self.convert_action_to_orientation(self.action)
-        _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
-        _ = self.robot_arm_controller.send_position_command(position)
+        _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
+        _ = self.robot_arm_controller.send_position_command(position,None)
         self.robot_arm_controller.move_towards_hand()
 
     def phase_3(self):
@@ -205,7 +205,7 @@ class RoboticArmControllerNode:
                 self.pub_text.publish(message)
             
         else:
-            _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION)
+            _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
             self.run = False
             return
 

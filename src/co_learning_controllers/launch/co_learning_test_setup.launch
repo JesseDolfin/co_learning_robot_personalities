@@ -21,8 +21,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     <!-- Arguments to control node launching -->
     <arg name="control_node" default="true"/>
     <arg name="secondary_task" default="true"/>
-    <arg name="realsense" default="true"/>
-    <arg name="rviz" default="true"/>
+    <arg name="rviz" default="false"/>
     <arg name="pose_detection" default="true"/>
     <arg name="qb_hand" default="true"/>
 
@@ -68,32 +67,14 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
         <node name="secondary_task" pkg="co_learning_secondary_task" type="secondary_task.py" output="log"/>
     </group>
 
-    <!-- Conditionally Launch RealSense camera in a new terminal window -->
-    <group if="$(arg realsense)">
-        <include file="$(find realsense2_camera)/launch/rs_camera.launch">
-            <arg name="device_type" value="$(arg device_type)"/>
-            <arg name="filters" value="$(arg filters)"/>
-            <arg name="output" value="$(arg output)"/>
-            <arg name="align_depth" value="true"/>
-            <arg name="initial_reset" value ="true"/>
-            <arg name="color_width" value="640"/>
-            <arg name="color_height" value="480"/>
-            <arg name="color_fps" value ="30"/>
-            <arg name="depth_width" value="640"/>
-            <arg name="depth_height" value="480"/>
-            <arg name="depth_fps" value ="30"/>
-        </include>
-        <group if="$(arg pose_detection)">
-            <node name="pose_detection" pkg="co_learning_detection" type="pose_detection.py" output="log"/>
-        </group>
+    <group if="$(arg pose_detection)">
+        <node name="pose_detection" pkg="co_learning_detection" type="pose_detection.py" output="log"/>
     </group>
-
-    <!-- Conditionally Add RViz -->
+   
     <group if="$(arg rviz)">
         <arg name="rviz_config" default="/home/jesse/Thesis/co_learning_robot_personalities/rviz_configs/camera_view.rviz"/>
         <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config)" output="screen"/>
     </group>
-
 
     <group if="$(arg qb_hand)">
         <include file="$(find qb_hand_control)/launch/control_qbhand.launch">

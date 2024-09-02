@@ -100,7 +100,7 @@ class HandPoseDetector():
 
         return np.array(depth_point_3d)
     
-    def findHands(self, img, draw=True):
+    def findHands(self, img, draw=False):
         imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.results = self.hands.process(imgRGB)
        
@@ -165,19 +165,18 @@ class HandPoseDetector():
         try:
             while not rospy.is_shutdown():
                 color_frame, depth_frame = self.get_frames()
+                depth_image = np.asanyarray(depth_frame.get_data())
+                color_image = np.asanyarray(color_frame.get_data())
+               
+                hand = self.findHands(color_image)
+                positions = self.findPosition(color_image, False)
 
                 if draw:
-                    depth_image = np.asanyarray(depth_frame.get_data())
                     depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
                     depth_image_normalized = np.uint8(depth_image_normalized)
                     cv2.imshow("Depth Image", depth_image_normalized)
-
-                    color_image = np.asanyarray(color_frame.get_data())
-                    hand = self.findHands(color_image)
                     cv2.imshow("Hand Image", hand) 
                     cv2.waitKey(1)
-
-                positions = self.findPosition(color_image, False)
 
                 if positions:
                     pose = self.determine_hand_pose(positions)
@@ -202,7 +201,7 @@ class HandPoseDetector():
 def main():
     rospy.init_node('hand_pose_node', anonymous=True)
     hand_pose_node = HandPoseDetector()
-    hand_pose_node.process_frames(draw=True)  
+    hand_pose_node.process_frames()  
     rospy.spin()
 
 if __name__ == '__main__':
