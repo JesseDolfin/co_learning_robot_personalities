@@ -22,12 +22,12 @@ step 1: set the IP of machine A (the desktop) to: 192.180.1.5, netmask: 255.255.
 step 2: set the IP om machine B (the laptop)  to: 192/180.1.10, netmask: 255.255.255.0.
 step 3: run the commands.
 Machine A:
-```
+```sh
 export ROS_MASTER_URI=http://192.180.1.5:11311
 export ROS_IP=192.180.1.5
 ```
 Machine B:
-```
+```sh
 export ROS_MASTER_URI=http://192.180.1.5:11311
 export ROS_IP=192.180.1.10
 ```
