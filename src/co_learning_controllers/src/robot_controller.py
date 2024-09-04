@@ -1,5 +1,6 @@
 # robotic_arm_control.py
 
+from os import wait
 import rospy
 import actionlib
 import numpy as np
@@ -47,22 +48,22 @@ class RoboticArmController:
         self.q_dot = msg.velocity
         if self.robot is not None:
             ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
-            ee_T_dot = np.array(self.robot.fkine(self.q_dot, end='iiwa_link_7', start='iiwa_link_0'))
+            # ee_T_dot = np.array(self.robot.fkine(self.q_dot, end='iiwa_link_7', start='iiwa_link_0'))
 
-            ee_vel = [ee_T_dot[0, 3], ee_T_dot[1, 3], ee_T_dot[2, 3]]
+            # ee_vel = [ee_T_dot[0, 3], ee_T_dot[1, 3], ee_T_dot[2, 3]]
 
             
-            if np.linalg.norm(ee_vel) > 10:
-                self.publish_human_input.publish(True)
-            else:
-                self.publish_human_input.publish(False)
+            # if np.linalg.norm(ee_vel) > 10:
+            #     self.publish_human_input.publish(True)
+            # else:
+            #     self.publish_human_input.publish(False)
 
-
-            translation = [ee_T[0, 3], ee_T[1, 3], ee_T[2, 3]]
+            translation = ee_T[:3,3]
             rot_mat = ee_T[0:3, 0:3]
             r = R.from_matrix(rot_mat)
-            euler_angles = r.as_euler('xyz', degrees=False).tolist()
-            self.ee_pose = translation + euler_angles[::-1] # reverses the list
+            euler_angles = r.as_euler('xyz', degrees=False)
+            self.ee_pose = np.hstack((translation,np.flip(euler_angles)))
+
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
@@ -131,7 +132,8 @@ class RoboticArmController:
     def move_towards_hand(self):
         rospy.loginfo("Moving towards hand")
         fixed_orientation = self.ee_pose[3:]
-        fixed_orientation[1] = -fixed_orientation[1] #BUG
+        if self.q[4] < -1:
+            fixed_orientation[1] = -fixed_orientation[1] # euler angles have 2 solutions causing flipping of axis. This is not a fix, specific patch for 2 predetermined locations
         fixed_position = self.ee_pose[0:3]
 
         if self.hand_pose == None:
@@ -146,6 +148,8 @@ class RoboticArmController:
 
         if self.hand_pose == None:
             wait_for_hand = True
+        else:
+            wait_for_hand = False
 
         while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand:
             if self.hand_pose != None:
@@ -163,12 +167,14 @@ class RoboticArmController:
             else:
                 target_position_arm = self.frame_transform(np.array(self.hand_pose))
 
+
             current_position = np.array(self.ee_pose[:3])
-            target_pose = target_position_arm.tolist() + fixed_orientation
+            target_pose = np.hstack((target_position_arm,fixed_orientation))
             goal_time = 2
             self.send_position_command(target_pose, None, goal_time)
 
         rospy.loginfo("Reached the hand position")
+        self.hand_pose = None
        
         return
     
@@ -280,11 +286,18 @@ class RoboticArmController:
                 self.send_position_command(saved_pose,None)
 
             if experiment == 3:
-                if initialise:
-                    initialise = False
-                    self.send_position_command(rot,None)
-                    rospy.Rate(1).sleep()
-                    self.move_towards_hand()
+                serve = np.deg2rad([107, -47, -11, 100, -82, -82, -35]) # Serve
+                drop = np.deg2rad([55, -40, -8, 82, 5, 20, 0]) # Drop
+                self.send_position_command(drop,None)
+                print("self.q for drop:",self.q)
+                self.move_towards_hand()
+                
+
+                self.send_position_command(serve,None)
+                print("self.q for serve:",self.q)
+                self.move_towards_hand()
+               
+                #self.move_towards_hand()
 
 
             if experiment == 4:

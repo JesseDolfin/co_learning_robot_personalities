@@ -82,6 +82,4 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
             <arg name="standalone" value="true"/>
         </include>
     </group>
-
-
 </launch>

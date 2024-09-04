@@ -26,7 +26,7 @@ HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
-    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, personality_type: Literal['leader', 'follower', 'cautious','impatient','baseline'] = 'baseline'):
+    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, personality_type: Literal['leader', 'follower', 'cautious','impatient','baseline'] = 'baseline',fake=False):
         self.num_test_runs = num_test_runs
         
         if personality_type == 'leader':
@@ -66,7 +66,7 @@ class RoboticArmControllerNode:
         if personality_type == 'follower':
             self.rl_agent.type = 'follower' # Follower has increased learning rate which means that it will more quickly change its decisions based on the human
 
-        #self.hand_controller = SoftHandController()
+        self.hand_controller = SoftHandController(fake)
         self.robot_arm_controller = RoboticArmController()  
         if personality_type == 'impatient':
             self.robot_arm_controller.type = 'fast' 
@@ -131,7 +131,7 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
-        #self.hand_controller.send_goal('close',2)
+        self.hand_controller.send_goal('close',2)
 
     def phase_1(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
@@ -285,21 +285,8 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        num_test_runs = 10
-        persistence_factor = 0.5
-        node = RoboticArmControllerNode(num_test_runs, exploration_factor=100, personality_type='leader')
-
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        print(base_dir)
-        q_table_path = base_dir / 'q_learning/Q_tables/q_table_solved_100000_38.npy'
-
-        if os.path.isfile(q_table_path):
-            # node.rl_agent.load_q_table(str(q_table_path))
-            # node.rl_agent.q_table *= persistence_factor
-            node.rl_agent.print_q_table()
-            node.start_episode()
-        else:
-            rospy.logerr(f"Q-table file not found: {q_table_path}")
+        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='baseline',fake=True)
+        node.start_episode()
 
     except rospy.ROSInterruptException:
         pass
