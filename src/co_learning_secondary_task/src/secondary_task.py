@@ -766,7 +766,7 @@ class secondary_task():
             self.time_left = self.max_time - time_elapsed
 
             if self.update_status:
-                self.send_task_status(start = 0,end=1)
+                self.send_task_status(end=1)
                 self.update_status = False
 
             keep_mouse_in_fluid_texts = [
