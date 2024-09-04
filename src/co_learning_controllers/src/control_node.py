@@ -266,6 +266,7 @@ class RoboticArmControllerNode:
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
         self.reset_msg()
+        self.robot_arm_controller.hand_pose = None
         self.rl_agent.print_q_table()
         if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor *.9, 0.20)

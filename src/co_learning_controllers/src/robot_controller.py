@@ -43,6 +43,7 @@ class RoboticArmController:
 
         self.initialise = True
 
+
     def joint_callback(self, msg):
         self.q = msg.position
         self.q_dot = msg.velocity
