@@ -63,6 +63,7 @@ class RoboticArmController:
             r = R.from_matrix(rot_mat)
             euler_angles = r.as_euler('xyz', degrees=False)
             self.ee_pose = np.hstack((translation,np.flip(euler_angles)))
+            
 
 
     def hand_pose_callback(self, msg):
@@ -159,6 +160,7 @@ class RoboticArmController:
                 rospy.loginfo(f"hand_pose=:{self.hand_pose}")
             else:
                 transformed_pose = self.frame_transform(np.array(self.hand_pose))
+                transformed_pose[2] = 0.1 if transformed_pose[2] < 0.1 else transformed_pose[2]
                 rospy.loginfo(f"hand_pose=:{[f'{x:.3f}' for x in transformed_pose]}")
 
 

@@ -184,7 +184,10 @@ class RoboticArmControllerNode:
 
         self.rate.sleep()
         self.robot_arm_controller.move_towards_hand()
-        return
+
+        if self.action == 5:
+            return
+        else: self.phase_3()
 
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
