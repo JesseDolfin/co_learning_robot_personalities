@@ -337,8 +337,9 @@ class RoboticArmController:
 if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
+    controller.send_position_command([0,0,0,0,0,0,0],None)
    
-    while True:
-        controller.test(3)
+    # while True:
+    #     controller.test(3)
     #controller.test(1)
     #print(controller.frame_transform(np.array([0.8,0.2,2.6])))
