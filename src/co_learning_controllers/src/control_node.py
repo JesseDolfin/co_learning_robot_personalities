@@ -45,7 +45,7 @@ class RoboticArmControllerNode:
         self.stop = False
         self.action = 0
         self.msg = secondary_task_message()
-        self.start = 0
+        self.draining_start = 0
         self.q = None
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
@@ -114,7 +114,8 @@ class RoboticArmControllerNode:
     def status_callback(self, msg):
         self.msg = msg
         self.successful_handover = msg.handover_successful
-        self.start = msg.draining_starts
+        self.draining_start = msg.draining_starts
+        self.draining_done = msg.draining_successful
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
@@ -136,14 +137,14 @@ class RoboticArmControllerNode:
     def phase_1(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         if self.action == 1:
-            while self.start == 0: # Always wait until the human has at least started the draining process
+            while self.draining_start == 0: # Always wait until the human has at least started the draining process
                 self.msg.reset = True
                 self.send_message()
                 self.rate.sleep()
                 if self.successful_handover == -1:
                     break
         if self.action == 2:
-            while self.start == 0:
+            while self.draining_start == 0:
                 self.msg.reset = True
                 self.send_message()
                 self.rate.sleep()
@@ -153,7 +154,8 @@ class RoboticArmControllerNode:
             self.msg.reset = False
             self.send_message()
             self.original_orientation = self.orientation
-            while self.original_orientation == self.orientation and self.successful_handover != -1:
+            while (self.original_orientation == self.orientation) and (self.draining_done == 0) and (self.successful_handover != -1):
+                print(f"originoal orientation:{self.original_orientation}, new orientation:{self.orientation}")
                 message_text = self.get_random_message(self.type)
                 if message_text:
                     message = String()
@@ -170,7 +172,7 @@ class RoboticArmControllerNode:
         position = self.convert_action_to_orientation(self.action)
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(position,None)
-        self.robot_arm_controller.move_towards_hand()
+        self.robot_arm_controller.move_towards_hand(update=True)
 
     def phase_3(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
@@ -187,7 +189,9 @@ class RoboticArmControllerNode:
 
         if self.action == 5:
             return
-        else: self.phase_3()
+        else: 
+            self.action = random.randint(5,7)
+            self.phase_3()
 
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
@@ -238,6 +242,7 @@ class RoboticArmControllerNode:
             if self.phase == 0:
                 self.phase_0()
             if self.phase == 1:
+                self.action = 2
                 self.phase_1()
             if self.phase == 2:
                 self.phase_2()
@@ -281,8 +286,9 @@ class RoboticArmControllerNode:
         self.msg.draining_successful = 0
         self.msg.reset = False
         self.msg.phase = 0
-        self.start = 0
+        self.draining_start = 0
         self.orientation = 'None'
+        self.original_orientation = None
         self.successful_handover = 0
         self.send_message()
         return

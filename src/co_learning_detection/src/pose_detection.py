@@ -135,7 +135,7 @@ class HandPoseDetector():
 
         normal_vector = np.cross(vector1, vector2) 
 
-        if normal_vector < 0:
+        if normal_vector > 0:
             return 'drop'  # Palm facing away from the camera
         else:
             return 'serve'  # Palm facing the camera
@@ -188,6 +188,11 @@ class HandPoseDetector():
                     
                     if point_3d is not None:
                         self.publish_message(pose, point_3d)
+
+                else:
+                    point = np.array([0,0,0])
+                    orientation = 'none'
+                    self.publish_message(orientation,point)
 
         except rospy.ROSInterruptException:
             pass

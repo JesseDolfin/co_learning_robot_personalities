@@ -34,10 +34,10 @@ class RoboticArmController:
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
 
-        rospy.Rate(0.5).sleep() # Give enough time for the FRIoverlay app to start up
+        rospy.Rate(0.4).sleep() # Give enough time for the FRIoverlay app to start up
 
         self.goal_time = 5.0
-        self.hand_pose = None
+        self.hand_pose = [0,0,0]
 
         self.type = 'none'
 
@@ -69,6 +69,7 @@ class RoboticArmController:
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
+        self.orientation = msg.orientation
 
     def create_goal(self, position, nullspace=None, goal_time = None, mode = None):
         goal = ControllerGoal()
@@ -110,7 +111,7 @@ class RoboticArmController:
             goal.nullspace_gain = [0,0,0,0,0,0,0]
         else:
             goal.nullspace_reference = nullspace
-            goal.nullspace_gain = np.array([10,10,10,10,10,10,10])
+            goal.nullspace_gain = np.array([100,100,100,100,100,0,0])
 
         goal.reference = position
         goal.velocity_reference = np.zeros(6)
@@ -131,53 +132,65 @@ class RoboticArmController:
             return False
         return True
 
-    def move_towards_hand(self):
+    def move_towards_hand(self,update = False):
         rospy.loginfo("Moving towards hand")
-        fixed_orientation = self.ee_pose[3:]
-        if self.q[4] < -1:
-            fixed_orientation[1] = -fixed_orientation[1] # euler angles have 2 solutions causing flipping of axis. This is not a fix, specific patch for 2 predetermined locations
-        fixed_position = self.ee_pose[0:3]
 
-        if self.hand_pose == None:
-            target_position_arm = fixed_position
+        if update: # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand()
+            self.fixed_orientation = self.ee_pose[3:]
+            self.q_save = self.q
+            if self.q[4] < -1:
+                self.fixed_orientation[1] = -self.fixed_orientation[1] # euler angles have 2 solutions causing flipping of axis. This is not a fix, specific patch for 2 predetermined locations
+            fixed_position = self.ee_pose[0:3]
+
+            if np.array(self.hand_pose).all() == 0:
+                target_position_arm = fixed_position
+            else:
+                target_position_cam = np.array(self.hand_pose)
+                target_position_arm = self.frame_transform(target_position_cam)
         else:
-            target_position_cam = np.array(self.hand_pose)
-            target_position_arm = self.frame_transform(target_position_cam)
+            self.q_save = None
 
+        target_position_arm = self.frame_transform(np.array(self.hand_pose))
         current_position = np.array(self.ee_pose[:3])
 
-        position_threshold = 0.3
+        position_threshold = 0.03
 
-        if self.hand_pose == None:
+        if np.array(self.hand_pose).all() == 0: # When initially no hand is detected keep checking for hand in the loop before moving on
             wait_for_hand = True
         else:
             wait_for_hand = False
 
-        while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand:
-            if self.hand_pose != None:
-                wait_for_hand = False
+        saved_pose = np.array(self.hand_pose)
+        update_pose = False
 
-            if self.hand_pose is None:
-                rospy.loginfo(f"hand_pose=:{self.hand_pose}")
-            else:
-                transformed_pose = self.frame_transform(np.array(self.hand_pose))
-                transformed_pose[2] = 0.1 if transformed_pose[2] < 0.1 else transformed_pose[2]
-                rospy.loginfo(f"hand_pose=:{[f'{x:.3f}' for x in transformed_pose]}")
+        while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand: 
+          
+            
+            if not np.array(self.hand_pose).all()==0:   # When a hand is in the workspace
+                update_pose = np.linalg.norm(np.array(self.hand_pose) - saved_pose) > 0.1 # Only update the pose when the hand is far away enough AND the hand is still in the workspace
+                wait_for_hand = False # We can stop waiting for a hand (if hand disapears again the robot should still go to previous hand location)
+                if update_pose: # Make sure to update the pose before transforming and sending it because if this is the transition from no hand to hand frame saved pose = [0,0,0]
+                    saved_pose = np.array(self.hand_pose)
+                target_position_arm = self.frame_transform(np.array(saved_pose)) # self.hand_pose is in camera frame, get it in robot frame
+                target_position_arm[2] = 0.1 if target_position_arm[2] < 0.1 else target_position_arm[2] # Make sure the robot never slams into the table
+                # rospy.loginfo(f"saved_pose=:{[f'{x:.3f}' for x in saved_pose]}")
+                # rospy.loginfo(f"current pose=:{[f'{x:.3f}' for x in np.array(self.hand_pose)]}")
+                # rospy.loginfo(f"target_position_arm=:{[f'{x:.3f}' for x in target_position_arm]}")
+                # rospy.loginfo(f"current_position_arm=:{[f'{x:.3f}' for x in np.array(self.ee_pose[:3])]}")
+                rospy.loginfo(f"error norm:{np.linalg.norm(target_position_arm - current_position)}")
 
-
-            if self.hand_pose == None:
-                target_position_arm = np.array(fixed_position) 
-            else:
-                target_position_arm = self.frame_transform(np.array(self.hand_pose))
-
-
-            current_position = np.array(self.ee_pose[:3])
-            target_pose = np.hstack((target_position_arm,fixed_orientation))
+                 
+            target_pose = np.hstack((target_position_arm,self.fixed_orientation)) 
             goal_time = 2
-            self.send_position_command(target_pose, None, goal_time)
+            if update_pose: # Only send the new command when the hand is updated (stops jitter)
+                self.send_position_command(target_pose, self.q_save, goal_time)
+            else:
+                rospy.Rate(1).sleep()
+
+            current_position = np.array(self.ee_pose[:3]) # After sending the command update the position
 
         rospy.loginfo("Reached the hand position")
-        self.hand_pose = None
+        self.hand_pose = [0,0,0]
        
         return
     
@@ -292,13 +305,13 @@ class RoboticArmController:
                 serve = np.deg2rad([107, -47, -11, 100, -82, -82, -35]) # Serve
                 drop = np.deg2rad([55, -40, -8, 82, 5, 20, 0]) # Drop
                 self.send_position_command(drop,None)
-                print("self.q for drop:",self.q)
+                #print("self.q for drop:",self.q)
                 self.move_towards_hand()
                 
 
-                self.send_position_command(serve,None)
-                print("self.q for serve:",self.q)
-                self.move_towards_hand()
+                # self.send_position_command(serve,None)
+                # print("self.q for serve:",self.q)
+                # self.move_towards_hand()
                
                 #self.move_towards_hand()
 
@@ -338,8 +351,11 @@ class RoboticArmController:
 if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
-   
+    controller.send_position_command([0,0,0,0,0,0,0],None)
     while True:
-        controller.test(3)
+        controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
+        controller.move_towards_hand()
+    
+    #controller.test(3)
     #controller.test(1)
     #print(controller.frame_transform(np.array([0.8,0.2,2.6])))
