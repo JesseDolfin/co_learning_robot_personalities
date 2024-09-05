@@ -202,7 +202,7 @@ class secondary_task():
         self.max_time = 30 # seconds
         self.time_left = self.max_time
 
-        self.max_needle_pressure = 200
+        self.max_needle_pressure = 6000
 
         self.task_failed = False
 
