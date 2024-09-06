@@ -17,3 +17,4 @@ yolov10m.pt
 *.task
 *.zip
 android_figurine/
+exported_model/
