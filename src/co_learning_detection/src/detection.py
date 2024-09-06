@@ -1,12 +1,16 @@
 import pyrealsense2 as rs
 import numpy as np
+import copy
 import cv2
 import rospy
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 from co_learning_messages.msg import hand_pose
 
-class HandPoseDetector():
-    def __init__(self, width=1280, height=720, fps=30):
+
+class MPDetector():
+    def __init__(self, width=1280, height=720, fps=30,fake=False):
         '''
         This node takes the camera image from the realsense camera and uses mediapipe to determine hand markers.
         These markers are used to determine the orientation of the hand "serve vs drop" which is determined by checking if the palm vector points towards or away from the camera.
@@ -30,15 +34,19 @@ class HandPoseDetector():
         self.height = height
         self.fps = fps
 
-        self.setup_realsense()
+        if not fake:
+            self.setup_realsense()
+            self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
+
         self.setup_mediapipe()
 
         self.wrist_pixel = None
         self.pose = None
 
-        self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
+        
 
     def setup_mediapipe(self):
+        # Setup the hand landmarker model
         self.mode = False
         self.maxHands = 1
         self.modelComplex = 1
@@ -48,6 +56,11 @@ class HandPoseDetector():
         self.mpHands = mp.solutions.hands
         self.hands = self.mpHands.Hands(self.mode, self.maxHands, self.modelComplex, self.detectionCon, self.trackCon)
         self.mpDraw = mp.solutions.drawing_utils
+
+        # Setup the detection model
+        base_options = python.BaseOptions(model_asset_path='efficientdet_lite0.tflite')
+        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.5)
+        self.object_detector = vision.ObjectDetector.create_from_options(options)
 
     def setup_realsense(self):
         self.pipeline = rs.pipeline()
@@ -199,13 +212,62 @@ class HandPoseDetector():
         finally:
             self.stop()
 
+    def run_object_detection(self,rgb_image,visualise=False):
+        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
+        results = self.object_detector.detect(image)
+
+        if visualise:
+            bb_image = self.visualize_bb(image,results)
+        else:
+            bb_image = None
+
+        return results, bb_image
+
+    def visualize_bb(self,rgb_image,results):
+        """Draws bounding boxes on the input image and return it.
+        Args:
+            image: The input RGB image.
+            detection_result: The list of all "Detection" entities to be visualize.
+        Returns:
+            Image with bounding boxes.
+        """
+
+        image = copy.copy(rgb_image.numpy_view())
+        margin = 10
+        row_size = 10
+        font_size = 1
+        font_thickness = 1
+        text_color = (255, 0, 0)
+
+        for detection in results.detections:
+            # Draw bounding_box
+            bbox = detection.bounding_box
+            start_point = bbox.origin_x, bbox.origin_y
+            end_point = bbox.origin_x + bbox.width, bbox.origin_y + bbox.height
+
+            print(start_point,end_point)
+            cv2.rectangle(image, start_point, end_point, text_color, 3)
+
+            # Draw label and score
+            category = detection.categories[0]
+            category_name = category.category_name
+            probability = round(category.score, 2)
+            result_text = category_name + ' (' + str(probability) + ')'
+            text_location = (margin + bbox.origin_x,
+                            margin + row_size + bbox.origin_y)
+            cv2.putText(image, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,
+                        font_size, text_color, font_thickness)
+
+        return image
+
+
     def stop(self):
         self.pipeline.stop()
         cv2.destroyAllWindows()
 
 def main():
     rospy.init_node('hand_pose_node', anonymous=True)
-    hand_pose_node = HandPoseDetector()
+    hand_pose_node = MPDetector()
     hand_pose_node.process_frames()  
     rospy.spin()
 

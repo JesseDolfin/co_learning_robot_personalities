@@ -22,7 +22,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     <arg name="control_node" default="true"/>
     <arg name="secondary_task" default="true"/>
     <arg name="rviz" default="false"/>
-    <arg name="pose_detection" default="true"/>
+    <arg name="detection" default="true"/>
     <arg name="qb_hand" default="true"/>
 
     <!-- Select the robot -->
@@ -67,8 +67,8 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
         <node name="secondary_task" pkg="co_learning_secondary_task" type="secondary_task.py" output="log"/>
     </group>
 
-    <group if="$(arg pose_detection)">
-        <node name="pose_detection" pkg="co_learning_detection" type="pose_detection.py" output="log"/>
+    <group if="$(arg detection)">
+        <node name="detection" pkg="co_learning_detection" type="detection.py" output="log"/>
     </group>
    
     <group if="$(arg rviz)">

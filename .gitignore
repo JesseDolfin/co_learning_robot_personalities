@@ -15,3 +15,5 @@ install/
 yolov10m.pt
 *.pt
 *.task
+*.zip
+android_figurine/
