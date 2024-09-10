@@ -1,13 +1,13 @@
 import cv2
 import numpy as np
-from pose_detection import MPDetector  # Assuming you have MPDetector in pose_detection.py
+from detection import MPDetector  # Assuming you have MPDetector in pose_detection.py
 import time
 
 # Initialize MPDetector
 detector = MPDetector(fake=True)
 
 # Try opening the camera with the appropriate index
-cam = cv2.VideoCapture(8)
+cam = cv2.VideoCapture(0)
 
 # Check if the camera is opened correctly
 if not cam.isOpened():

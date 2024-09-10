@@ -57,8 +57,11 @@ class MPDetector():
         self.hands = self.mpHands.Hands(self.mode, self.maxHands, self.modelComplex, self.detectionCon, self.trackCon)
         self.mpDraw = mp.solutions.drawing_utils
 
+        test_model = 'co_learning_robot_personalities/src/co_learning_detection/src/exported_model/model_fp16.tflite'
+        model = 'efficientdet_lite0.tflite'
+
         # Setup the detection model
-        base_options = python.BaseOptions(model_asset_path='efficientdet_lite0.tflite')
+        base_options = python.BaseOptions(model_asset_path=test_model)
         options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.5)
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
