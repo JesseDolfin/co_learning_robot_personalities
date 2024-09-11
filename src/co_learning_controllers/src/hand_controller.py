@@ -37,7 +37,10 @@ class SoftHandController:
         if not self.fake:
             self.position = msg.position[0]
 
-    def send_goal(self, mode, duration):
+    def send_goal(self, mode:str, duration:int):
+        '''
+        modes: 'open', 'closed', 'partial'
+        '''
         if not self.fake:
             rospy.loginfo('{} for {} s'.format(mode, duration))
      

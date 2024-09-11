@@ -132,6 +132,7 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
+        self.hand_controller.send_goal('open',2)
         self.hand_controller.send_goal('close',2)
 
     def phase_1(self):
@@ -184,7 +185,7 @@ class RoboticArmControllerNode:
         elif self.action == 7:
             pass
 
-        self.rate.sleep()
+        rospy.Rate(0.5).sleep()
         self.robot_arm_controller.move_towards_hand()
 
         if self.action == 5:
@@ -295,7 +296,7 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='baseline',fake=True)
+        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='baseline',fake=False)
         node.start_episode()
 
     except rospy.ROSInterruptException:

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import pyrealsense2 as rs
 import numpy as np
 import copy
@@ -7,6 +8,7 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from co_learning_messages.msg import hand_pose
+import rosgraph
 
 
 class MPDetector():
@@ -34,6 +36,8 @@ class MPDetector():
         self.height = height
         self.fps = fps
 
+        #self.ros = rosgraph.is_master_online()
+        
         if not fake:
             self.setup_realsense()
             self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
@@ -57,11 +61,14 @@ class MPDetector():
         self.hands = self.mpHands.Hands(self.mode, self.maxHands, self.modelComplex, self.detectionCon, self.trackCon)
         self.mpDraw = mp.solutions.drawing_utils
 
-        test_model = 'src/co_learning_detection/src/exported_model/efficientdet_lite2.tflite'
-        model = 'efficientdet_lite0.tflite'
+       
+        model_path = '../jesse/co_learning_robot_personalities/src/co_learning_detection/src/exported_model/efficientdet_lite2.tflite'
+     
+        model_path_2 = 'src/co_learning_detection/src/exported_model/efficientdet_lite2.tflite'
+    
 
         # Setup the detection model
-        base_options = python.BaseOptions(model_asset_path=test_model)
+        base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.1)
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
@@ -107,6 +114,7 @@ class MPDetector():
 
     def get_3d_point(self, pixel_coords, depth_frame):
         # Extract depth value from the depth frame
+        print(pixel_coords)
         depth_value = depth_frame.get_distance(pixel_coords[0], pixel_coords[1])
         if depth_value <= 0 or depth_value > self.depth_clipping_distance:
             return None
@@ -127,7 +135,7 @@ class MPDetector():
 
         return img
     
-    def findPosition(self, img, handNo=0, draw=False):
+    def findPosition(self, img, handNo=0):
         lmlist = []
         if self.results.multi_hand_landmarks:
             myHand = self.results.multi_hand_landmarks[handNo]
@@ -135,10 +143,8 @@ class MPDetector():
             for id, lm in enumerate(myHand.landmark):
                 h, w, c = img.shape
                 cx, cy = int(lm.x * w), int(lm.y * h)
-                lmlist.append([id, cx, cy])
-                if draw:
-                    cv2.circle(img, (cx, cy), 5, (255, 0, 255), cv2.FILLED)
-
+                lmlist.append([id, cx + self.y_offset, cy+self.x_offset])
+        
         return lmlist
     
     def determine_hand_pose(self, hand_landmarks):
@@ -188,14 +194,20 @@ class MPDetector():
                 color_frame, depth_frame = self.get_frames()
                 depth_image = np.asanyarray(depth_frame.get_data())
                 color_image = np.asanyarray(color_frame.get_data())
+
+                # zoom into workspace to increase detection capabilities of hand
+                x,y,_ = color_image.shape
+                self.x_offset = 200
+                self.y_offset = 500
+                color_image_crop = color_image[self.x_offset:x,self.y_offset:y,:]
                
-                hand = self.findHands(color_image)
-                positions = self.findPosition(color_image, False)
+                hand = self.findHands(color_image_crop,draw)
+                positions = self.findPosition(color_image_crop)
 
                 if draw:
-                    depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
-                    depth_image_normalized = np.uint8(depth_image_normalized)
-                    cv2.imshow("Depth Image", depth_image_normalized)
+                    #depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
+                    #depth_image_normalized = np.uint8(depth_image_normalized)
+                    #cv2.imshow("Depth Image", depth_image_normalized)
                     cv2.imshow("Hand Image", hand) 
                     cv2.waitKey(1)
 
@@ -277,9 +289,9 @@ class MPDetector():
         cv2.destroyAllWindows()
 
 def main():
-    rospy.init_node('hand_pose_node', anonymous=True)
-    hand_pose_node = MPDetector()
-    hand_pose_node.process_frames()  
+    rospy.init_node('hand_pose_node')  # You can choose a name for your node
+    hand_pose = MPDetector()
+    hand_pose.process_frames()
     rospy.spin()
 
 if __name__ == '__main__':

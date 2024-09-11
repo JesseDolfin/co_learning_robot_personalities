@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation as R
 from robot.robot import Robot
 from co_learning_messages.msg import hand_pose
 from std_msgs.msg import Bool
-import matplotlib.pyplot as plt
+
 
 # Constants
 HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
@@ -49,15 +49,6 @@ class RoboticArmController:
         self.q_dot = msg.velocity
         if self.robot is not None:
             ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
-            # ee_T_dot = np.array(self.robot.fkine(self.q_dot, end='iiwa_link_7', start='iiwa_link_0'))
-
-            # ee_vel = [ee_T_dot[0, 3], ee_T_dot[1, 3], ee_T_dot[2, 3]]
-
-            
-            # if np.linalg.norm(ee_vel) > 10:
-            #     self.publish_human_input.publish(True)
-            # else:
-            #     self.publish_human_input.publish(False)
 
             translation = ee_T[:3,3]
             rot_mat = ee_T[0:3, 0:3]
@@ -93,10 +84,10 @@ class RoboticArmController:
         elif len(position) == 6:
             if mode == None:
                 goal.mode = 'ee_cartesian_ds'
-                stiffness = [80.0, 80.0, 80.0, 5.0, 5.0, 5.0]
+                stiffness = [180.0, 180.0, 180.0, 15.0, 15.0, 15.0]
             elif mode == 'ee_cartesian':
                 goal.mode = mode
-                stiffness = [80.0, 80.0, 80.0, 5.0, 3.0, 3.0]
+                stiffness = [180.0, 180.0, 180.0, 15.0, 13.0, 13.0]
                 rospy.Rate(1).sleep()
             goal.stiffness = stiffness
             goal.damping = (2 * np.sqrt(stiffness)).tolist()
@@ -135,7 +126,7 @@ class RoboticArmController:
     def move_towards_hand(self,update = False):
         rospy.loginfo("Moving towards hand")
 
-        if update: # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand()
+        if update: # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand() untill the orientation is reset
             self.fixed_orientation = self.ee_pose[3:]
             self.q_save = self.q
             if self.q[4] < -1:
@@ -147,31 +138,32 @@ class RoboticArmController:
             else:
                 target_position_cam = np.array(self.hand_pose)
                 target_position_arm = self.frame_transform(target_position_cam)
+
+            if np.array(self.hand_pose).all() == 0: # When initially no hand is detected keep checking for hand in the loop before moving on
+                wait_for_hand = True
+            else:
+                wait_for_hand = False
         else:
             self.q_save = None
+            wait_for_hand = False
+
 
         target_position_arm = self.frame_transform(np.array(self.hand_pose))
         current_position = np.array(self.ee_pose[:3])
 
-        position_threshold = 0.03
+        position_threshold = 0.09
 
-        if np.array(self.hand_pose).all() == 0: # When initially no hand is detected keep checking for hand in the loop before moving on
-            wait_for_hand = True
-        else:
-            wait_for_hand = False
-
-        saved_pose = np.array(self.hand_pose)
+        self.saved_pose = np.array(self.hand_pose)
         update_pose = False
 
+
         while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand: 
-          
-            
             if not np.array(self.hand_pose).all()==0:   # When a hand is in the workspace
-                update_pose = np.linalg.norm(np.array(self.hand_pose) - saved_pose) > 0.1 # Only update the pose when the hand is far away enough AND the hand is still in the workspace
+                update_pose = np.linalg.norm(np.array(self.hand_pose) - self.saved_pose) > 0.0 # Only update the pose when the hand is far away enough AND the hand is still in the workspace
                 wait_for_hand = False # We can stop waiting for a hand (if hand disapears again the robot should still go to previous hand location)
                 if update_pose: # Make sure to update the pose before transforming and sending it because if this is the transition from no hand to hand frame saved pose = [0,0,0]
-                    saved_pose = np.array(self.hand_pose)
-                target_position_arm = self.frame_transform(np.array(saved_pose)) # self.hand_pose is in camera frame, get it in robot frame
+                    self.saved_pose = np.array(self.hand_pose)
+                target_position_arm = self.frame_transform(np.array(self.saved_pose)) # self.hand_pose is in camera frame, get it in robot frame
                 target_position_arm[2] = 0.1 if target_position_arm[2] < 0.1 else target_position_arm[2] # Make sure the robot never slams into the table
                 # rospy.loginfo(f"saved_pose=:{[f'{x:.3f}' for x in saved_pose]}")
                 # rospy.loginfo(f"current pose=:{[f'{x:.3f}' for x in np.array(self.hand_pose)]}")
@@ -179,9 +171,12 @@ class RoboticArmController:
                 # rospy.loginfo(f"current_position_arm=:{[f'{x:.3f}' for x in np.array(self.ee_pose[:3])]}")
                 rospy.loginfo(f"error norm:{np.linalg.norm(target_position_arm - current_position)}")
 
-                 
             target_pose = np.hstack((target_position_arm,self.fixed_orientation)) 
             goal_time = 2
+
+          
+            rospy.loginfo(f"Test value for human input:{abs(np.linalg.norm(np.array(self.ee_pose[:2]) - self.frame_transform(np.array(self.hand_pose))[:2])-1)}")
+
             if update_pose: # Only send the new command when the hand is updated (stops jitter)
                 self.send_position_command(target_pose, self.q_save, goal_time)
             else:
@@ -352,9 +347,11 @@ if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
     controller.send_position_command([0,0,0,0,0,0,0],None)
-    # while True:
+    controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
+    controller.move_towards_hand(update=True)
+    while True:
     #     controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
-    #     controller.move_towards_hand()
+        controller.move_towards_hand()
     
     #controller.test(3)
     #controller.test(1)
