@@ -57,12 +57,12 @@ class MPDetector():
         self.hands = self.mpHands.Hands(self.mode, self.maxHands, self.modelComplex, self.detectionCon, self.trackCon)
         self.mpDraw = mp.solutions.drawing_utils
 
-        test_model = 'co_learning_robot_personalities/src/co_learning_detection/src/exported_model/model_fp16.tflite'
+        test_model = 'src/co_learning_detection/src/exported_model/efficientdet_lite2.tflite'
         model = 'efficientdet_lite0.tflite'
 
         # Setup the detection model
         base_options = python.BaseOptions(model_asset_path=test_model)
-        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.5)
+        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.1)
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
     def setup_realsense(self):
@@ -156,11 +156,16 @@ class MPDetector():
         else:
             return 'serve'  # Palm facing the camera
     
-    def get_frames(self):
+    def get_frames(self,aligned=True):
         frames = self.pipeline.wait_for_frames()
-        aligned_frames = self.align.process(frames)
-        color_frame = aligned_frames.get_color_frame()
-        depth_frame = aligned_frames.get_depth_frame()
+        if aligned:
+            aligned_frames = self.align.process(frames)
+            color_frame = aligned_frames.get_color_frame()
+            depth_frame = aligned_frames.get_depth_frame()
+
+        else:
+            color_frame = frames.get_color_frame()
+            depth_frame = frames.get_depth_frame()
 
         if not depth_frame or not color_frame:
             return None, None
@@ -216,6 +221,10 @@ class MPDetector():
             self.stop()
 
     def run_object_detection(self,rgb_image,visualise=False):
+
+        if isinstance(rgb_image, rs.video_frame):
+            rgb_image = np.asanyarray(rgb_image.get_data())
+
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
         results = self.object_detector.detect(image)
 
@@ -248,7 +257,6 @@ class MPDetector():
             start_point = bbox.origin_x, bbox.origin_y
             end_point = bbox.origin_x + bbox.width, bbox.origin_y + bbox.height
 
-            print(start_point,end_point)
             cv2.rectangle(image, start_point, end_point, text_color, 3)
 
             # Draw label and score
