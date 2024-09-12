@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
+
 import signal
-import string
 import sys
 import rospy
 import numpy as np
 import os
-from pathlib import Path
 from std_msgs.msg import String
 from typing import Literal
 import random
+import time
 
 # I give up, modifying the python path to recognise the package.
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -77,8 +77,6 @@ class RoboticArmControllerNode:
         self.gamma = 0.8  
         self.Lamda = 0.3  
 
-        self.rate = rospy.Rate(.5) # Hz
-
         self.messages = {
                             'impatient': [
                                 'Please hurry up!',
@@ -129,46 +127,63 @@ class RoboticArmControllerNode:
         return None
 
     def phase_0(self):
+        '''
+        Go to the home position and grab the object
+        '''
+
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
         self.hand_controller.send_goal('open',2)
+        time.sleep(2) # TODO: test if the new hand implementation fixes the no-wait time
         self.hand_controller.send_goal('close',2)
 
     def phase_1(self):
+        '''
+        Wait untill the human starts draining then; start handover directly (action 1), wait for the human to ask for item (action 2); break if human fails drainig process.
+        '''
+
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
+        rate = rospy.Rate(10)
+
         if self.action == 1:
             while self.draining_start == 0: # Always wait until the human has at least started the draining process
                 self.msg.reset = True
                 self.send_message()
-                self.rate.sleep()
-                if self.successful_handover == -1:
+                rate.sleep()
+                if self.successful_handover == -1: # If human fails continue
                     break
         if self.action == 2:
             while self.draining_start == 0:
                 self.msg.reset = True
                 self.send_message()
-                self.rate.sleep()
+                rate.sleep()
                 if self.successful_handover == -1:
                     break
 
             self.msg.reset = False
             self.send_message()
             self.original_orientation = self.orientation
-            while (self.original_orientation == self.orientation) and (self.draining_done == 0) and (self.successful_handover != -1):
-                print(f"originoal orientation:{self.original_orientation}, new orientation:{self.orientation}")
+
+            #
+            while (self.original_orientation == self.orientation) and (self.draining_done == 0) and (self.successful_handover != -1): # Will wait to start handover untill the draining is done OR the human asks for the item (state change) and break when human fails
                 message_text = self.get_random_message(self.type)
                 if message_text:
                     message = String()
                     message.data = message_text
                     self.pub_text.publish(message)
 
-                self.rate.sleep()
+                rate.sleep()
                 # read leader follower papers? role shifting? -> ayse kuchukyilmaz. 
             return
 
 
     def phase_2(self):
+        '''
+        Go to intermediate position and then to either serve orientation (action 3) or drop orientation (action 4)
+        Then move the item towards the hand of the human
+        '''
+
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         position = self.convert_action_to_orientation(self.action)
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
@@ -176,6 +191,11 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.move_towards_hand(update=True)
 
     def phase_3(self):
+        '''
+        Robot now has to decide to open its hand (either fully or partially), if the robot decides to close its hand we skip this action for now
+        # It can be frustrating for the robot not to realease the object, need some testing
+        '''
+
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
     
         if self.action == 5:
@@ -185,23 +205,28 @@ class RoboticArmControllerNode:
         elif self.action == 7:
             pass
 
-        rospy.Rate(0.5).sleep()
-        self.robot_arm_controller.move_towards_hand()
+        time.sleep(2) # TODO: test if the new hand implementation fixes the no-wait time
 
-        if self.action == 5:
+        # 'update' parmaeter defaults to false which causes the function not to wait for the hand initaially and keep the origional orienation (serve or drop)
+        self.robot_arm_controller.move_towards_hand() 
+
+        if self.action == 5: # assume that when the robot opens its hand the handover is done, either successfully or it has failed (the item dropped)
             return
         else: 
-            self.action = random.randint(5,7)
+            self.action = random.randint(5,7) # TODO: This needs to be connected to the RL mechanism
             self.phase_3()
 
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
         self.rl_agent.experience_replay(self.alpha, self.gamma, self.Lamda)
-        self.rate.sleep()
         return
 
 
     def check_end_condition(self):
+        '''
+        There are a set amount of test runs per personality, this is to give the agent time to build a strategy, check if terminal condition is reaced
+        Also send a message at the end of the whole ordeal to emmbed more of the personality
+        '''
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
@@ -213,6 +238,7 @@ class RoboticArmControllerNode:
                 self.pub_text.publish(message)
             
         else:
+            # If it is the end of the experiment send the arm upright to singal the end
             _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
             self.run = False
             return
@@ -264,12 +290,12 @@ class RoboticArmControllerNode:
         if self.run:
             self.start_episode()
 
-    def convert_action_to_orientation(self, action):
+    def convert_action_to_orientation(self, action:int):
         positions = {
             3: np.deg2rad([107, -47, -11, 100, -82, -82, -35]), # Serve
             4: np.deg2rad([55, -40, -8, 82, 5, 20, 0]) # Drop
         }
-        return positions.get(action, HOME_POSITION)
+        return positions.get(action, INTERMEDIATE_POSITION) # If wrong action is picked somehow, send the arm to the safest position
 
     def reset(self):
         _, self.phase = self.rl_agent.reset()
@@ -278,10 +304,14 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.hand_pose = None
         self.rl_agent.print_q_table()
         if self.type == 'leader':
-            self.exploration_factor = max(self.exploration_factor *.9, 0.20)
+            self.exploration_factor = max(self.exploration_factor *.9, 0.20) # e-decay
         return
 
     def reset_msg(self):
+        '''
+        This signals the secondary task that it may also get ready for another attempt
+        '''
+
         self.msg = secondary_task_message()
         self.msg.draining_starts = 0
         self.msg.draining_successful = 0

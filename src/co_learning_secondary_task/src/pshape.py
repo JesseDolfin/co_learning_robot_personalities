@@ -5,8 +5,6 @@ Created on Mon Feb  7 16:02:10 2022
 @author: willemet.l
 """
 
-from co_learning_secondary_task.src.pyhapi import Mechanisms
-from co_learning_secondary_task.src.pantograph import Pantograph
 import math
 import numpy as np
 import pygame

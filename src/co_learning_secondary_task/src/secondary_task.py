@@ -4,10 +4,6 @@ import signal
 import sys
 import pygame
 import numpy as np
-import matplotlib.pyplot as plt
-
-    
-from serial.tools import list_ports
 import time
 import os
 import random
@@ -22,7 +18,7 @@ sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
 
 from co_learning_messages.msg import secondary_task_message
 from co_learning_secondary_task.src.pantograph import Pantograph
-from co_learning_secondary_task.src.pyhapi import Board, Device, Mechanisms
+from co_learning_secondary_task.src.pyhapi import Mechanisms
 from co_learning_secondary_task.src.pshape import PShape      
 
 class secondary_task():

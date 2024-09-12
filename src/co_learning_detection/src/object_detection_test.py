@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from detection import MPDetector  # Assuming you have MPDetector in pose_detection.py
-import time
+
 
 
 fake = False

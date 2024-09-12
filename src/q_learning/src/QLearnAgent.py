@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 
-from ast import Lambda
 import os
 import numpy as np
 import random
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-
 import rosgraph
 import rospy
-
 from CoLearnEnvironment import CoLearn
 
-from co_learning_messages.msg import secondary_task_message
 
 class QLearningAgent():
     def __init__(self, env):

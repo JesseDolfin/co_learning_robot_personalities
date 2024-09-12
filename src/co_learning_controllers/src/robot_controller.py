@@ -1,6 +1,5 @@
-# robotic_arm_control.py
+#!/usr/bin/env python3
 
-from os import wait
 import rospy
 import actionlib
 import numpy as np
@@ -10,6 +9,7 @@ from scipy.spatial.transform import Rotation as R
 from robot.robot import Robot
 from co_learning_messages.msg import hand_pose
 from std_msgs.msg import Bool
+import time
 
 
 # Constants
@@ -88,7 +88,7 @@ class RoboticArmController:
             elif mode == 'ee_cartesian':
                 goal.mode = mode
                 stiffness = [180.0, 180.0, 180.0, 15.0, 13.0, 13.0]
-                rospy.Rate(1).sleep()
+                time.sleep(goal.time) # This mode does not wait for confirmation
             goal.stiffness = stiffness
             goal.damping = (2 * np.sqrt(stiffness)).tolist()
         elif len(position) not in [6,7]:
@@ -109,7 +109,7 @@ class RoboticArmController:
 
         return goal
 
-    def send_position_command(self, position, nullspace,goal_time = None, mode=None):
+    def send_position_command(self, position:list | ControllerGoal, nullspace :list ,goal_time:int = None, mode:str=None):
         if not isinstance(position,ControllerGoal):
             goal = self.create_goal(position, nullspace,goal_time,mode)
         else:
@@ -180,7 +180,7 @@ class RoboticArmController:
             if update_pose: # Only send the new command when the hand is updated (stops jitter)
                 self.send_position_command(target_pose, self.q_save, goal_time)
             else:
-                rospy.Rate(1).sleep()
+                rospy.Rate(1).sleep() # Dynamically allocate the required sleep time in the while loop
 
             current_position = np.array(self.ee_pose[:3]) # After sending the command update the position
 

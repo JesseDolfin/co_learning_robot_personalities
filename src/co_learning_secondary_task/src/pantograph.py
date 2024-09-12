@@ -5,8 +5,6 @@ __version__ = '1.0.0'
 __date__ = '2021/03/22'
 __description__ = 'Python Pantograph mech. definitions'
 
-import sys
-
 from co_learning_secondary_task.src.pyhapi import Mechanisms
 import math
 

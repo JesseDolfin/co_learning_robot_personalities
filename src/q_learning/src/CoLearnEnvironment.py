@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from gymnasium import Env
 from gymnasium.spaces import Discrete
 import threading

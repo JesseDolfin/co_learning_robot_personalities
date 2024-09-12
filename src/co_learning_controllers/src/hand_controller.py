@@ -46,7 +46,9 @@ class SoftHandController:
      
         goal = self.get_qbhand_goal(mode, duration)
         if not self.fake:
-            self.client.send_goal_and_wait(goal)
+            self.client.wait_for_server()
+            self.client.send_goal(goal)
+            self.client.wait_for_result()
  
 
     def get_qbhand_goal(self, mode='open', duration=5, n_interval=20):

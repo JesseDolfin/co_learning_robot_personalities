@@ -8,7 +8,6 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from co_learning_messages.msg import hand_pose
-import rosgraph
 
 
 class MPDetector():
