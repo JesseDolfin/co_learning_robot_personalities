@@ -619,7 +619,7 @@ class secondary_task():
 
         # Implements a sine wave parallel to the needle
         needle_direction = np.array([cos_alpha, sin_alpha])
-        faulty_force = needle_direction * 40000 * np.sin(self.t / 5)
+        faulty_force = needle_direction * 35000 * np.sin(self.t / 10)
 
         # Calculate force feedback from impedance controller 
         self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) + faulty_force

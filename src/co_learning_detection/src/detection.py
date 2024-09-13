@@ -8,6 +8,7 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from co_learning_messages.msg import hand_pose
+from co_learning_messages.msg import secondary_task_message
 
 
 class MPDetector():
@@ -40,6 +41,7 @@ class MPDetector():
         if not fake:
             self.setup_realsense()
             self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
+            self.secondary_pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
 
         self.setup_mediapipe()
 
@@ -68,7 +70,7 @@ class MPDetector():
 
         # Setup the detection model
         base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.1)
+        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.15)
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
     def setup_realsense(self):
@@ -189,6 +191,9 @@ class MPDetector():
 
     def process_frames(self, draw=False):
         try:
+            frame_counter = 0 
+            detection_interval = 30 # Amount of frames skipped  
+
             while not rospy.is_shutdown():
                 color_frame, depth_frame = self.get_frames()
                 depth_image = np.asanyarray(depth_frame.get_data())
@@ -226,25 +231,52 @@ class MPDetector():
                     orientation = 'none'
                     self.publish_message(orientation,point)
 
+                frame_counter += 1
+                if frame_counter >= detection_interval: # Dont run expensive inference each frame but slow it down
+                    rospy.loginfo("update frequency")
+                    object_detected = self.run_object_detection(visualise=draw)
+                    msg = secondary_task_message()
+                    if object_detected:
+                        msg.handover_successful = 1
+                        self.secondary_pub.publish(msg)
+                    else:
+                        msg.handover_successful = 0
+                        self.secondary_pub.publish(msg)
+                    frame_counter = 0  
+
         except rospy.ROSInterruptException:
             pass
         finally:
             self.stop()
 
-    def run_object_detection(self,rgb_image,visualise=False):
+    def run_object_detection(self,visualise=False):
+        color_frame, _ = self.get_frames(aligned=False)
+        color_image = np.asanyarray(color_frame.get_data())
 
-        if isinstance(rgb_image, rs.video_frame):
-            rgb_image = np.asanyarray(rgb_image.get_data())
+        x,y,_ = color_image.shape
+        x_offset = 272
+        y_offset = 600
+        x_neg_offset = 0
+        y_neg_offset = 232
+        color_image_crop = color_image[x_offset:x-x_neg_offset,y_offset:y-y_neg_offset,:]
+        color_image_crop = color_image_crop.astype(np.uint8)
 
-        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
+        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=color_image_crop)
         results = self.object_detector.detect(image)
 
         if visualise:
             bb_image = self.visualize_bb(image,results)
-        else:
-            bb_image = None
+            cv2.imshow('bounding box image',bb_image)
+            cv2.waitKey(1)
 
-        return results, bb_image
+        object_detected = False
+
+        for detection in results.detections:
+            if any(category.category_name == 'scissors' for category in detection.categories):
+                object_detected = True
+                break  # No need to check further once object is detected
+
+        return object_detected
 
     def visualize_bb(self,rgb_image,results):
         """Draws bounding boxes on the input image and return it.
@@ -288,7 +320,7 @@ class MPDetector():
         cv2.destroyAllWindows()
 
 def main():
-    rospy.init_node('hand_pose_node')  # You can choose a name for your node
+    rospy.init_node('hand_pose_node')
     hand_pose = MPDetector()
     hand_pose.process_frames()
     rospy.spin()

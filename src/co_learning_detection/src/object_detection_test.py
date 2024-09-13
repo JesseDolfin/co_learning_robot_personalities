@@ -45,27 +45,8 @@ if fake:
     cv2.destroyAllWindows()
 else:
     while True:
-        color_frame, _ = detector.get_frames(aligned=True)
+        detector.run_object_detection(visualise=True)
 
-        numpy_frame = np.asanyarray(color_frame.get_data())
-
-        img_size = 300
-
-        x_offset = 190
-        y_offset = 440
-
-        numpy_frame = numpy_frame[x_offset:img_size+x_offset,y_offset:img_size+y_offset,:]
-
-        numpy_frame = numpy_frame.astype(np.uint8)
-
-        # Run object detection on the RGB frame
-        results, annotated_image = detector.run_object_detection(numpy_frame, visualise=True)
-
-        # Display the annotated frame in a window called 'webcam'
-        cv2.imshow('realsense image', annotated_image)
-
-        # Exit the loop if the 'q' key is pressed
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+   
 
 
