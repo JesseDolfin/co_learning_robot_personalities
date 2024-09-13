@@ -10,6 +10,7 @@ from robot.robot import Robot
 from co_learning_messages.msg import hand_pose
 from std_msgs.msg import Bool
 import time
+from typing import Union
 
 
 # Constants
@@ -109,7 +110,7 @@ class RoboticArmController:
 
         return goal
 
-    def send_position_command(self, position:list | ControllerGoal, nullspace :list ,goal_time:int = None, mode:str=None):
+    def send_position_command(self, position:Union[list, ControllerGoal], nullspace :list ,goal_time:int = None, mode:str=None):
         if not isinstance(position,ControllerGoal):
             goal = self.create_goal(position, nullspace,goal_time,mode)
         else:

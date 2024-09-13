@@ -203,9 +203,9 @@ class RoboticArmControllerNode:
         elif self.action == 6:
             self.hand_controller.send_goal('partial',2)
         elif self.action == 7:
-            pass
+            self.hand_controller.send_goal('close',2)
 
-        time.sleep(2) # TODO: test if the new hand implementation fixes the no-wait time
+        #time.sleep(2) # TODO: test if the new hand implementation fixes the no-wait time
 
         # 'update' parmaeter defaults to false which causes the function not to wait for the hand initaially and keep the origional orienation (serve or drop)
         self.robot_arm_controller.move_towards_hand() 
