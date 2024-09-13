@@ -57,7 +57,7 @@ class SoftHandController:
                 rospy.Rate(1).sleep()
                 rospy.loginfo("waiting for joint position")
         else:
-            print("[MOCK] Generating mock trajectory")
+            print(f"[MOCK] Generating mock trajectory for mode:{mode}")
 
         goal = FollowJointTrajectoryGoal()
         goal.trajectory.joint_names = ['qbhand1_synergy_joint']

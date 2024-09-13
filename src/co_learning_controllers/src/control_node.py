@@ -207,7 +207,7 @@ class RoboticArmControllerNode:
 
         self.robot_arm_controller.move_towards_hand() 
 
-        if self.action == 5 or self.successful_handover == 1: # assume that when the robot opens its hand the handover is done, either successfully or it has failed (the item dropped)
+        if self.action == 5: #or self.successful_handover == 1: # assume that when the robot opens its hand the handover is done, either successfully or it has failed (the item dropped)
             return
         else: 
             self.action = random.randint(5,7) # TODO: This needs to be connected to the RL mechanism
@@ -323,7 +323,7 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='baseline',fake=False)
+        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='baseline',fake=True)
         node.start_episode()
 
     except rospy.ROSInterruptException:

@@ -170,13 +170,15 @@ class RoboticArmController:
                 # rospy.loginfo(f"current pose=:{[f'{x:.3f}' for x in np.array(self.hand_pose)]}")
                 # rospy.loginfo(f"target_position_arm=:{[f'{x:.3f}' for x in target_position_arm]}")
                 # rospy.loginfo(f"current_position_arm=:{[f'{x:.3f}' for x in np.array(self.ee_pose[:3])]}")
-                rospy.loginfo(f"error norm:{np.linalg.norm(target_position_arm - current_position)}")
+            
+            error = np.linalg.norm(target_position_arm - current_position)
+            rospy.loginfo(f"error norm=:{f'{error:.3f}'}, must be less than:{position_threshold}")
 
             target_pose = np.hstack((target_position_arm,self.fixed_orientation)) 
             goal_time = 2
 
           
-            rospy.loginfo(f"Test value for human input:{abs(np.linalg.norm(np.array(self.ee_pose[:2]) - self.frame_transform(np.array(self.hand_pose))[:2])-1)}")
+            #rospy.loginfo(f"Test value for human input:{abs(np.linalg.norm(np.array(self.ee_pose[:2]) - self.frame_transform(np.array(self.hand_pose))[:2])-1)}")
 
             if update_pose: # Only send the new command when the hand is updated (stops jitter)
                 self.send_position_command(target_pose, self.q_save, goal_time)

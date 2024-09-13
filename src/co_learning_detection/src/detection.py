@@ -70,7 +70,7 @@ class MPDetector():
 
         # Setup the detection model
         base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.15)
+        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.10)
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
     def setup_realsense(self):
@@ -192,7 +192,7 @@ class MPDetector():
     def process_frames(self, draw=False):
         try:
             frame_counter = 0 
-            detection_interval = 30 # Amount of frames skipped  
+            detection_interval = 5 # Amount of frames skipped  
 
             while not rospy.is_shutdown():
                 color_frame, depth_frame = self.get_frames()
@@ -222,6 +222,9 @@ class MPDetector():
                     palm = (int((wrist[1] + middle_finger_mcp[1]) / 2), int((wrist[2] + middle_finger_mcp[2]) / 2))
 
                     point_3d = self.get_3d_point(palm, depth_frame)
+
+                    if point_3d[2] > 2.633: #BUG: the hand detection module wil lock onto the rightmost hand.
+                        point_3d = None
                     
                     if point_3d is not None:
                         self.publish_message(pose, point_3d)
@@ -254,10 +257,18 @@ class MPDetector():
         color_image = np.asanyarray(color_frame.get_data())
 
         x,y,_ = color_image.shape
-        x_offset = 272
-        y_offset = 600
+        # This setup gives the exact input size the model was trained on 448 x 448 x 3
+        # x_offset = 272
+        # y_offset = 600
+        # x_neg_offset = 0
+        # y_neg_offset = 232
+
+        # Smaller workspace configuration
+        x_offset = 350
+        y_offset = 700
         x_neg_offset = 0
         y_neg_offset = 232
+
         color_image_crop = color_image[x_offset:x-x_neg_offset,y_offset:y-y_neg_offset,:]
         color_image_crop = color_image_crop.astype(np.uint8)
 
