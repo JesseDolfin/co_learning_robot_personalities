@@ -72,6 +72,7 @@ class QLearningAgent():
             count = 0
             stop = False
             while (phase == self.phase and not stop):
+                
                 action = self.epsilon_greedy(epsilon)
                 next_state, reward, terminated, info = self.env.step(action)
                 count+=1
@@ -127,7 +128,7 @@ class QLearningAgent():
         self.experience["valid"].append(valid)
 
     def experience_replay(self, alpha, gamma, Lambda):
-        print(f"experience is:{self.experience}")
+        rospy.loginfo("updating Q-table with experience")
         last_reward = self.experience["reward"][-1] 
         for i in range(len(self.experience["state"])):
             state = self.experience["state"][i]

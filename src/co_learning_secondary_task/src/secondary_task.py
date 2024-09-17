@@ -575,10 +575,6 @@ class secondary_task():
 
         return False
 
-
-
-
-
     def update_fe(self):
         cos_alpha = np.cos(self.alpha)
         sin_alpha = np.sin(self.alpha)

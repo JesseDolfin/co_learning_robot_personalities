@@ -135,8 +135,9 @@ class RoboticArmControllerNode:
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
         self.hand_controller.send_goal('open',2)
-        time.sleep(2) # TODO: test if the new hand implementation fixes the no-wait time
+        time.sleep(2) 
         self.hand_controller.send_goal('close',2)
+        time.sleep(2)
 
     def phase_1(self):
         '''
@@ -193,10 +194,12 @@ class RoboticArmControllerNode:
     def phase_3(self):
         '''
         Robot now has to decide to open its hand (either fully or partially), if the robot decides to close its hand we skip this action for now
-        # It can be frustrating for the robot not to realease the object, need some testing
+        It can be frustrating for the robot not to realease the object, need some testing
         '''
 
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
+
+        self.robot_arm_controller.move_towards_hand() 
     
         if self.action == 5:
             self.hand_controller.send_goal('open',2)
@@ -205,13 +208,9 @@ class RoboticArmControllerNode:
         elif self.action == 7:
             self.hand_controller.send_goal('close',2)
 
-        self.robot_arm_controller.move_towards_hand() 
+        time.sleep(2)
 
-        if self.action == 5: #or self.successful_handover == 1: # assume that when the robot opens its hand the handover is done, either successfully or it has failed (the item dropped)
-            return
-        else: 
-            self.action = random.randint(5,7) # TODO: This needs to be connected to the RL mechanism
-            self.phase_3()
+        return
 
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
@@ -299,7 +298,7 @@ class RoboticArmControllerNode:
         self.terminated = False
         self.reset_msg()
         self.robot_arm_controller.hand_pose = None
-        self.rl_agent.print_q_table()
+        #self.rl_agent.print_q_table()
         if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor *.9, 0.20) # e-decay
         return

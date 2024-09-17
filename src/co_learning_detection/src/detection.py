@@ -35,6 +35,7 @@ class MPDetector():
         self.width = width
         self.height = height
         self.fps = fps
+        self.msg = None
 
         #self.ros = rosgraph.is_master_online()
         
@@ -42,13 +43,15 @@ class MPDetector():
             self.setup_realsense()
             self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
             self.secondary_pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
+            rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
 
         self.setup_mediapipe()
 
         self.wrist_pixel = None
         self.pose = None
 
-        
+    def status_callback(self,msg):
+        self.msg = msg
 
     def setup_mediapipe(self):
         # Setup the hand landmarker model
@@ -70,7 +73,7 @@ class MPDetector():
 
         # Setup the detection model
         base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.10)
+        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.25)
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
     def setup_realsense(self):
@@ -114,16 +117,41 @@ class MPDetector():
         self.depth_to_color_extrin = depth_stream.get_extrinsics_to(color_stream)
 
     def get_3d_point(self, pixel_coords, depth_frame):
-        # Extract depth value from the depth frame
-        print(pixel_coords)
-        depth_value = depth_frame.get_distance(pixel_coords[0], pixel_coords[1])
-        if depth_value <= 0 or depth_value > self.depth_clipping_distance:
-            return None
-        
-        # Deproject from pixel to 3D point using camera intrinsics
-        depth_point_3d = rs.rs2_deproject_pixel_to_point(self.depth_intrin, pixel_coords, depth_value)
+        """
+        Convert pixel coordinates to a 3D point in the world frame.
 
-        return np.array(depth_point_3d)
+        Args:
+            pixel_coords (tuple): A tuple (x, y) representing pixel coordinates.
+            depth_frame (rs.depth_frame): A RealSense depth frame.
+
+        Returns:
+            numpy.ndarray: A 3D point as an (x, y, z) numpy array, or None if an error occurred.
+        """
+        if not isinstance(depth_frame, rs.depth_frame):
+            print("Invalid depth frame")
+            return None
+
+        width = depth_frame.get_width()
+        height = depth_frame.get_height()
+
+        if (pixel_coords[0] < 0 or pixel_coords[0] >= width or
+            pixel_coords[1] < 0 or pixel_coords[1] >= height):
+            print(f"Pixel coordinates {pixel_coords} are out of bounds")
+            return None
+
+        try:
+            depth_value = depth_frame.get_distance(pixel_coords[0], pixel_coords[1])
+
+            if depth_value <= 0 or depth_value > self.depth_clipping_distance:
+                print(f"Depth value {depth_value} is out of range")
+                return None
+
+            depth_point_3d = rs.rs2_deproject_pixel_to_point(self.depth_intrin, pixel_coords, depth_value)
+            return np.array(depth_point_3d)
+
+        except RuntimeError as e:
+            print(f"RuntimeError occurred: {e}")
+            return None
     
     def findHands(self, img, draw=False):
         imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -192,7 +220,7 @@ class MPDetector():
     def process_frames(self, draw=False):
         try:
             frame_counter = 0 
-            detection_interval = 5 # Amount of frames skipped  
+            detection_interval = 30 # Amount of frames skipped  
 
             while not rospy.is_shutdown():
                 color_frame, depth_frame = self.get_frames()
@@ -223,8 +251,9 @@ class MPDetector():
 
                     point_3d = self.get_3d_point(palm, depth_frame)
 
-                    if point_3d[2] > 2.633: #BUG: the hand detection module wil lock onto the rightmost hand.
-                        point_3d = None
+                    if point_3d is not None:
+                        if point_3d[2] > 2.433: #BUG: the hand detection module wil lock onto the rightmost hand. -> make workspace smaller?
+                            point_3d = None
                     
                     if point_3d is not None:
                         self.publish_message(pose, point_3d)
@@ -238,12 +267,14 @@ class MPDetector():
                 if frame_counter >= detection_interval: # Dont run expensive inference each frame but slow it down
                     rospy.loginfo("update frequency")
                     object_detected = self.run_object_detection(visualise=draw)
-                    msg = secondary_task_message()
+
+                    if self.msg is not None:
+                        msg = self.msg
+                    else:
+                        msg = secondary_task_message()
+
                     if object_detected:
                         msg.handover_successful = 1
-                        self.secondary_pub.publish(msg)
-                    else:
-                        msg.handover_successful = 0
                         self.secondary_pub.publish(msg)
                     frame_counter = 0  
 

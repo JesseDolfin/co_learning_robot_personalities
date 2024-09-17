@@ -85,7 +85,12 @@ class RoboticArmController:
         elif len(position) == 6:
             if mode == None:
                 goal.mode = 'ee_cartesian_ds'
-                stiffness = [180.0, 180.0, 180.0, 15.0, 15.0, 15.0]
+                if self.type == 'fast':
+                    stiffness = [220.0, 220.0, 220.0, 15.0, 15.0, 15.0]
+                if self.type == 'slow':
+                    stiffness = [180.0, 180.0, 180.0, 15.0, 15.0, 15.0]
+                else:
+                    stiffness = [150.0, 150.0, 150.0, 15.0, 15.0, 15.0]
             elif mode == 'ee_cartesian':
                 goal.mode = mode
                 stiffness = [180.0, 180.0, 180.0, 15.0, 13.0, 13.0]
@@ -95,7 +100,7 @@ class RoboticArmController:
         elif len(position) not in [6,7]:
             raise ValueError("Requested position MUST be either all joint angles or the full cartesian position [x,y,z,rx,ry,rz]")
 
-        goal.precision = 1e-1
+        goal.precision = 2e-1
         goal.rate = 20
 
         if nullspace == None:
@@ -144,15 +149,20 @@ class RoboticArmController:
                 wait_for_hand = True
             else:
                 wait_for_hand = False
+
+            self.save_target = None
         else:
             self.q_save = None
             wait_for_hand = False
 
+        if self.save_target is not None:
+            target_position_arm = self.save_target
+        else:
+            target_position_arm = self.frame_transform(np.array(self.hand_pose))
 
-        target_position_arm = self.frame_transform(np.array(self.hand_pose))
         current_position = np.array(self.ee_pose[:3])
 
-        position_threshold = 0.25
+        position_threshold = 0.3
 
         self.saved_pose = np.array(self.hand_pose)
         update_pose = False
@@ -176,6 +186,8 @@ class RoboticArmController:
 
             target_pose = np.hstack((target_position_arm,self.fixed_orientation)) 
             goal_time = 2
+
+            self.save_target = target_position_arm
 
           
             #rospy.loginfo(f"Test value for human input:{abs(np.linalg.norm(np.array(self.ee_pose[:2]) - self.frame_transform(np.array(self.hand_pose))[:2])-1)}")

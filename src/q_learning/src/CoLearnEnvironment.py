@@ -18,7 +18,7 @@ class CoLearn(Env):
         - Go to Drop                        : 2, 4
         - Open hand                         : 3, 5
         - Open hand partialy                : 3, 6
-        - Wait 0.5 seconds                  : 3, 7
+        - Close hand                        : 3, 7
         Where the first number indicates the phase
 
         
@@ -36,10 +36,10 @@ class CoLearn(Env):
         - (Hand_h: unknown, robot: drop)                : 2, 10
         - (Human_input, Hand open)                      : 3, 11
         - (Human_input, Hand partial)                   : 3, 12
-        - (Human_input, Wait 0.5 seconds)               : 3, 13
+        - (Human_input, Hand close)                     : 3, 13
         - (No human_input, Hand open)                   : 3, 14
         - (No human_input, Hand partial)                : 3, 15
-        - (No human_input, Wait 0.5 seconds)            : 3, 16
+        - (No human_input, Hand close)                  : 3, 16
         '''
  
         self.action_size = 8
@@ -113,9 +113,7 @@ class CoLearn(Env):
         elif self.phase == 2:
             return action in [5, 6, 7]
         elif self.phase == 3:
-            if action == 5:
-                self.hand_open = True
-            return action == 0 and self.hand_open
+            if action == 5: return True
         else:
             return False
 
@@ -159,11 +157,15 @@ class CoLearn(Env):
             if action == 0:
                 return action
             elif self.human_input:
+                if action == 5:
+                    return 11
                 if action == 6:
                     return 12
                 if action == 7:
                     return 13
             else:
+                if action == 5:
+                    return 14
                 if action == 6:
                     return 15
                 if action == 7:
@@ -190,8 +192,6 @@ class CoLearn(Env):
             self.terminated = True
             self.phase = 0
 
-        
-
         if self.phase == 3 and action in [5, 6, 7]:
             self.info['break'] = True
         else:
@@ -212,6 +212,7 @@ class CoLearn(Env):
             if self.phase == 4:
                 while self.handover_successful == 0:
                     self.wait_for_handover()
+                    rospy.loginfo("Waiting for confirmation of handover success")
                 if self.handover_successful == 1:
                     reward += self.phase_size * 10 # Reward for finishing is 10 (for each state)
                     reward += self.phase_size * self.time_left * 2 # Dynamic reward based on performance
