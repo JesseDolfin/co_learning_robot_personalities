@@ -31,7 +31,7 @@ if fake:
             break
 
         # Run object detection on the RGB frame
-        results, annotated_image = detector.run_object_detection(frame, visualise=True)
+        results, annotated_image = detector.run_object_detection(frame, visualize=True)
 
         # Display the annotated frame in a window called 'webcam'
         cv2.imshow('webcam', annotated_image)
@@ -45,7 +45,7 @@ if fake:
     cv2.destroyAllWindows()
 else:
     while True:
-        detector.run_object_detection(visualise=True)
+        detector.run_object_detection(visualize=True)
 
    
 

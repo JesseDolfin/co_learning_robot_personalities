@@ -73,7 +73,7 @@ class MPDetector():
 
         # Setup the detection model
         base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.25)
+        options = vision.ObjectDetectorOptions(base_options=base_options,score_threshold=0.10)
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
     def setup_realsense(self):
@@ -98,7 +98,7 @@ class MPDetector():
         self.align_to = rs.stream.depth
         self.align = rs.align(self.align_to)
 
-        # Intrinsics and extrinsics
+        # Intrinsics and extrinsic
         self.depth_intrin = None
         self.color_intrin = None
         self.color_to_depth_extrin = None
@@ -266,7 +266,7 @@ class MPDetector():
                 frame_counter += 1
                 if frame_counter >= detection_interval: # Dont run expensive inference each frame but slow it down
                     rospy.loginfo("update frequency")
-                    object_detected = self.run_object_detection(visualise=draw)
+                    object_detected = self.run_object_detection(visualize=draw)
 
                     if self.msg is not None:
                         msg = self.msg
@@ -283,7 +283,7 @@ class MPDetector():
         finally:
             self.stop()
 
-    def run_object_detection(self,visualise=False):
+    def run_object_detection(self,visualize=False):
         color_frame, _ = self.get_frames(aligned=False)
         color_image = np.asanyarray(color_frame.get_data())
 
@@ -306,7 +306,7 @@ class MPDetector():
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=color_image_crop)
         results = self.object_detector.detect(image)
 
-        if visualise:
+        if visualize:
             bb_image = self.visualize_bb(image,results)
             cv2.imshow('bounding box image',bb_image)
             cv2.waitKey(1)

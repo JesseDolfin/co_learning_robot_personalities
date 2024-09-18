@@ -24,6 +24,7 @@ class QLearningAgent():
         self.alpha = 0.15
         self.gamma = 0.8 
         self.Lambda = 0.3
+        self.phase = 0
 
         self.type = 'none'
 
@@ -61,7 +62,7 @@ class QLearningAgent():
         Lambda = trace_decay
 
         if real_time:
-            if self.phase == 0 and self.initialise:
+            if self.initialise:
                 self.state, self.phase = self.env.reset()
                 self.reset_experience()
                 terminated = False
@@ -69,18 +70,14 @@ class QLearningAgent():
                 self.initialise = False
 
             phase = self.phase
-            count = 0
-            stop = False
-            while (phase == self.phase and not stop):
-                
+            valid = False
+            while phase == self.phase and not valid:
                 action = self.epsilon_greedy(epsilon)
                 next_state, reward, terminated, info = self.env.step(action)
-                count+=1
-
+         
                 phase = info.get('phase', phase)
-                stop = info.get('break',False)
                 valid = info.get('valid',False)
-    
+
                 self.experience_update(self.state,action,next_state,reward,valid,phase)
                 self.state = next_state
 
@@ -137,7 +134,7 @@ class QLearningAgent():
             valid = self.experience["valid"][i]
             
             if valid: # When a valid action is taken
-                reward = last_reward / self.env.phase_size # Increase the reward for this transition by the final reward per phase (if handover was successfull this approach will reward the full trajectory)
+                reward = last_reward / self.env.state_size # Increase the reward for this transition by the final reward per phase (if handover was successful this approach will reward the full trajectory)
                 #print(f"State:{state}, Reward:{reward}")
                 self.update_q_table(state, action, reward, next_state, alpha, gamma, Lambda)
                 

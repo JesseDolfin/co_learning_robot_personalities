@@ -68,9 +68,9 @@ class RoboticArmController:
 
         if goal_time == None:
             if self.type == 'fast':
-                goal.time = 5 - 2.0
+                goal.time = 5 - 3.0
             elif self.type == 'slow':
-                goal.time = 5 + 2.0
+                goal.time = 5 + 3.0
             else:
                 goal.time = 5
         else:
@@ -88,9 +88,9 @@ class RoboticArmController:
                 if self.type == 'fast':
                     stiffness = [220.0, 220.0, 220.0, 15.0, 15.0, 15.0]
                 if self.type == 'slow':
-                    stiffness = [180.0, 180.0, 180.0, 15.0, 15.0, 15.0]
-                else:
                     stiffness = [150.0, 150.0, 150.0, 15.0, 15.0, 15.0]
+                else:
+                    stiffness = [180.0, 180.0, 180.0, 15.0, 15.0, 15.0]
             elif mode == 'ee_cartesian':
                 goal.mode = mode
                 stiffness = [180.0, 180.0, 180.0, 15.0, 13.0, 13.0]
@@ -132,7 +132,7 @@ class RoboticArmController:
     def move_towards_hand(self,update = False):
         rospy.loginfo("Moving towards hand")
 
-        if update: # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand() untill the orientation is reset
+        if update: # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand() until the orientation is reset
             self.fixed_orientation = self.ee_pose[3:]
             self.q_save = self.q
             if self.q[4] < -1:
@@ -171,7 +171,7 @@ class RoboticArmController:
         while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand: 
             if not np.array(self.hand_pose).all()==0:   # When a hand is in the workspace
                 update_pose = np.linalg.norm(np.array(self.hand_pose) - self.saved_pose) > 0.0 # Only update the pose when the hand is far away enough AND the hand is still in the workspace
-                wait_for_hand = False # We can stop waiting for a hand (if hand disapears again the robot should still go to previous hand location)
+                wait_for_hand = False # We can stop waiting for a hand (if hand disappears again the robot should still go to previous hand location)
                 if update_pose: # Make sure to update the pose before transforming and sending it because if this is the transition from no hand to hand frame saved pose = [0,0,0]
                     self.saved_pose = np.array(self.hand_pose)
                 target_position_arm = self.frame_transform(np.array(self.saved_pose)) # self.hand_pose is in camera frame, get it in robot frame
@@ -185,7 +185,13 @@ class RoboticArmController:
             rospy.loginfo(f"error norm=:{f'{error:.3f}'}, must be less than:{position_threshold}")
 
             target_pose = np.hstack((target_position_arm,self.fixed_orientation)) 
+
             goal_time = 2
+            if self.type == 'fast':
+                goal_time - 1
+            if self.type == 'slow':
+                goal_time + 1
+            
 
             self.save_target = target_position_arm
 

@@ -10,7 +10,7 @@ from typing import Literal
 import random
 import time
 
-# I give up, modifying the python path to recognise the package.
+# I give up, modifying the python path to recognize the package.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
 if workspace_root not in sys.path:
@@ -70,8 +70,12 @@ class RoboticArmControllerNode:
         self.robot_arm_controller = RoboticArmController()  
         if personality_type == 'impatient':
             self.robot_arm_controller.type = 'fast' 
+            self.hand_time = 1
         elif personality_type == 'cautious':
             self.robot_arm_controller.type = 'slow'
+            self.hand_time = 3
+        else:
+            self.hand_time = 2
 
         self.alpha = 0.15  
         self.gamma = 0.8  
@@ -134,14 +138,14 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
-        self.hand_controller.send_goal('open',2)
-        time.sleep(2) 
-        self.hand_controller.send_goal('close',2)
-        time.sleep(2)
+        self.hand_controller.send_goal('open',self.hand_time)
+        time.sleep(self.hand_time) 
+        self.hand_controller.send_goal('close',self.hand_time)
+        time.sleep(self.hand_time)
 
     def phase_1(self):
         '''
-        Wait untill the human starts draining then; start handover directly (action 1), wait for the human to ask for item (action 2); break if human fails drainig process.
+        Wait until the human starts draining then; start handover directly (action 1), wait for the human to ask for item (action 2); break if human fails draining process.
         '''
 
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
@@ -167,7 +171,7 @@ class RoboticArmControllerNode:
             self.original_orientation = self.orientation
 
             #
-            while (self.original_orientation == self.orientation) and (self.draining_done == 0) and (self.successful_handover != -1): # Will wait to start handover untill the draining is done OR the human asks for the item (state change) and break when human fails
+            while (self.original_orientation == self.orientation) and (self.draining_done == 0) and (self.successful_handover != -1): # Will wait to start handover until the draining is done OR the human asks for the item (state change) and break when human fails
                 message_text = self.get_random_message(self.type)
                 if message_text:
                     message = String()
@@ -194,7 +198,7 @@ class RoboticArmControllerNode:
     def phase_3(self):
         '''
         Robot now has to decide to open its hand (either fully or partially), if the robot decides to close its hand we skip this action for now
-        It can be frustrating for the robot not to realease the object, need some testing
+        It can be frustrating for the robot not to release the object, need some testing
         '''
 
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
@@ -202,13 +206,13 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.move_towards_hand() 
     
         if self.action == 5:
-            self.hand_controller.send_goal('open',2)
+            self.hand_controller.send_goal('open',self.hand_time)
         elif self.action == 6:
-            self.hand_controller.send_goal('partial',2)
+            self.hand_controller.send_goal('partial',self.hand_time)
         elif self.action == 7:
-            self.hand_controller.send_goal('close',2)
+            self.hand_controller.send_goal('close',self.hand_time)
 
-        time.sleep(2)
+        time.sleep(self.hand_time)
 
         return
 
@@ -220,8 +224,8 @@ class RoboticArmControllerNode:
 
     def check_end_condition(self):
         '''
-        There are a set amount of test runs per personality, this is to give the agent time to build a strategy, check if terminal condition is reaced
-        Also send a message at the end of the whole ordeal to emmbed more of the personality
+        There are a set amount of test runs per personality, this is to give the agent time to build a strategy, check if terminal condition is reached
+        Also send a message at the end of the whole ordeal to embed more of the personality
         '''
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
@@ -234,7 +238,7 @@ class RoboticArmControllerNode:
                 self.pub_text.publish(message)
             
         else:
-            # If it is the end of the experiment send the arm upright to singal the end
+            # If it is the end of the experiment send the arm upright to signal the end
             _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
             self.run = False
             return
@@ -279,6 +283,11 @@ class RoboticArmControllerNode:
                 exploration_factor=self.exploration_factor,
                 real_time=True
             )
+
+            if self.terminated:
+                # Make sure the last action goes through
+                self.phase_3()
+
         elif self.run:
             self.update_q_table()
             self.check_end_condition()
@@ -322,7 +331,7 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='baseline',fake=True)
+        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='impatient',fake=True)
         node.start_episode()
 
     except rospy.ROSInterruptException:
