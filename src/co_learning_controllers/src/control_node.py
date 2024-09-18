@@ -139,9 +139,7 @@ class RoboticArmControllerNode:
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
         self.hand_controller.send_goal('open',self.hand_time)
-        time.sleep(self.hand_time) 
         self.hand_controller.send_goal('close',self.hand_time)
-        time.sleep(self.hand_time)
 
     def phase_1(self):
         '''
@@ -170,13 +168,15 @@ class RoboticArmControllerNode:
             self.send_message()
             self.original_orientation = self.orientation
 
-            #
+            first_message = True
             while (self.original_orientation == self.orientation) and (self.draining_done == 0) and (self.successful_handover != -1): # Will wait to start handover until the draining is done OR the human asks for the item (state change) and break when human fails
-                message_text = self.get_random_message(self.type)
-                if message_text:
-                    message = String()
-                    message.data = message_text
-                    self.pub_text.publish(message)
+                if first_message:
+                    first_message = False
+                    message_text = self.get_random_message(self.type)
+                    if message_text:
+                        message = String()
+                        message.data = message_text
+                        self.pub_text.publish(message)
 
                 rate.sleep()
                 # read leader follower papers? role shifting? -> ayse kuchukyilmaz. 
@@ -211,9 +211,6 @@ class RoboticArmControllerNode:
             self.hand_controller.send_goal('partial',self.hand_time)
         elif self.action == 7:
             self.hand_controller.send_goal('close',self.hand_time)
-
-        time.sleep(self.hand_time)
-
         return
 
     def update_q_table(self):

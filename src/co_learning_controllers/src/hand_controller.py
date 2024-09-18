@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import actionlib
 from control_msgs.msg import FollowJointTrajectoryGoal, FollowJointTrajectoryAction
+import time
 
 class SoftHandController:
     def __init__(self, fake=False):
@@ -49,6 +50,7 @@ class SoftHandController:
             self.client.wait_for_server()
             self.client.send_goal(goal)
             self.client.wait_for_result()
+        time.sleep(duration)
  
 
     def get_qbhand_goal(self, mode='open', duration=5, n_interval=20):

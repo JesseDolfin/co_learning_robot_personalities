@@ -362,17 +362,15 @@ class RoboticArmController:
                      count = 0
 
 
-
-            
 if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
     controller.send_position_command([0,0,0,0,0,0,0],None)
-    controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
-    controller.move_towards_hand(update=True)
-    while True:
-    #     controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
-        controller.move_towards_hand()
+    # controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
+    # controller.move_towards_hand(update=True)
+    # while True:
+    # #     controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
+    #     controller.move_towards_hand()
     
     #controller.test(3)
     #controller.test(1)
