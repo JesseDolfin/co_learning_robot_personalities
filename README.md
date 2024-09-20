@@ -155,18 +155,17 @@ roslaunch co_learning_controllers co_learning_test_setup.launch
 ```
 
 This will start the simulation and the required controller nodes / secondary task node.
-
 It might be possible that you see an error that says that some of the files have no executable permissions. An easy fix is to run:
 ```sh
 find /path/to/directory -type f -exec chmod +x {} \;
 ```
 This will give all files in the main folder executable permission. Don't run this unless you trust all the repos installed! 
 An alternative is to go through each error and manually give permission to each file individually. 
-
 If you want to start this on the real robot run the command with the prefix `simulation:=false`:
 ```sh
 roslaunch co_learning_controllers co_learning_test_setup.launch simulation:=false
 ```
+
 
 ### The full setup is as follows
 Follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
