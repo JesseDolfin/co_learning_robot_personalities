@@ -22,6 +22,9 @@ class RoboticArmController:
         self.q = None
         self.goal_time = 5.0
         self.ee_pose = [0, 0, 0, 0, 0, 0]
+        self._effort_mag_save = 0
+        self.delta_save = 0
+        self.count = 0
         ns = rospy.get_param('/namespaces')
 
         self.robot = Robot(model=ns.replace('/',''))
@@ -48,6 +51,12 @@ class RoboticArmController:
     def joint_callback(self, msg):
         self.q = msg.position
         self.q_dot = msg.velocity
+
+        effort = msg.effort
+        effort_magnitude = np.linalg.norm(effort)
+        self.delta = abs(effort_magnitude-self._effort_mag_save)
+        self._effort_mag_save = effort_magnitude
+
         if self.robot is not None:
             ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
 
@@ -56,8 +65,6 @@ class RoboticArmController:
             r = R.from_matrix(rot_mat)
             euler_angles = r.as_euler('xyz', degrees=False)
             self.ee_pose = np.hstack((translation,np.flip(euler_angles)))
-            
-
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
@@ -70,7 +77,7 @@ class RoboticArmController:
             if self.type == 'fast':
                 goal.time = 5 - 3.0
             elif self.type == 'slow':
-                goal.time = 5 + 3.0
+                goal.time = 5 + 2.0
             else:
                 goal.time = 5
         else:
@@ -248,9 +255,13 @@ class RoboticArmController:
                            
         while not rospy.is_shutdown():
             if experiment == 0:
-                if count == 0:
-                    rospy.loginfo("Sending pre-defined position command")
-                    self.send_position_command(rot)
+                rospy.loginfo("Sending pre-defined position command")
+                self.send_position_command(rot,None)
+
+                if self.delta > self.delta_save:
+                    self.delta_save = self.delta
+
+                rospy.loginfo(f"maximum delta:{self.delta_save:.2f}, current delta:{self.delta:.2f}")
 
                 target = self.ee_pose
         
@@ -263,7 +274,12 @@ class RoboticArmController:
                 target[2] += 0.1
 
                 rospy.loginfo("sending dynamic position command, forward")
-                self.send_position_command(target)
+                self.send_position_command(target,None)
+
+                if self.delta > self.delta_save:
+                    self.delta_save = self.delta
+
+                rospy.loginfo(f"maximum delta:{self.delta_save:.2f}, current delta:{self.delta:.2f}")
 
                 target = self.ee_pose
                 target[4] = -target[4] 
@@ -274,9 +290,14 @@ class RoboticArmController:
                 target[2] -= 0.1
 
                 rospy.loginfo("sending dynamic position command, backwards")
-                self.send_position_command(target)
+                self.send_position_command(target,None)
 
-                count += 1
+                if self.delta > self.delta_save:
+                    self.delta_save = self.delta
+
+                rospy.loginfo(f"maximum delta:{self.delta_save:.2f}, current delta:{self.delta:.2f}")
+
+    
 
             if experiment == 1:
                 if initialise:
@@ -364,7 +385,10 @@ if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
     controller.send_position_command([0,0,0,0,0,0,0],None)
-    # controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
+    #controller.test(0)
+    #while True:
+        #controller.send_position_command([0,0,0,0,0,0,0],None)
+        #controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
     # controller.move_towards_hand(update=True)
     # while True:
     # #     controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)

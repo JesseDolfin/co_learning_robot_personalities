@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import sys
+import os
+
 # I give up, modifying the python path to recognize the package.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
@@ -13,16 +16,12 @@ from q_learning.src.CoLearnEnvironment import CoLearn
 from co_learning_controllers.src.robot_controller import RoboticArmController
 
 import signal
-import sys
-import os
 from typing import Literal
 import random
 
 from std_msgs.msg import String
 import rospy
 import numpy as np
-
-
 
 HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
@@ -211,6 +210,7 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
 
         self.robot_arm_controller.move_towards_hand() 
+        
     
         if self.action == 5:
             self.hand_controller.send_goal('open',self.hand_time)
