@@ -515,6 +515,7 @@ class secondary_task():
             self.process_events()  # Keyboard events
 
             if self.success:
+                self.success_count += 1
                 self.send_task_status(success=1, time=self.time_left)
 
             if self.check_termination_conditions():
@@ -564,6 +565,7 @@ class secondary_task():
             self.time_left = 0
             self.send_task_status(success=-1, time=0)
             self.reset = False
+            self.spine_hit_count += 1
             return True
         
         if self.handover_successful:
@@ -571,6 +573,7 @@ class secondary_task():
             self.success_chime.play()  # Play success sound
             pygame.time.delay(1000)  # Add delay to make the border visible
             self.send_task_status(success=1, time=self.time_left)
+            self.success_count += 1
             return True
 
         return False
@@ -775,6 +778,7 @@ class secondary_task():
             if not self.collision_dict['Cerebrospinal fluid one']:
                 self.needle_removed_too_soon_2 = True
                 self.send_task_status(success=-1, time=self.time_left)
+                self.spine_hit_count += 1
                 self.reset = False
                 self.task_failed = True
 
@@ -841,6 +845,7 @@ class secondary_task():
 
         if self.needle_removed_too_soon and self.needle_removed_too_soon_update:
             self.send_task_status(success = -1)
+            self.spine_hit_count += 1
             self.reset = False
             self.needle_removed_too_soon_update = False
 
@@ -848,6 +853,7 @@ class secondary_task():
             self.task_failed = True
             self.bar_released_too_soon = True
             self.send_task_status(success = -1)
+            self.spine_hit_count += 1
             self.reset = False
             
 

@@ -18,15 +18,15 @@ To test if they correctly recognise rosmaster A you can type rostopic list on ma
 NOTE: Make sure that machine B ipv4 address is somewhere in the range 192.180.1.x!, I am unsure if the subnet mask needs to be set but to be safe set it to: 255.255.255.0  
 
 **Practical use case example:**  
-step 1: set the IP of machine A (the desktop) to: 192.180.1.5, netmask: 255.255.255.0, gateway: 192.190.1.1 (KUKA preset on the desktop in the lab)  
+step 1: set the IP of machine A (the desktop) to: 192.180.1.5, netmask: 255.255.255.0, gateway: 192.190.1.1 (Kuka preset on the desktop in the lab)  
 step 2: set the IP om machine B (the laptop)  to: 192.180.1.10, netmask: 255.255.255.0.  
 step 3: run the commands.  
-Machine A:
+Desktop:
 ```sh
 export ROS_MASTER_URI=http://192.180.1.5:11311
 export ROS_IP=192.180.1.5
 ```
-Machine B:
+Laptop:
 ```sh
 export ROS_MASTER_URI=http://192.180.1.5:11311
 export ROS_IP=192.180.1.10

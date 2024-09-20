@@ -162,7 +162,7 @@ class RoboticArmController:
 
         current_position = np.array(self.ee_pose[:3])
 
-        position_threshold = 0.3
+        position_threshold = 0.2
 
         self.saved_pose = np.array(self.hand_pose)
         update_pose = False

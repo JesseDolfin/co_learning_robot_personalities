@@ -135,7 +135,7 @@ class RoboticArmControllerNode:
         Go to the home position and grab the object
         '''
 
-        rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
+        rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: Home")
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
         self.hand_controller.send_goal('open',self.hand_time)
@@ -304,7 +304,7 @@ class RoboticArmControllerNode:
         self.terminated = False
         self.reset_msg()
         self.robot_arm_controller.hand_pose = None
-        #self.rl_agent.print_q_table()
+        self.rl_agent.print_q_table()
         if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor *.9, 0.20) # e-decay
         return
@@ -328,7 +328,7 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='impatient',fake=True)
+        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='follower',fake=True)
         node.start_episode()
 
     except rospy.ROSInterruptException:
