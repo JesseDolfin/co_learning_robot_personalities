@@ -66,7 +66,7 @@ class RoboticArmController:
     def create_goal(self, position, nullspace=None, goal_time = None, mode = None):
         goal = ControllerGoal()
 
-        if goal_time == None:
+        if goal_time is None:
             if self.type == 'fast':
                 goal.time = 5 - 3.0
             elif self.type == 'slow':
@@ -83,7 +83,7 @@ class RoboticArmController:
             goal.stiffness = stiffness
             goal.damping = (2 * np.sqrt(stiffness)).tolist()
         elif len(position) == 6:
-            if mode == None:
+            if mode is None:
                 goal.mode = 'ee_cartesian_ds'
                 if self.type == 'fast':
                     stiffness = [220.0, 220.0, 220.0, 15.0, 15.0, 15.0]
@@ -103,7 +103,7 @@ class RoboticArmController:
         goal.precision = 2e-1
         goal.rate = 20
 
-        if nullspace == None:
+        if nullspace is None:
             goal.nullspace_reference = [0,0,0,0,0,0,0]
             goal.nullspace_gain = [0,0,0,0,0,0,0]
         else:
@@ -131,12 +131,13 @@ class RoboticArmController:
 
     def move_towards_hand(self,update = False):
         rospy.loginfo("Moving towards hand")
-
-        if update: # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand() until the orientation is reset
+        # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand() until the orientation is reset
+        if update:
             self.fixed_orientation = self.ee_pose[3:]
             self.q_save = self.q
             if self.q[4] < -1:
-                self.fixed_orientation[1] = -self.fixed_orientation[1] # euler angles have 2 solutions causing flipping of axis. This is not a fix, specific patch for 2 predetermined locations
+                # euler angles have 2 solutions causing flipping of axis. This is not a fix, specific patch for 2 predetermined locations
+                self.fixed_orientation[1] = -self.fixed_orientation[1] 
             fixed_position = self.ee_pose[0:3]
 
             if np.array(self.hand_pose).all() == 0:
@@ -145,11 +146,9 @@ class RoboticArmController:
                 target_position_cam = np.array(self.hand_pose)
                 target_position_arm = self.frame_transform(target_position_cam)
 
-            if np.array(self.hand_pose).all() == 0: # When initially no hand is detected keep checking for hand in the loop before moving on
-                wait_for_hand = True
-            else:
-                wait_for_hand = False
-
+            # When initially no hand is detected keep checking for hand in the loop before moving on
+            wait_for_hand = np.array(self.hand_pose).all() == 0 
+    
             self.save_target = None
         else:
             self.q_save = None
@@ -169,7 +168,7 @@ class RoboticArmController:
 
 
         while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand: 
-            if not np.array(self.hand_pose).all()==0:   # When a hand is in the workspace
+            if np.array(self.hand_pose).all() != 0:  # When a hand is in the workspace
                 update_pose = np.linalg.norm(np.array(self.hand_pose) - self.saved_pose) > 0.0 # Only update the pose when the hand is far away enough AND the hand is still in the workspace
                 wait_for_hand = False # We can stop waiting for a hand (if hand disappears again the robot should still go to previous hand location)
                 if update_pose: # Make sure to update the pose before transforming and sending it because if this is the transition from no hand to hand frame saved pose = [0,0,0]
@@ -247,7 +246,6 @@ class RoboticArmController:
                                 [-0.6,0.3,2.1],
                                 [-0.5,0.4,2.0]])
                            
-
         while not rospy.is_shutdown():
             if experiment == 0:
                 if count == 0:
@@ -333,16 +331,16 @@ class RoboticArmController:
 
 
             if experiment == 4:
-                 if initialise:
-                     self.send_position_command(rot,None)
+                if initialise:
+                    self.send_position_command(rot,None)
 
-                     fixed_orientation = self.ee_pose[3:]
-                     fixed_orientation[1] = -fixed_orientation[1] #BUG
-                     
-                     initialise = False
+                    fixed_orientation = self.ee_pose[3:]
+                    fixed_orientation[1] = -fixed_orientation[1] #BUG
+                    
+                    initialise = False
 
                  
-                 target_positions= {0: [-0.32212266, -0.53631857,  0.42099988],
+                target_positions= {0: [-0.32212266, -0.53631857,  0.42099988],
                                     1: [-0.36131503, -0.5264838,   0.49599993],
                                     2: [-0.33462706, -0.65330973,  0.26599991],
                                     3: [-0.49206611, -0.63994768,  0.14599978],
@@ -350,16 +348,16 @@ class RoboticArmController:
                                     5: [-0.14201932, -0.28211292,  0.1739999 ],
                                     6: [-0.21154168, -0.2970249,   0.08799993]}
                  
-                 goal = target_positions[count] + fixed_orientation
+                goal = target_positions[count] + fixed_orientation
 
-                 print(target_positions[count])
+                print(target_positions[count])
                  
-                 self.send_position_command(goal,None,mode='ee_cartesian')
+                self.send_position_command(goal,None,mode='ee_cartesian')
 
-                 count += 1
+                count += 1
 
-                 if count == 7:
-                     count = 0
+                if count == 7:
+                    count = 0
 
 
 if __name__=='__main__':

@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
 
-import signal
-import sys
-import rospy
-import numpy as np
-import os
-from std_msgs.msg import String
-from typing import Literal
-import random
-import time
-
 # I give up, modifying the python path to recognize the package.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
@@ -20,19 +10,35 @@ from co_learning_messages.msg import secondary_task_message, hand_pose
 from co_learning_controllers.src.hand_controller import SoftHandController
 from q_learning.src.QLearnAgent import QLearningAgent
 from q_learning.src.CoLearnEnvironment import CoLearn
-from co_learning_controllers.src.robot_controller import RoboticArmController 
+from co_learning_controllers.src.robot_controller import RoboticArmController
+
+import signal
+import sys
+import os
+from typing import Literal
+import random
+
+from std_msgs.msg import String
+import rospy
+import numpy as np
+
+
 
 HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
-    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, personality_type: Literal['leader', 'follower', 'cautious','impatient','baseline'] = 'baseline',fake=False):
+    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, 
+                 personality_type: Literal['leader', 'follower', 'cautious','impatient',
+                                           'baseline'] = 'baseline',fake=False):
         self.num_test_runs = num_test_runs
         
         if personality_type == 'leader':
-            self.exploration_factor = 0.8 # Leader handles on own initiative (high exploration in the beginning with decaying exploration factor)
+            # Leader handles on own initiative (high exploration in the beginning with decaying exploration factor)
+            self.exploration_factor = 0.8 
         elif personality_type == 'follower':
-            self.exploration_factor = 0.2 # Follower relies more on the input from the human (will follow the actions of the human quicker)
+            # Follower relies more on the input from the human (will follow the actions of the human quicker)
+            self.exploration_factor = 0.2 
         else:
             self.exploration_factor = exploration_factor
 
@@ -60,16 +66,18 @@ class RoboticArmControllerNode:
 
         self.env = CoLearn()
         if personality_type == 'leader':
-            self.env.type = 'leader'  # Has preference for a 'serve' orientation and thus has increased reward for entering this state
+            # Has preference for a 'serve' orientation and thus has increased reward for entering this state
+            self.env.type = 'leader'
         
         self.rl_agent = QLearningAgent(env=self.env)
+        # Follower has increased learning rate which means that it will more quickly change its decisions based on the human
         if personality_type == 'follower':
-            self.rl_agent.type = 'follower' # Follower has increased learning rate which means that it will more quickly change its decisions based on the human
+            self.rl_agent.type = 'follower'
 
         self.hand_controller = SoftHandController(fake)
-        self.robot_arm_controller = RoboticArmController()  
+        self.robot_arm_controller = RoboticArmController()
         if personality_type == 'impatient':
-            self.robot_arm_controller.type = 'fast' 
+            self.robot_arm_controller.type = 'fast'
             self.hand_time = 1
         elif personality_type == 'cautious':
             self.robot_arm_controller.type = 'slow'
@@ -77,9 +85,9 @@ class RoboticArmControllerNode:
         else:
             self.hand_time = 2
 
-        self.alpha = 0.15  
-        self.gamma = 0.8  
-        self.Lamda = 0.3  
+        self.alpha = 0.15
+        self.gamma = 0.8
+        self.Lamda = 0.3
 
         self.messages = {
                             'impatient': [
@@ -180,7 +188,6 @@ class RoboticArmControllerNode:
 
                 rate.sleep()
                 # read leader follower papers? role shifting? -> ayse kuchukyilmaz. 
-            return
 
 
     def phase_2(self):
@@ -211,13 +218,10 @@ class RoboticArmControllerNode:
             self.hand_controller.send_goal('partial',self.hand_time)
         elif self.action == 7:
             self.hand_controller.send_goal('close',self.hand_time)
-        return
 
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
         self.rl_agent.experience_replay(self.alpha, self.gamma, self.Lamda)
-        return
-
 
     def check_end_condition(self):
         '''
@@ -238,7 +242,6 @@ class RoboticArmControllerNode:
             # If it is the end of the experiment send the arm upright to signal the end
             _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
             self.run = False
-            return
 
     def send_message(self, phase=None):
         if self.msg is not None:
@@ -307,7 +310,6 @@ class RoboticArmControllerNode:
         self.rl_agent.print_q_table()
         if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor *.9, 0.20) # e-decay
-        return
 
     def reset_msg(self):
         '''
@@ -324,7 +326,7 @@ class RoboticArmControllerNode:
         self.original_orientation = None
         self.successful_handover = 0
         self.send_message()
-        return
+
 
 if __name__ == '__main__':
     try:
