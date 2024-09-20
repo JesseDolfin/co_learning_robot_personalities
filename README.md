@@ -155,18 +155,37 @@ roslaunch co_learning_controllers co_learning_test_setup.launch
 ```
 
 This will start the simulation and the required controller nodes / secondary task node.
-
 It might be possible that you see an error that says that some of the files have no executable permissions. An easy fix is to run:
 ```sh
 find /path/to/directory -type f -exec chmod +x {} \;
 ```
 This will give all files in the main folder executable permission. Don't run this unless you trust all the repos installed! 
 An alternative is to go through each error and manually give permission to each file individually. 
-
 If you want to start this on the real robot run the command with the prefix `simulation:=false`:
 ```sh
 roslaunch co_learning_controllers co_learning_test_setup.launch simulation:=false
 ```
+
+
+### The full setup is as follows
+Follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
+Then on machine A source the workspace in a terminal and run the following:
+```sh
+roslaunch co_learning_controllers co_learning_test_setup.launch simulation:=false control_node:=false secondary_task:=false
+```
+
+In another terminal source the workspace and run the following:
+```sh
+rosrun co_learning_controllers control_node.py
+```
+
+On machine B connect the ethernet cable from the switch to the machine, source the workspace and run the following:
+```sh
+rosrun co_learning_secondary_task secondary_task.py 
+```
+
+After all of this start the FRIOverlay app in automatic mode on the tablet.  
+The robot arm should now be moving, to start the experiment simply start the simulation on machine B.
 
 _For more examples, please refer to the [Documentation](https://google.com)_
 
