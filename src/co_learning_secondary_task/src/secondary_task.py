@@ -749,6 +749,7 @@ class secondary_task():
                     else:
                         self.start_handover = True
                         self.draw_progress_bar(0)
+                        self.bar_released_too_soon = False
                     if self.update_draining_start:
                         self.update_draining_start = False
                         self.send_task_status(start=1)
@@ -852,9 +853,11 @@ class secondary_task():
         if self.bar_pressed and not self.render_bar and not self.start_handover:
             self.task_failed = True
             self.bar_released_too_soon = True
-            self.send_task_status(success = -1)
+            self.send_task_status(success=-1)
             self.spine_hit_count += 1
             self.reset = False
+        elif self.start_handover:
+            self.bar_released_too_soon = False
             
 
         # Handles the logic of the handover phase
