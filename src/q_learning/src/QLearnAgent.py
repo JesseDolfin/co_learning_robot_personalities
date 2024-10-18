@@ -81,7 +81,7 @@ class QLearningAgent():
                 self.experience_update(self.state,action,next_state,reward,valid,phase)
 
                 if reward != 0 and valid:
-                    self.update_q_table(self, self.state, action, reward, next_state, alpha, gamma, Lambda) # To make sure the agent does not get stuck in a loop (closing hand when it is already closed)
+                    self.update_q_table(self.state, action, reward, next_state, alpha, gamma, Lambda) # To make sure the agent does not get stuck in a loop (closing hand when it is already closed)
 
                 self.state = next_state
 
