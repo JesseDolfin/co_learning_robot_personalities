@@ -21,7 +21,7 @@ class SoftHandController:
             try:
                 rospy.init_node('hand_controller')
             except rospy.exceptions.ROSException as e:
-                rospy.logwarn(f"Cannot initialize node 'hand_controller': {e}")
+                rospy.logwarn(f"Cannot initialize node 'hand_controller' as it has already been initialized")
 
             # Initialize publisher and subscriber
             self.pub = rospy.Publisher(
