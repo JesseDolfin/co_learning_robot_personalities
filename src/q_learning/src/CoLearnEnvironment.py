@@ -18,7 +18,7 @@ class CoLearn(Env):
         - Go to Serve                       : 2, 3
         - Go to Drop                        : 2, 4
         - Open hand                         : 3, 5
-        - Open hand partially                : 3, 6
+        - Open hand partially               : 3, 6
         - Close hand                        : 3, 7
         Where the first number indicates the phase
 
@@ -50,6 +50,7 @@ class CoLearn(Env):
         self.observation_space = Discrete(self.observation_size)
 
         self.phase = 0
+        self.phase_size = 4
 
         self.state_size = 17
         self.state = 0 
@@ -178,6 +179,7 @@ class CoLearn(Env):
         return self.state, self.reward, self.terminated, self.info
 
     def obtain_reward(self,action):
+        self.reward = 0
         if self.ros_running:
             if self.previous_phase == 3 and action == 5:
                 # This means that the hand is now open
@@ -195,9 +197,11 @@ class CoLearn(Env):
             if self.type == 'leader' and self.state in [5,7]:
                 self.reward += 10 # robot prefers the state 'serve'
 
-            if self.previous_state not in [11,14] and action == 0:
-                # High penalty if the arm decides to go to home position before opening hand fully
-                self.reward -= self.observation_size * 100 
+            if self.previous_state in [12,15] and action in [6,7]:
+                self.reward -= 2 # Incentive not to close the hand
+
+            if self.previous_state in [13,16] and action == 7:
+                self.reward -= 2 # Incentive not to keep the hand closed
 
         else:
             self.reward = 0 # OFFLINE REWARD FUNCTION GOES HERE

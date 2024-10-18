@@ -27,7 +27,7 @@ HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
 INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
-    def __init__(self, num_test_runs: int, exploration_factor: float = 0.25, 
+    def __init__(self, num_test_runs: int, exploration_factor: float = 0.9, 
                  personality_type: Literal['leader', 'follower', 'cautious','impatient',
                                            'baseline'] = 'baseline',fake=False):
         self.num_test_runs = num_test_runs
@@ -37,7 +37,7 @@ class RoboticArmControllerNode:
             self.exploration_factor = 0.8 
         elif personality_type == 'follower':
             # Follower relies more on the input from the human (will follow the actions of the human quicker)
-            self.exploration_factor = 0.2 
+            self.exploration_factor = 0.6 
         else:
             self.exploration_factor = exploration_factor
 
@@ -61,7 +61,7 @@ class RoboticArmControllerNode:
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
         self.pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
-        self.pub_text = rospy.Publisher('Task_text', String, queue_size=1)
+        #self.pub_text = rospy.Publisher('Task_text', String, queue_size=1) # Disabled
 
         self.env = CoLearn()
         if personality_type == 'leader':
@@ -183,7 +183,7 @@ class RoboticArmControllerNode:
                     if message_text:
                         message = String()
                         message.data = message_text
-                        self.pub_text.publish(message)
+                        #self.pub_text.publish(message)
 
                 rate.sleep()
                 # read leader follower papers? role shifting? -> ayse kuchukyilmaz. 
@@ -236,7 +236,7 @@ class RoboticArmControllerNode:
             if message_text:
                 message = String()
                 message.data = message_text
-                self.pub_text.publish(message)
+                #self.pub_text.publish(message)
             
         else:
             # If it is the end of the experiment send the arm upright to signal the end
@@ -298,7 +298,7 @@ class RoboticArmControllerNode:
     def convert_action_to_orientation(self, action:int):
         positions = {
             3: np.deg2rad([107, -47, -11, 100, -82, -82, -35]), # Serve
-            4: np.deg2rad([55, -40, -8, 82, 5, 20, 0]) # Drop
+            4: np.deg2rad([55, -40, -8, 82, 5, 50, 0]) # Drop
         }
         return positions.get(action, INTERMEDIATE_POSITION) # If wrong action is picked somehow, send the arm to the safest position
 
@@ -308,8 +308,14 @@ class RoboticArmControllerNode:
         self.reset_msg()
         self.robot_arm_controller.hand_pose = None
         self.rl_agent.print_q_table()
+        
+        # e-decay
         if self.type == 'leader':
-            self.exploration_factor = max(self.exploration_factor *.9, 0.20) # e-decay
+            self.exploration_factor = max(self.exploration_factor *.9, 0.20) 
+        elif self.type == 'follower':
+            self.exploration_factor = max(self.exploration_factor *.80, 0.05) 
+        else:
+            self.exploration_factor = max(self.exploration_factor *.95, 0.10) 
 
     def reset_msg(self):
         '''

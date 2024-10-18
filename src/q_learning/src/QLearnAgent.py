@@ -79,6 +79,10 @@ class QLearningAgent():
                 valid = info.get('valid',False)
 
                 self.experience_update(self.state,action,next_state,reward,valid,phase)
+
+                if reward != 0 and valid:
+                    self.update_q_table(self, self.state, action, reward, next_state, alpha, gamma, Lambda) # To make sure the agent does not get stuck in a loop (closing hand when it is already closed)
+
                 self.state = next_state
 
             self.phase = phase
@@ -134,8 +138,7 @@ class QLearningAgent():
             valid = self.experience["valid"][i]
             
             if valid: # When a valid action is taken
-                reward = last_reward / self.env.state_size # Increase the reward for this transition by the final reward per phase (if handover was successful this approach will reward the full trajectory)
-                #print(f"State:{state}, Reward:{reward}")
+                reward = last_reward / self.env.phase_size # Increase the reward for this transition by the final reward per phase (if handover was successful this approach will reward the full trajectory)
                 self.update_q_table(state, action, reward, next_state, alpha, gamma, Lambda)
                 
                                                            

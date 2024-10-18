@@ -728,7 +728,7 @@ class secondary_task():
 
     def render_screen(self):
         def draw_layers(screen, colors, layers, border_radius):
-            pygame.draw.rect(self.screenVR, (0,0,0), pygame.Rect(0, 440, 550, 60),  2)
+            #pygame.draw.rect(self.screenVR, (0,0,0), pygame.Rect(0, 440, 550, 60),  2)
             for color, layer in zip(colors, layers):
                 pygame.draw.rect(screen, color, layer, border_radius=border_radius)
 
@@ -766,7 +766,7 @@ class secondary_task():
 
             keep_mouse_in_fluid_texts = [
                 "Don't remove the needle from the epidural space until", 
-                "the robot has provided a piece of cotton!",
+                "the robot has provided the object!",
                 "You can release the spacebar now!"
             ]
             y_offset = 60
@@ -881,7 +881,7 @@ class secondary_task():
             self.screenVR.blit(text_surface, (0, y_offset))
             y_offset += 20
 
-        self.check_print_text()
+        #self.check_print_text() Disabled one-way communication
             
             
         # Fuse it back together
