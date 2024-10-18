@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import rosgraph
 import rospy
-from trajectory_msgs.msg import JointTrajectoryPoint
+from trajectory_msgs.msg import JointTrajectoryPoint,JointTrajectory
 from sensor_msgs.msg import JointState
 import sys
 import numpy as np
@@ -26,6 +26,7 @@ class SoftHandController:
                 rospy.loginfo('Waiting for joint trajectory action')
                 self.client.wait_for_server()
                 rospy.loginfo('Found joint trajectory action!')
+                self.pub = rospy.Publisher('/qbhand1/control/qbhand1_synergy_trajectory_controller/command',JointTrajectory,queue_size=10)
                 rospy.Subscriber('/qbhand1/control/joint_states', JointState, self.callback)
             else:
                 print("ROS is offline! Shutting down")
@@ -47,9 +48,11 @@ class SoftHandController:
      
         goal = self.get_qbhand_goal(mode, duration)
         if not self.fake:
-            self.client.wait_for_server()
-            self.client.send_goal(goal)
-            self.client.wait_for_result()
+            # self.client.wait_for_server()
+            # self.client.send_goal(goal)
+            # self.client.wait_for_result()
+            self.pub.publish(goal)
+
         time.sleep(duration)
  
 
@@ -61,8 +64,9 @@ class SoftHandController:
         else:
             print(f"[MOCK] Generating mock trajectory for mode:{mode}")
 
-        goal = FollowJointTrajectoryGoal()
-        goal.trajectory.joint_names = ['qbhand1_synergy_joint']
+        goal = JointTrajectory()
+        goal.header.stamp = rospy.Time.now()
+        goal.joint_names = ['qbhand1_synergy_joint']
 
         if mode == 'open':
             tp = np.linspace(self.position, 0.00, n_interval)
@@ -79,7 +83,7 @@ class SoftHandController:
             point = JointTrajectoryPoint()
             point.time_from_start = rospy.Duration(float(tt[i]))
             point.positions = [float(tp[i])]
-            goal.trajectory.points.append(point)
+            goal.points.append(point)
 
         return goal
 

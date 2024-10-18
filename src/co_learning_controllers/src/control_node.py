@@ -10,6 +10,7 @@ if workspace_root not in sys.path:
     sys.path.append(workspace_root)
 
 import argparse
+import time
 
 from co_learning_messages.msg import secondary_task_message, hand_pose
 from co_learning_controllers.src.hand_controller import SoftHandController
@@ -148,6 +149,7 @@ class RoboticArmControllerNode:
         _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
         _ = self.robot_arm_controller.send_position_command(HOME_POSITION,None)
         self.hand_controller.send_goal('open',self.hand_time)
+        time.sleep(2)
         self.hand_controller.send_goal('close',self.hand_time)
 
     def phase_1(self):
