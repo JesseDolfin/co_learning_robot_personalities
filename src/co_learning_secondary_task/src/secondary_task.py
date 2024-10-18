@@ -432,6 +432,7 @@ class secondary_task():
     def rotMat(self,angle):
         transformation_matrix = np.array([[np.cos(-angle), np.sin(-angle)],[-np.sin(-angle),  np.cos(-angle)]])
         return transformation_matrix
+    
 
     def compute_line(self,begin_pos, end_pos):
         x1 = begin_pos[0]
@@ -535,6 +536,8 @@ class secondary_task():
             
             self.previous_cursor = self.cursor
             self.clock.tick(self.FPS)
+
+    
 
     def update_rotation(self):
         if self.rotate_up:
@@ -740,6 +743,16 @@ class secondary_task():
             for rect in rects:
                 screen.blit(layer_image, (rect[0], rect[1]))
 
+        def display_timer():
+            if self.time_start is not None:
+                time_color = (255, 0, 0) if self.time_left <= 10 else (0, 0, 0)
+                if self.start_handover:
+                    text = f"Time left for handover: {self.time_left:.2f}s"
+                else:
+                    text = f"Time left: {self.time_left:.2f}s"
+                text_time = self.font.render(text, True, time_color)
+                self.screenVR.blit(text_time, (0, 478 if self.time_left <= 10 else 480))
+
         def handle_draining():
             if self.collision_dict['Cerebrospinal fluid one'] and self.i > 350 and self.visual_feedback:
                 if self.render_bar:
@@ -788,10 +801,6 @@ class secondary_task():
                 self.spine_hit_count += 1
                 self.reset = False
                 self.task_failed = True
-
-            time_color = (255, 0, 0) if self.time_left <= 10 else (0, 0, 0)
-            text_time = self.font.render(f"Time left for handover: {self.time_left:.2f}s", True, time_color)
-            self.screenVR.blit(text_time, (0, 478 if self.time_left <= 10 else 480))
 
         # Render the haptic surface
         self.screenHaptics.fill(self.cWhite)
@@ -888,7 +897,7 @@ class secondary_task():
             y_offset += 20
 
         #self.check_print_text() Disabled one-way communication
-            
+        display_timer()
             
         # Fuse it back together
         self.window.blit(self.screenHaptics, (0, 0))
@@ -898,6 +907,7 @@ class secondary_task():
         if self.haptic_feedback and self.visual_feedback and self.collision_dict['Spinal cord']:
             self.spinal_coord_collision_hit = True
             
+     
 
         pygame.display.flip()
 
