@@ -2,6 +2,7 @@
 
 import sys
 import time
+from tracemalloc import start
 from typing import Union
 
 import numpy as np
@@ -38,6 +39,7 @@ class RoboticArmController:
         self.goal_time = 5.0
         self.hand_pose = [0, 0, 0]
         self.type = 'none'
+        self.save_target = None
 
         try:
             ns = rospy.get_param('/namespaces')
@@ -188,21 +190,35 @@ class RoboticArmController:
             bool: True if human interaction is detected, False otherwise.
         """
         rospy.loginfo(f"Monitoring for human interaction for {duration} seconds...")
-        start_time = rospy.Time.now()
+        start_time = time.time()
         rate = rospy.Rate(10)  # 10 Hz monitoring rate
         interaction_detected = False
-        effort_threshold = 5.0  # Adjust this threshold based on your robot
+        delta_threshold = 1  # Adjust this threshold based on your robot
+        previous_effort_magnitude = None
 
-        while (rospy.Time.now() - start_time).to_sec() < duration:
+        
+
+        while time.time() - start_time < duration:
+            print(time.time()-start_time < duration)
             effort_magnitude = self._effort_mag_save
-            rospy.loginfo(f"Effort magnitude: {effort_magnitude:.2f}")
-            if effort_magnitude > effort_threshold:
-                interaction_detected = True
-                rospy.loginfo("Human interaction detected based on effort magnitude.")
-                break
+            if previous_effort_magnitude is not None:
+                effort_delta = abs(effort_magnitude - previous_effort_magnitude)
+                rospy.loginfo(f"Effort delta: {effort_delta:.2f}")
+                if effort_delta > delta_threshold:
+                    print("effort_delta",effort_delta)
+                    print("delta_threshold",delta_threshold)
+                    interaction_detected = True
+                    rospy.loginfo("Human interaction detected based on effort delta.")
+                    break
+            else:
+                rospy.loginfo(f"Effort magnitude: {effort_magnitude:.2f}")
+
+            previous_effort_magnitude = effort_magnitude
             rate.sleep()
 
         return interaction_detected
+
+
 
     def move_towards_hand(self, update=False):
         """
@@ -280,6 +296,7 @@ class RoboticArmController:
 
         rospy.loginfo("Reached the hand position")
         rospy.loginfo("Waiting for 5 seconds to detect human interaction...")
+        time.sleep(2) # give the arm time to settle
         interaction_detected = self.detect_human_interaction(duration=5.0)
 
         msg = Bool()
@@ -421,14 +438,14 @@ class RoboticArmController:
             if experiment == 3:
                 serve = np.deg2rad([107, -47, -11, 100, -82, -82, -35]) # Serve
                 drop = np.deg2rad([55, -40, -8, 82, 5, 20, 0]) # Drop
-                self.send_position_command(drop,None)
+                self.send_position_command(serve,None)
                 #print("self.q for drop:",self.q)
-                self.move_towards_hand()
+                self.move_towards_hand(update=True)
                 
 
-                # self.send_position_command(serve,None)
+                self.send_position_command(serve,None)
                 # print("self.q for serve:",self.q)
-                # self.move_towards_hand()
+                self.move_towards_hand(update=True)
                
                 #self.move_towards_hand()
 
@@ -466,7 +483,7 @@ class RoboticArmController:
 if __name__=='__main__':
     rospy.init_node("test")
     controller = RoboticArmController()
-    controller.send_position_command([0,0,0,0,0,0,0],None)
+    #controller.send_position_command([0,0,0,0,0,0,0],None)
     #controller.test(0)
     #while True:
         #controller.send_position_command([0,0,0,0,0,0,0],None)
@@ -476,6 +493,6 @@ if __name__=='__main__':
     # #     controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
     #     controller.move_towards_hand()
     
-    #controller.test(3)
+    controller.test(3)
     #controller.test(1)
     #print(controller.frame_transform(np.array([0.8,0.2,2.6])))

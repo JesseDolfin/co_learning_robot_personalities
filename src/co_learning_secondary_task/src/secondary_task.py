@@ -121,7 +121,7 @@ class secondary_task():
         self.cWhite     = (255,255,255)
         self.cGreen     = (0,230,0)
 
-        self.time_start = time.time() +100
+        self.time_start = None
 
         self.clock = pygame.time.Clock()
 
@@ -195,7 +195,7 @@ class secondary_task():
 
         self.run = True
 
-        self.max_time = 30 # seconds
+        self.max_time = 60 # seconds
         self.time_left = self.max_time
 
         self.max_needle_pressure = 6000
@@ -208,7 +208,6 @@ class secondary_task():
         self.rotate_down = False           
         self.update_status = True
         self.start_handover = False
-        self.update_time = True
         self.needle_removed_too_soon_update = True
 
         self.xc,self.yc = self.screenVR.get_rect().center ##center of the screen
@@ -514,6 +513,11 @@ class secondary_task():
         while self.run:
             self.process_events()  # Keyboard events
 
+            if self.time_start is not None:
+                self.time_left = self.max_time - (time.time() - self.time_start)
+                if self.time_left < 0:
+                    self.time_left = 0
+
             if self.success:
                 self.success_count += 1
                 self.send_task_status(success=1, time=self.time_left)
@@ -740,6 +744,11 @@ class secondary_task():
             if self.collision_dict['Cerebrospinal fluid one'] and self.i > 350 and self.visual_feedback:
                 if self.render_bar:
                     self.bar_pressed = True
+                    if self.update_draining_start:
+                        self.update_draining_start = False
+                        self.send_task_status(start=1)
+                        if self.time_start is None:
+                            self.time_start = time.time()
                     self.fluid -= 1
                     if self.fluid > 0:
                         fluid_left = round(self.fluid / 100, 2)
@@ -758,9 +767,6 @@ class secondary_task():
                     self.screenVR.blit(space_bar_text, (0, 60))
 
         def handle_handover():
-            time_elapsed = time.time() - self.time_start
-            self.time_left = self.max_time - time_elapsed
-
             if self.update_status:
                 self.send_task_status(end=1)
                 self.update_status = False
@@ -835,9 +841,6 @@ class secondary_task():
         if self.haptic_feedback:
             handle_draining()
 
-        if self.start_handover and self.update_time:
-            self.time_start = time.time()
-            self.update_time = False
 
         if self.bar_pressed and not self.start_handover:
             if not self.collision_dict['Cerebrospinal fluid one']:
