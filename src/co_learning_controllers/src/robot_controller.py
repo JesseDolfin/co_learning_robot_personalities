@@ -1,36 +1,59 @@
 #!/usr/bin/env python3
 
-import rospy
-import actionlib
-import numpy as np
-from sensor_msgs.msg import JointState
-from cor_tud_msgs.msg import ControllerAction, ControllerGoal
-from scipy.spatial.transform import Rotation as R
-from robot.robot import Robot
-from co_learning_messages.msg import hand_pose
-from std_msgs.msg import Bool
+import sys
 import time
 from typing import Union
 
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+try:
+    import rospy
+    import actionlib
+    from sensor_msgs.msg import JointState
+    from std_msgs.msg import Bool
+    from cor_tud_msgs.msg import ControllerAction, ControllerGoal
+    from co_learning_messages.msg import hand_pose
+except ImportError as e:
+    print(f"Import Error: {e}")
+    sys.exit(1)
+
+try:
+    from robot.robot import Robot
+except ImportError as e:
+    rospy.logerr(f"Could not import Robot class: {e}")
+    Robot = None
 
 # Constants
-HOME_POSITION = [np.pi/2, np.pi/4, 0, -np.pi/4, 0, np.pi/4, 0]
-INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
+HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
+INTERMEDIATE_POSITION = [np.pi / 2, 0, 0, 0, 0, 0, 0]
+
 
 class RoboticArmController:
     def __init__(self):
         self.q = None
-        self.goal_time = 5.0
+        self.q_dot = None
         self.ee_pose = [0, 0, 0, 0, 0, 0]
         self._effort_mag_save = 0
-        self.delta_save = 0
-        self.count = 0
-        ns = rospy.get_param('/namespaces')
+        self.goal_time = 5.0
+        self.hand_pose = [0, 0, 0]
+        self.type = 'none'
 
-        self.robot = Robot(model=ns.replace('/',''))
-        self.client = actionlib.SimpleActionClient(ns+'/torque_controller', ControllerAction)
-        rospy.Subscriber(ns+'/joint_states', JointState, self.joint_callback, queue_size=10)
-        rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
+        try:
+            ns = rospy.get_param('/namespaces')
+        except KeyError as e:
+            rospy.logerr(f"Parameter '/namespaces' not found: {e}")
+            sys.exit(1)
+
+        if Robot is not None:
+            self.robot = Robot(model=ns.replace('/', ''))
+        else:
+            rospy.logwarn("Robot class not available.")
+            self.robot = None
+
+        self.client = actionlib.SimpleActionClient(f"{ns}/torque_controller", ControllerAction)
+        self.joint_state_sub = rospy.Subscriber(f"{ns}/joint_states", JointState, self.joint_callback, queue_size=10)
+        self.hand_pose_sub = rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
         self.publish_human_input = rospy.Publisher('human_input', Bool, queue_size=1)
 
@@ -38,95 +61,115 @@ class RoboticArmController:
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
 
-        rospy.Rate(0.4).sleep() # Give enough time for the FRIoverlay app to start up
-
-        self.goal_time = 5.0
-        self.hand_pose = [0,0,0]
-
-        self.type = 'none'
-
-        self.initialise = True
-
+        rospy.sleep(2.5)  # Give enough time for the FRIoverlay app to start up
 
     def joint_callback(self, msg):
+        """Callback function for joint_states subscriber."""
         self.q = msg.position
         self.q_dot = msg.velocity
 
         effort = msg.effort
         effort_magnitude = np.linalg.norm(effort)
-        self.delta = abs(effort_magnitude-self._effort_mag_save)
         self._effort_mag_save = effort_magnitude
 
-        if self.robot is not None:
+        if self.robot is not None and self.q is not None:
             ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
 
-            translation = ee_T[:3,3]
-            rot_mat = ee_T[0:3, 0:3]
+            translation = ee_T[:3, 3]
+            rot_mat = ee_T[:3, :3]
             r = R.from_matrix(rot_mat)
             euler_angles = r.as_euler('xyz', degrees=False)
-            self.ee_pose = np.hstack((translation,np.flip(euler_angles)))
+            self.ee_pose = np.hstack((translation, np.flip(euler_angles)))
 
     def hand_pose_callback(self, msg):
+        """Callback function for hand_pose subscriber."""
         self.hand_pose = [msg.x, msg.y, msg.z]
-        self.orientation = msg.orientation
+        # self.orientation = msg.orientation  # Unused variable
 
-    def create_goal(self, position, nullspace=None, goal_time = None, mode = None):
+    def create_goal(self, position, nullspace=None, goal_time=None, mode=None):
+        """
+        Create a ControllerGoal based on the desired position.
+
+        Parameters:
+            position (list): Desired position, can be joint angles (length 7) or Cartesian pose (length 6).
+            nullspace (list, optional): Nullspace reference for redundancy resolution.
+            goal_time (float, optional): Duration for the goal.
+            mode (str, optional): Control mode.
+
+        Returns:
+            ControllerGoal: Configured goal object.
+        """
         goal = ControllerGoal()
 
         if goal_time is None:
             if self.type == 'fast':
-                goal.time = 5 - 3.0
+                goal.time = 2.0  # 5 - 3.0
             elif self.type == 'slow':
-                goal.time = 5 + 2.0
+                goal.time = 7.0  # 5 + 2.0
             else:
-                goal.time = 5
+                goal.time = 5.0
         else:
             goal.time = goal_time
 
-        # Auto select correct goal-mode based on input arguments
+        # Auto-select correct goal mode based on input arguments
         if len(position) == 7:
             goal.mode = 'joint_ds'
             stiffness = [100.0, 100.0, 50.0, 50.0, 25.0, 10.0, 10.0]
-            goal.stiffness = stiffness
-            goal.damping = (2 * np.sqrt(stiffness)).tolist()
         elif len(position) == 6:
             if mode is None:
                 goal.mode = 'ee_cartesian_ds'
                 if self.type == 'fast':
                     stiffness = [220.0, 220.0, 220.0, 15.0, 15.0, 15.0]
-                if self.type == 'slow':
+                elif self.type == 'slow':
                     stiffness = [150.0, 150.0, 150.0, 15.0, 15.0, 15.0]
                 else:
                     stiffness = [180.0, 180.0, 180.0, 15.0, 15.0, 15.0]
             elif mode == 'ee_cartesian':
                 goal.mode = mode
                 stiffness = [180.0, 180.0, 180.0, 15.0, 13.0, 13.0]
-                time.sleep(goal.time) # This mode does not wait for confirmation
-            goal.stiffness = stiffness
-            goal.damping = (2 * np.sqrt(stiffness)).tolist()
-        elif len(position) not in [6,7]:
-            raise ValueError("Requested position MUST be either all joint angles or the full cartesian position [x,y,z,rx,ry,rz]")
+                time.sleep(goal.time)  # This mode does not wait for confirmation
+            else:
+                rospy.logwarn(f"Unknown mode '{mode}'. Defaulting to 'ee_cartesian_ds'.")
+                goal.mode = 'ee_cartesian_ds'
+                stiffness = [180.0, 180.0, 180.0, 15.0, 15.0, 15.0]
+        else:
+            raise ValueError("Requested position must be either joint angles (length 7) or Cartesian pose (length 6).")
 
-        goal.precision = 2e-1
+        goal.stiffness = stiffness
+        goal.damping = (2 * np.sqrt(stiffness)).tolist()
+        goal.precision = 0.2
         goal.rate = 20
 
         if nullspace is None:
-            goal.nullspace_reference = [0,0,0,0,0,0,0]
-            goal.nullspace_gain = [0,0,0,0,0,0,0]
+            goal.nullspace_reference = [0] * 7
+            goal.nullspace_gain = [0] * 7
         else:
             goal.nullspace_reference = nullspace
-            goal.nullspace_gain = np.array([100,100,100,100,100,0,0])
+            goal.nullspace_gain = [100, 100, 100, 100, 100, 0, 0]
 
         goal.reference = position
-        goal.velocity_reference = np.zeros(6)
+        goal.velocity_reference = [0.0] * 6
 
         return goal
 
-    def send_position_command(self, position:Union[list, ControllerGoal], nullspace :list ,goal_time:int = None, mode:str=None):
-        if not isinstance(position,ControllerGoal):
-            goal = self.create_goal(position, nullspace,goal_time,mode)
+    def send_position_command(self, position: Union[list, ControllerGoal], nullspace: list = None, goal_time: float = None, mode: str = None):
+        """
+        Send a position command to the robot.
+
+        Parameters:
+            position (list or ControllerGoal): Desired position or pre-configured ControllerGoal.
+            nullspace (list, optional): Nullspace reference.
+            goal_time (float, optional): Duration for the movement.
+            mode (str, optional): Control mode.
+
+        Returns:
+            bool: True if the goal was sent successfully, False otherwise.
+        """
+        if not isinstance(position, ControllerGoal):
+            goal = self.create_goal(position, nullspace, goal_time, mode)
         else:
             goal = position
+
         try:
             self.client.wait_for_server()
             self.client.send_goal(goal)
@@ -136,26 +179,33 @@ class RoboticArmController:
             return False
         return True
 
-    def move_towards_hand(self,update = False):
+    def move_towards_hand(self, update=False):
+        """
+        Move the robot's end-effector towards the detected hand position.
+
+        Parameters:
+            update (bool): Whether to update the target based on the current hand position.
+        """
         rospy.loginfo("Moving towards hand")
-        # update gets called the very first time, if hand position is reached update may not be called again in subsequent call to move_towards_hand() until the orientation is reset
+
         if update:
             self.fixed_orientation = self.ee_pose[3:]
             self.q_save = self.q
-            if self.q[4] < -1:
-                # euler angles have 2 solutions causing flipping of axis. This is not a fix, specific patch for 2 predetermined locations
-                self.fixed_orientation[1] = -self.fixed_orientation[1] 
-            fixed_position = self.ee_pose[0:3]
 
-            if np.array(self.hand_pose).all() == 0:
+            # Correct for possible axis flipping
+            if self.q is not None and self.q[4] < -1:
+                self.fixed_orientation[1] = -self.fixed_orientation[1]
+
+            fixed_position = self.ee_pose[:3]
+
+            if np.all(np.array(self.hand_pose) == 0):
                 target_position_arm = fixed_position
             else:
                 target_position_cam = np.array(self.hand_pose)
                 target_position_arm = self.frame_transform(target_position_cam)
 
-            # When initially no hand is detected keep checking for hand in the loop before moving on
-            wait_for_hand = np.array(self.hand_pose).all() == 0 
-    
+            # When initially no hand is detected, keep checking before moving on
+            wait_for_hand = np.all(np.array(self.hand_pose) == 0)
             self.save_target = None
         else:
             self.q_save = None
@@ -167,79 +217,73 @@ class RoboticArmController:
             target_position_arm = self.frame_transform(np.array(self.hand_pose))
 
         current_position = np.array(self.ee_pose[:3])
-
         position_threshold = 0.2
-
         self.saved_pose = np.array(self.hand_pose)
         update_pose = False
 
+        while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand:
+            if np.any(np.array(self.hand_pose) != 0):  # When a hand is in the workspace
+                hand_movement = np.linalg.norm(np.array(self.hand_pose) - self.saved_pose)
+                update_pose = hand_movement > 0.0  # Update pose if hand moved significantly
+                wait_for_hand = False  # Stop waiting as the hand is detected
 
-        while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand: 
-            if np.array(self.hand_pose).all() != 0:  # When a hand is in the workspace
-                update_pose = np.linalg.norm(np.array(self.hand_pose) - self.saved_pose) > 0.0 # Only update the pose when the hand is far away enough AND the hand is still in the workspace
-                wait_for_hand = False # We can stop waiting for a hand (if hand disappears again the robot should still go to previous hand location)
-                if update_pose: # Make sure to update the pose before transforming and sending it because if this is the transition from no hand to hand frame saved pose = [0,0,0]
+                if update_pose:
                     self.saved_pose = np.array(self.hand_pose)
-                target_position_arm = self.frame_transform(np.array(self.saved_pose)) # self.hand_pose is in camera frame, get it in robot frame
-                target_position_arm[2] = 0.1 if target_position_arm[2] < 0.1 else target_position_arm[2] # Make sure the robot never slams into the table
-                # rospy.loginfo(f"saved_pose=:{[f'{x:.3f}' for x in saved_pose]}")
-                # rospy.loginfo(f"current pose=:{[f'{x:.3f}' for x in np.array(self.hand_pose)]}")
-                # rospy.loginfo(f"target_position_arm=:{[f'{x:.3f}' for x in target_position_arm]}")
-                # rospy.loginfo(f"current_position_arm=:{[f'{x:.3f}' for x in np.array(self.ee_pose[:3])]}")
-            
+
+                target_position_arm = self.frame_transform(self.saved_pose)
+                target_position_arm[2] = max(target_position_arm[2], 0.1)  # Prevent collision with the table
+
             error = np.linalg.norm(target_position_arm - current_position)
-            rospy.loginfo(f"error norm=:{f'{error:.3f}'}, must be less than:{position_threshold}")
+            rospy.loginfo(f"Error norm: {error:.3f}, threshold: {position_threshold}")
 
-            target_pose = np.hstack((target_position_arm,self.fixed_orientation)) 
+            target_pose = np.hstack((target_position_arm, self.fixed_orientation))
 
-            goal_time = 2
+            goal_time = 2.0
             if self.type == 'fast':
-                goal_time - 1
-            if self.type == 'slow':
-                goal_time + 1
-            
+                goal_time -= 1.0
+            elif self.type == 'slow':
+                goal_time += 1.0
 
             self.save_target = target_position_arm
 
-          
-            #rospy.loginfo(f"Test value for human input:{abs(np.linalg.norm(np.array(self.ee_pose[:2]) - self.frame_transform(np.array(self.hand_pose))[:2])-1)}")
-
-            if update_pose: # Only send the new command when the hand is updated (stops jitter)
+            if update_pose:
                 self.send_position_command(target_pose, self.q_save, goal_time)
             else:
-                rospy.Rate(1).sleep() # Dynamically allocate the required sleep time in the while loop
+                rospy.sleep(1.0)  # Sleep for 1 second
 
-            current_position = np.array(self.ee_pose[:3]) # After sending the command update the position
+            current_position = np.array(self.ee_pose[:3])  # Update the current position
 
         rospy.loginfo("Reached the hand position")
-        self.hand_pose = [0,0,0]
-       
-        return
-    
-    def frame_transform(self,target):
+        self.hand_pose = [0, 0, 0]
+
+    def frame_transform(self, target):
         """
-        Manual calibration camera kuka iiwa7:
+        Transform the target position from camera frame to robot frame.
 
-        translation: x=0.276, y=0.146, z=2.643
+        Parameters:
+            target (array): Target position in camera frame.
 
-        180 deg rotation about x then 90 deg rotation about z
+        Returns:
+            array: Transformed position in robot frame.
         """
-        
-        offset = np.array([0.356, 0.256, 2.643]) # experimental values obtained around operating region
+        # Calibration parameters
+        offset = np.array([0.356, 0.256, 2.643])  # Experimental values
+        rot_x_180 = np.array([[1, 0, 0],
+                              [0, -1, 0],
+                              [0, 0, -1]])
+        rot_z_90 = np.array([[0, -1, 0],
+                             [1, 0, 0],
+                             [0, 0, 1]])
+        rot_tot = np.dot(rot_x_180, rot_z_90)
 
-        rot_x_180 = np.array([[1,0,0],[0,-1,0],[0,0,-1]]) 
-        rot_z_90 = np.array([[0,-1,0],[1,0,0],[0,0,1]])
-        rot_tot = np.dot(rot_x_180,rot_z_90)
-        
-        transform = np.column_stack((rot_tot,offset))
-        transform = np.vstack((transform,np.array([0,0,0,1])))
+        transform = np.column_stack((rot_tot, offset))
+        transform = np.vstack((transform, np.array([0, 0, 0, 1])))
 
-        target_hom = np.append(target[0:3],1)
+        target_hom = np.append(target[:3], 1)
+        transformed_target = np.dot(transform, target_hom)[:3]
 
-        return np.dot(transform,target_hom)[:3]
-    
-         
-    
+        return transformed_target
+
     def test(self,experiment,positions = None):
         rot= np.deg2rad([107, -47, -11, 100, -82, -82, -35])
         count = 0
