@@ -336,7 +336,9 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='follower',fake=True)
+        # Retrieve 'fake' parameter from command line or use default 'False'
+        fake = rospy.get_param('~fake', False)
+        node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='follower', fake=fake)
         node.start_episode()
 
     except rospy.ROSInterruptException:
