@@ -289,7 +289,7 @@ class RoboticArmController:
         else:
             rospy.loginfo("No human interaction detected during waiting period.")
             msg.data = False
-        self.publish_human_input(msg)
+        self.publish_human_input.publish(msg)
 
         self.hand_pose = [0, 0, 0]
 
