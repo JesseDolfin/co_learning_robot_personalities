@@ -99,7 +99,7 @@ class SoftHandController:
             end_position = 0.5
 
         tp = np.linspace(start_position, end_position, n_interval)
-        tt = np.linspace(0, duration, n_interval)
+        tt = np.linspace(0.1, duration, n_interval)
 
         for i in range(n_interval):
             point = JointTrajectoryPoint()
