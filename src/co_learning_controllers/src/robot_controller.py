@@ -84,7 +84,6 @@ class RoboticArmController:
     def hand_pose_callback(self, msg):
         """Callback function for hand_pose subscriber."""
         self.hand_pose = [msg.x, msg.y, msg.z]
-        # self.orientation = msg.orientation  # Unused variable
 
     def create_goal(self, position, nullspace=None, goal_time=None, mode=None):
         """
@@ -103,15 +102,14 @@ class RoboticArmController:
 
         if goal_time is None:
             if self.type == 'fast':
-                goal.time = 2.0  # 5 - 3.0
+                goal.time = 2.0
             elif self.type == 'slow':
-                goal.time = 7.0  # 5 + 2.0
+                goal.time = 7.0
             else:
                 goal.time = 5.0
         else:
             goal.time = goal_time
 
-        # Auto-select correct goal mode based on input arguments
         if len(position) == 7:
             goal.mode = 'joint_ds'
             stiffness = [100.0, 100.0, 50.0, 50.0, 25.0, 10.0, 10.0]
@@ -127,7 +125,7 @@ class RoboticArmController:
             elif mode == 'ee_cartesian':
                 goal.mode = mode
                 stiffness = [180.0, 180.0, 180.0, 15.0, 13.0, 13.0]
-                time.sleep(goal.time)  # This mode does not wait for confirmation
+                time.sleep(goal.time)
             else:
                 rospy.logwarn(f"Unknown mode '{mode}'. Defaulting to 'ee_cartesian_ds'.")
                 goal.mode = 'ee_cartesian_ds'
@@ -178,6 +176,33 @@ class RoboticArmController:
             rospy.logerr(f"Action client error: {e}")
             return False
         return True
+
+    def detect_human_interaction(self, duration=5.0):
+        """
+        Detect human interaction with the robot arm over a specified duration.
+
+        Parameters:
+            duration (float): Time in seconds to monitor for human interaction.
+
+        Returns:
+            bool: True if human interaction is detected, False otherwise.
+        """
+        rospy.loginfo(f"Monitoring for human interaction for {duration} seconds...")
+        start_time = rospy.Time.now()
+        rate = rospy.Rate(10)  # 10 Hz monitoring rate
+        interaction_detected = False
+        effort_threshold = 5.0  # Adjust this threshold based on your robot
+
+        while (rospy.Time.now() - start_time).to_sec() < duration:
+            effort_magnitude = self._effort_mag_save
+            rospy.loginfo(f"Effort magnitude: {effort_magnitude:.2f}")
+            if effort_magnitude > effort_threshold:
+                interaction_detected = True
+                rospy.loginfo("Human interaction detected based on effort magnitude.")
+                break
+            rate.sleep()
+
+        return interaction_detected
 
     def move_towards_hand(self, update=False):
         """
@@ -254,6 +279,18 @@ class RoboticArmController:
             current_position = np.array(self.ee_pose[:3])  # Update the current position
 
         rospy.loginfo("Reached the hand position")
+        rospy.loginfo("Waiting for 5 seconds to detect human interaction...")
+        interaction_detected = self.detect_human_interaction(duration=5.0)
+
+        msg = Bool()
+        if interaction_detected:
+            rospy.loginfo("Human interaction is detected during waiting period.")
+            msg.data = True
+        else:
+            rospy.loginfo("No human interaction detected during waiting period.")
+            msg.data = False
+        self.publish_human_input(msg)
+
         self.hand_pose = [0, 0, 0]
 
     def frame_transform(self, target):
@@ -267,14 +304,15 @@ class RoboticArmController:
             array: Transformed position in robot frame.
         """
         # Calibration parameters
-        offset = np.array([0.356, 0.256, 2.643])  # Experimental values
-        rot_x_180 = np.array([[1, 0, 0],
-                              [0, -1, 0],
-                              [0, 0, -1]])
-        rot_z_90 = np.array([[0, -1, 0],
-                             [1, 0, 0],
-                             [0, 0, 1]])
-        rot_tot = np.dot(rot_x_180, rot_z_90)
+        offset =    np.array([0.356, 0.256, 2.643])  # Experimental values
+        rot_x_180 = np.array([[1,  0,  0],
+                              [0, -1,  0],
+                              [0,  0, -1]])
+        
+        rot_z_90 =  np.array([[0, -1,  0],
+                              [1,  0,  0],
+                              [0,  0,  1]])
+        rot_tot =   np.dot(rot_x_180, rot_z_90)
 
         transform = np.column_stack((rot_tot, offset))
         transform = np.vstack((transform, np.array([0, 0, 0, 1])))
