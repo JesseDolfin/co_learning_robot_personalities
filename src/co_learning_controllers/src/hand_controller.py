@@ -110,5 +110,5 @@ class SoftHandController:
         return goal
 
 if __name__ == '__main__':
-    controller = SoftHandController(fake=True)
+    controller = SoftHandController(fake=False)
     controller.send_goal('open', 1)
