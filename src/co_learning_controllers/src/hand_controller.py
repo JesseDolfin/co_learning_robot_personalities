@@ -67,7 +67,7 @@ class SoftHandController:
         if mode == 'open':
             tp = np.linspace(self.position, 0.00, n_interval)
         elif mode == 'close':
-            tp = np.linspace(self.position, 0.8, n_interval)
+            tp = np.linspace(self.position, 1.0, n_interval)
         elif mode == 'partial':
             tp = np.linspace(self.position, 0.5, n_interval)
         else:
