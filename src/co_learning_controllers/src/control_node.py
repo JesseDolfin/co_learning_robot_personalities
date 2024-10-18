@@ -9,6 +9,8 @@ workspace_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
 if workspace_root not in sys.path:
     sys.path.append(workspace_root)
 
+import argparse
+
 from co_learning_messages.msg import secondary_task_message, hand_pose
 from co_learning_controllers.src.hand_controller import SoftHandController
 from q_learning.src.QLearnAgent import QLearningAgent
@@ -336,8 +338,13 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        # Retrieve 'fake' parameter from command line or use default 'False'
-        fake = rospy.get_param('~fake', False)
+        # Use argparse to parse command-line arguments
+        parser = argparse.ArgumentParser(description="Robotic Arm Controller Node")
+        parser.add_argument('--fake', type=bool, default=False, help="Set to True to run in fake mode")
+        
+        args = parser.parse_args()
+        fake = args.fake
+        
         node = RoboticArmControllerNode(num_test_runs=10, exploration_factor=0.25, personality_type='follower', fake=fake)
         node.start_episode()
 
