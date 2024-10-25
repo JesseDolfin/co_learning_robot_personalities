@@ -10,6 +10,7 @@ import random
 import time
 import rospy
 import rosgraph
+from math import exp
 
 from std_msgs.msg import String
 
@@ -38,7 +39,7 @@ class secondary_task():
         self.pantograph = Pantograph
         self.robot = PShape
     
-        self.spine_hit_count = 0
+        self.fail_count = 0
         self.success_count = 0
 
         pygame.mouse.set_visible(True)     ##Hide cursor by default. 'm' toggles it
@@ -572,7 +573,7 @@ class secondary_task():
             self.time_left = 0
             self.send_task_status(success=-1, time=0)
             self.reset = False
-            self.spine_hit_count += 1
+            self.fail_count += 1
             return True
         
         if self.handover_successful:
@@ -626,6 +627,11 @@ class secondary_task():
         # Implements a sine wave parallel to the needle
         needle_direction = np.array([cos_alpha, sin_alpha])
         faulty_force = needle_direction * 35000 * np.sin(self.t / 10)
+
+        if self.fail_count != 0:
+            x = (self.success_count + 10) / self.fail_count
+            difficulty_modifier = exp(-1/x)
+            faulty_force *= difficulty_modifier
 
         # Calculate force feedback from impedance controller 
         self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) + faulty_force
@@ -798,7 +804,7 @@ class secondary_task():
             if not self.collision_dict['Cerebrospinal fluid one']:
                 self.needle_removed_too_soon_2 = True
                 self.send_task_status(success=-1, time=self.time_left)
-                self.spine_hit_count += 1
+                self.fail_count += 1
                 self.reset = False
                 self.task_failed = True
 
@@ -858,7 +864,7 @@ class secondary_task():
 
         if self.needle_removed_too_soon and self.needle_removed_too_soon_update:
             self.send_task_status(success = -1)
-            self.spine_hit_count += 1
+            self.fail_count += 1
             self.reset = False
             self.needle_removed_too_soon_update = False
 
@@ -866,7 +872,7 @@ class secondary_task():
             self.task_failed = True
             self.bar_released_too_soon = True
             self.send_task_status(success=-1)
-            self.spine_hit_count += 1
+            self.fail_count += 1
             self.reset = False
         elif self.start_handover:
             self.bar_released_too_soon = False
@@ -945,9 +951,9 @@ class secondary_task():
                 ("Restart Simulation", (0, 0, 0), pygame.font.Font(None, 24)),
                 ("You hit the patient's spine! Please try again", (240, 0, 0), pygame.font.Font(None, 38)),
                 ("You successfully drained all the fluid from the epidural space, well done!", (20, 150, 40), pygame.font.Font(None, 38)),
-                (f"Fails: {self.spine_hit_count}", (0, 0, 0), pygame.font.Font(None, 24)),
+                (f"Fails: {self.fail_count}", (0, 0, 0), pygame.font.Font(None, 24)),
                 (f"Successes: {self.success_count}", (0, 0, 0), pygame.font.Font(None, 24)),
-                (f"You successfully completed: {self.spine_hit_count + self.success_count} simulation runs!", (0, 0, 0), pygame.font.Font(None, 24)),
+                (f"You successfully completed: {self.fail_count + self.success_count} simulation runs!", (0, 0, 0), pygame.font.Font(None, 24)),
                 ("Press 'q' to exit simulation", (0, 0, 0), pygame.font.Font(None, 24)),
                 ("You did not obtain the item in time! Please try again", (240, 0, 0), pygame.font.Font(None, 38)),
                 ("Needle removed from epidural space without successfully draining the epidural space! Please try again", (240, 0, 0), pygame.font.Font(None, 38)),
@@ -964,7 +970,7 @@ class secondary_task():
         button_rect = pygame.Rect(0, 0, 150, 50)
         texts = render_end_texts()
 
-        tries = self.spine_hit_count + self.success_count
+        tries = self.fail_count + self.success_count
 
         while self.run:
             self.window.blit(self.screenHaptics, (0, 0))
