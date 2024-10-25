@@ -200,6 +200,7 @@ class secondary_task():
         self.time_left = self.max_time
 
         self.max_needle_pressure = 6000
+        self.max_tries = 100
 
         self.task_failed = False
 
@@ -521,8 +522,8 @@ class secondary_task():
                     self.time_left = 0
 
             if self.success:
-                self.success_count += 1
                 self.send_task_status(success=1, time=self.time_left)
+                self.success = False
 
             if self.check_termination_conditions():
                 self.end_screen()
@@ -563,6 +564,7 @@ class secondary_task():
             self.time_left = 0
             self.send_task_status(success=-1, time=0)
             self.reset = False
+            self.fail_count += 1
             return True
         
         if self.time_left <= 0 and self.start_handover:
@@ -581,7 +583,7 @@ class secondary_task():
             self.success_chime.play()  # Play success sound
             pygame.time.delay(1000)  # Add delay to make the border visible
             self.send_task_status(success=1, time=self.time_left)
-            self.success_count += 1
+            self.success_count +=1
             return True
 
         return False
@@ -624,14 +626,19 @@ class secondary_task():
         self.endpoint_velocity = (self.xhold - self.xh) / self.FPS
         self.xhold = self.xh
 
+        if self.fail_count != 0:
+            helper_modifier = - 0.1 * exp(0.2 * self.fail_count) + 1.1 
+            hinder_modifier = (self.success_count/10) * exp(helper_modifier-1)
+            difficulty_modifier = min(helper_modifier+hinder_modifier,1)
+            difficulty_modifier = max(difficulty_modifier,0.7)
+        else:
+            difficulty_modifier = 1
+
+        print(difficulty_modifier)
+
         # Implements a sine wave parallel to the needle
         needle_direction = np.array([cos_alpha, sin_alpha])
-        faulty_force = needle_direction * 35000 * np.sin(self.t / 10)
-
-        if self.fail_count != 0:
-            x = (self.success_count + 10) / self.fail_count
-            difficulty_modifier = exp(-1/x)
-            faulty_force *= difficulty_modifier
+        faulty_force = needle_direction * 45000 * np.sin(difficulty_modifier * self.t / 6) * difficulty_modifier
 
         # Calculate force feedback from impedance controller 
         self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) + faulty_force
@@ -804,7 +811,6 @@ class secondary_task():
             if not self.collision_dict['Cerebrospinal fluid one']:
                 self.needle_removed_too_soon_2 = True
                 self.send_task_status(success=-1, time=self.time_left)
-                self.fail_count += 1
                 self.reset = False
                 self.task_failed = True
 
@@ -864,7 +870,6 @@ class secondary_task():
 
         if self.needle_removed_too_soon and self.needle_removed_too_soon_update:
             self.send_task_status(success = -1)
-            self.fail_count += 1
             self.reset = False
             self.needle_removed_too_soon_update = False
 
@@ -872,7 +877,6 @@ class secondary_task():
             self.task_failed = True
             self.bar_released_too_soon = True
             self.send_task_status(success=-1)
-            self.fail_count += 1
             self.reset = False
         elif self.start_handover:
             self.bar_released_too_soon = False
@@ -913,8 +917,6 @@ class secondary_task():
         if self.haptic_feedback and self.visual_feedback and self.collision_dict['Spinal cord']:
             self.spinal_coord_collision_hit = True
             
-     
-
         pygame.display.flip()
 
     def render_screen_border(self, status):
@@ -981,19 +983,19 @@ class secondary_task():
             for event in pygame.event.get():
                 if event.type == pygame.KEYUP:
                     if event.key == ord('q'):
-                        if tries < 10:
+                        if tries < self.max_tries:
                             self.run = False
                             pygame.display.quit()
                             pygame.quit()
                         else:
                             self.run = False
 
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and tries < 10 and self.reset:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and tries < self.max_tries and self.reset:
                     if button_rect.collidepoint(event.pos):
                         self.initialise_simulation_parameters()
                         self.run_simulation()
 
-            if tries < 10:
+            if tries < self.max_tries:
                 if self.reset:
                     if button_rect.collidepoint(pygame.mouse.get_pos()):
                         pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
