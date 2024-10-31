@@ -96,7 +96,7 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    cd iiwa_impedance_control
    git checkout cor_tud_compatibility
    cd ..
-   ``
+   ```
 5. Clone the qb_hand repositories:
    ```sh
    git clone --recurse-submodules https://bitbucket.org/qbrobotics/qbdevice-ros.git
