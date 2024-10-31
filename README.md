@@ -135,7 +135,7 @@ It is possible to selectively turn off nodes , make sure that you set ```allow_n
 <arg name="detection" default="true"/>
 <arg name="qb_hand" default="true"/>
 ```
-All the nodes are stand-alone except for the control_node, which needs at least the detection node to run. If you pass the parameter ``fake=true``` to the control node, you can run it without the qb_hand, as it does not depend on any of the other nodes.
+All the nodes are stand-alone except for the control_node, which needs at least the detection node to run. If you pass the parameter ```fake=true``` to the control node, you can run it without the qb_hand, as it does not depend on any of the other nodes.
 
 ### The full setup is as follows
 Follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
