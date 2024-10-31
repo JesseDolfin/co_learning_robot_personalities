@@ -1,1 +1,0 @@
-roslaunch qb_hand_control control_qbhand.launch activate_on_initialization:="true" use_rviz:="true" standalone:="true"
