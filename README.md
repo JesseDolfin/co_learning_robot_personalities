@@ -8,8 +8,6 @@
 *** Thanks again! Now go create something AMAZING! :D
 -->
 
-
-
 <!-- PROJECT SHIELDS -->
 <!--
 *** I'm using markdown "reference style" links for readability.
@@ -25,13 +23,10 @@
 [![MIT License][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
-
-
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
   <img src="https://www.kuka.com/-/media/kuka-corporate/images/products/robots/cta-images/lbr-iiwa.png?rev=-1&w=767&hash=78E7DD844A27074AFD67AEF17C72078A" alt="KUKA arm" width="200"/>
-  </a>
 
 <h3 align="center">Co-learning with robot personalities for KUKA iiwa7</h3>
 
@@ -49,15 +44,11 @@
   </p>
 </div>
 
-
-
 <!-- TABLE OF CONTENTS -->
 <details>
   <summary>Table of Contents</summary>
   <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-    </li>
+    <li><a href="#about-the-project">About The Project</a></li>
     <li>
       <a href="#getting-started">Getting Started</a>
       <ul>
@@ -72,100 +63,77 @@
   </ol>
 </details>
 
-
-
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 [![Product Name Screen Shot][product-screenshot]](https://preview.free3d.com/img/2015/06/2205987029685109856/qyz27g5f.jpg)
 
-
-
 <!-- GETTING STARTED -->
 ## Getting Started
-This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3.8. Other configurations are not tested, and the code might not run on different versions.
+This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3.8. Other configurations have not been tested, and compatibility may vary.
 
 ### Prerequisites
-This repository requires access to the TU Delft CoR gitlab iiwa [repository](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros).
-Please follow the installation instructions from iiwa_ros before installing this package.
-
-
-### Installation
-1. Install the qb_softhand repositories
-   ```sh
-   cd <work space>
-   mkdir -p qb_hand/src
-   cd qb_hand/src
-   ```
-   Install the combined robot hw package:
+1. Install the combined robot hw package:
    ```sh
    sudo apt install ros-noetic-combined-robot-hw
    ```
-   
-   Clone the repositories and install them:
+2. Install the RealSense SDK 2.0, to do this follow their [installation instructions](https://dev.intelrealsense.com/docs/compiling-librealsense-for-linux-ubuntu-guide)
+
+### Installation
+1. Create a workspace folder and go into it, then create a src folder
+   ```sh
+   mkdir <WORKSPACE_NAME> && cd <WORKSPACE_NAME>
+   mkdir src
+   ```
+2. Install the [iiwa_ros](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros) from the KUKA iiwa CoR lab's repository, following their installation instructions **except for the compilation instructions**. This means that all the cloned repos go into <WORKSPACE_NAME>.
+3. Go into the source folder and clone the iiwa_ros repo:
+  ```sh
+  cd src
+  git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/iiwa_ros.git
+  ```
+4. Clone the impedance controller and checkout a specific branch that allows compatibility with the cor_tud iiwa_ros package:
+   ```sh
+   git clone git@gitlab.tudelft.nl:nickymol/iiwa_impedance_control.git
+   cd iiwa_impedance_control
+   git checkout cor_tud_compatibility
+   cd ..
+   ``
+5. Clone the qb_hand repositories:
    ```sh
    git clone --recurse-submodules https://bitbucket.org/qbrobotics/qbdevice-ros.git
    git clone https://bitbucket.org/qbrobotics/qbhand-ros.git
-   cd ..
-   catkin_make
    ```
-   Source the repository and add it to the path:
-   ```sh
-   source devel/setup.bash
-   echo "source <work space>/qb_hand/devel/setup.bash" >> ~/.bashrc
-   ```
-
-1. Install the realsense software inside of your workspace.
-    Follow the installation steps from their [repo](https://github.com/IntelRealSense/realsense-ros/tree/ros1-legacy?tab=readme-ov-file).
-
-4. Install the co_learning_personalities package
-   ```sh
-   cd <workspace>
-   git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
-   cd co_learning_robot_personalities
-   catkin_make
-   ```
-
-   Source the repository and add it to the path:
-   ```sh
-   source devel/setup.bash
-   echo "source <work space>/co_learning_robot_personalities/devel/setup.bash" >> ~/.bashrc
-   ```
-
-5. Posterior installations:
-   ```sh
-   pip install numpy==1.21
-   pip install python-dateutill==2.8.2
-   pip install mediapipe
-   pip install pyrealsense2
-   pip install ultralytics
-   pip install gymnasium
-   pip install pygame
-   pip install pyserial
-   ```
+6. Lastly, clone this repository and build the workspace:
+  ```sh
+  git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
+  cd ..
+  catkin_make
+  ```
+7. Install additional dependencies:
+   ```sh pip install numpy==1.21 python-dateutil==2.8.2 mediapipe pyrealsense2 ultralytics gymnasium pygame pyserial  ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- USAGE EXAMPLES -->
 ## Usage
 After installing and sourcing the software the simulation may be started using the following roslaunch command:
 ```sh
-roslaunch co_learning_controllers co_learning_test_setup.launch
+roslaunch co_learning_controllers bringup.launch allow_nodes:=false
 ```
-
-This will start the simulation and the required controller nodes / secondary task node.
-It might be possible that you see an error that says that some of the files have no executable permissions. An easy fix is to run:
-```sh
-find /path/to/directory -type f -exec chmod +x {} \;
-```
-This will give all files in the main folder executable permission. Don't run this unless you trust all the repos installed! 
-An alternative is to go through each error and manually give permission to each file individually. 
-If you want to start this on the real robot run the command with the prefix `simulation:=false`:
+This will start the simulation without any of the nodes.
+If you want to start this on the real robot, run the command with the prefix `simulation:=false`:
 ```sh
 roslaunch co_learning_controllers co_learning_test_setup.launch simulation:=false
 ```
-
+It is possible to selectively turn off nodes , make sure that you set ```allow_nodes:=true``` or omit the option entirely as the default value is true. The full set of node control parameters are:
+```xml
+<arg name="allow_nodes" default="true"/>
+<arg name="control_node" default="true"/>
+<arg name="secondary_task" default="true"/>
+<arg name="rviz" default="false"/>
+<arg name="detection" default="true"/>
+<arg name="qb_hand" default="true"/>
+```
+All the nodes are stand-alone except for the control_node, which needs at least the detection node to run. If you pass the parameter ``fake=true``` to the control node, you can run it without the qb_hand, as it does not depend on any of the other nodes.
 
 ### The full setup is as follows
 Follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
@@ -196,7 +164,7 @@ _For more examples, please refer to the [Documentation](https://google.com)_
 ## Contributing
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+If you have a suggestion to improve this, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement."
 Don't forget to give the project a star! Thanks again!
 
 1. Fork the Project
