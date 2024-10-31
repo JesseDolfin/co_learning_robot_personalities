@@ -6,27 +6,23 @@ from typing import Union
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-try:
-    import rospy
-    import actionlib
-    from sensor_msgs.msg import JointState
-    from std_msgs.msg import Bool
-    from iiwa_impedance_control.action import JointTrajectoryExecutionAction,CartesianTrajectoryExecutionAction
-    from geometry_msgs.msg import PoseStamped
-    from co_learning_messages.msg import hand_pose
-    from dynamic_reconfigure.client import Client
-    from controller_manager_msgs.srv import SwitchController
-    from iiwa_impedance_control.msg import CartesianTrajectoryExecutionAction, CartesianTrajectoryExecutionGoal
-    from iiwa_impedance_control.msg import JointTrajectoryExecutionAction, JointTrajectoryExecutionGoal
-except ImportError as e:
-    print(f"Import Error: {e}")
-    sys.exit(1)
 
-try:
-    from robot.robot import Robot
-except ImportError as e:
-    rospy.logerr(f"Could not import Robot class: {e}")
-    Robot = None
+import rospy
+import actionlib
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
+#from iiwa_impedance_control.action import JointTrajectoryExecutionAction,CartesianTrajectoryExecutionAction
+from geometry_msgs.msg import PoseStamped
+from co_learning_messages.msg import hand_pose
+from dynamic_reconfigure.client import Client
+from controller_manager_msgs.srv import SwitchController
+from iiwa_impedance_control.msg import CartesianTrajectoryExecutionAction, CartesianTrajectoryExecutionGoal
+from iiwa_impedance_control.msg import JointTrajectoryExecutionAction, JointTrajectoryExecutionGoal
+
+
+
+from robot.robot import Robot
+
 
 # Constants
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
@@ -36,6 +32,16 @@ class RoboticArmController:
     def __init__(self):
         self.init_action_servers()
 
+    # Dummy callback functions to handle action results and feedback
+    def cartesian_trajectory_done_callback(self, status, result):
+        rospy.loginfo("Cartesian trajectory execution done with status: {}".format(status))
+
+    def cartesian_trajectory_active_callback(self):
+        rospy.loginfo("Cartesian trajectory execution is active.")
+
+    def cartesian_trajectory_feedback_callback(self, feedback):
+        rospy.loginfo("Received feedback for cartesian trajectory execution.")
+
     def init_action_servers(self):
         self.cartesian_action_client = actionlib.SimpleActionClient(
             '/CartesianImpedanceController/cartesian_trajectory_execution_action',
@@ -44,32 +50,35 @@ class RoboticArmController:
             '/JointImpedanceController/joint_trajectory_execution_action', JointTrajectoryExecutionAction)
 
         try:
-            self.log("Waiting for cartesian_trajectory_execution action server...")
+            rospy.loginfo("Waiting for cartesian_trajectory_execution action server...")
             self.cartesian_action_client.wait_for_server()
-            self.log("cartesian_trajectory_execution action server found!")
+            rospy.loginfo("cartesian_trajectory_execution action server found!")
         except:
-            self.log("cartesian_trajectory_execution action server not found...", "warn")
+            rospy.loginfo("cartesian_trajectory_execution action server not found...", "warn")
         try:
-            self.log("Waiting for joint_trajectory_execution action server...")
+            rospy.loginfo("Waiting for joint_trajectory_execution action server...")
             self.joint_action_client.wait_for_server()
-            self.log("joint_trajectory_execution server found!")
+            rospy.loginfo("joint_trajectory_execution server found!")
         except:
-            self.log("joint_trajectory_execution server not found...", "warn")
+            rospy.loginfo("joint_trajectory_execution server not found...", "warn")
         try:
-            self.log("Waiting for dynamic reconfigure CartesianImpedanceController server...")
+            rospy.loginfo("Waiting for dynamic reconfigure CartesianImpedanceController server...")
             self.dynamic_reconfigure_cartesian_impedance_controller_client = Client(
                 "/CartesianImpedanceController/dynamic_reconfigure_server_node/", timeout=10, config_callback=None)
-            self.log("Dynamic reconfigure CartesianImpedanceController server found!")
+            rospy.loginfo("Dynamic reconfigure CartesianImpedanceController server found!")
         except:
-            self.log("Dynamic reconfigure CartesianImpedanceController server not found...", "warn")
-        try:
-            self.log("Waiting for iiwa controller manager...")
-            rospy.wait_for_service('/iiwa/controller_manager/switch_controller')
-            self.controller_manager = rospy.ServiceProxy('/iiwa/controller_manager/switch_controller',
-                                                        SwitchController)
-            self.log("Iiwa controller manager found!")
-        except:
-            self.log("Iiwa controller manager not found...", "warn")
+            rospy.loginfo("Dynamic reconfigure CartesianImpedanceController server not found...", "warn")
+        # try:
+        #     rospy.loginfo("Waiting for iiwa controller manager...")
+        #     rospy.wait_for_service('/iiwa/controller_manager/switch_controller')
+        #     self.controller_manager = rospy.ServiceProxy('/iiwa/controller_manager/switch_controller',
+        #                                                 SwitchController)
+        #     rospy.loginfo("Iiwa controller manager found!")
+        # except:
+        #     rospy.loginfo("Iiwa controller manager not found...", "warn")
+
+         # Allow some time for action servers to start and connections to be established
+        rospy.sleep(2)
 
     def send_cartesian_trajectory_goal(self, goal):
         goal = CartesianTrajectoryExecutionGoal()
@@ -128,7 +137,9 @@ class RoboticArmController:
                                                 self.joint_trajectory_active_callback,
                                                 self.joint_trajectory_feedback_callback)
                 
-if __name__=='__main__':
+if __name__ == '__main__':
     rospy.init_node("test")
-
-    
+    controller = RoboticArmController() 
+    controller.send_cartesian_trajectory_goal(CartesianTrajectoryExecutionGoal())
+    rospy.spin() 
+ 

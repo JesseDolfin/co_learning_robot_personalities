@@ -25,5 +25,6 @@ catkin_install_python(PROGRAMS
   src/control_node.py
   src/hand_controller.py
   src/robot_controller.py
+  src/robot_impedance_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
