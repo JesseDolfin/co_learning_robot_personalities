@@ -5,7 +5,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
 |-->
 <launch>
     <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${node}] [${time}]: ${message}"/>
-    <!-- These are the arguments you can pass this launch file, for example paused:=true -->
+
     <arg name="paused" default="false"/>
     <arg name="use_sim_time" default="true"/>
     <arg name="gui" default="true"/>
@@ -14,9 +14,6 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     <arg name="world_name" default="$(find iiwa_gazebo)/world/iiwa.world"/> 
     <arg name="simulation" default="true"/>
     <arg name="gzclient" default="false"/>
-    <arg name="schunk_hand" default="false"/>
-    <arg name="device_type" default="d455"/>
-    <arg name="filters" default=""/>
     <arg name="output" default="log"/> 
 
     <!-- Arguments to control node launching -->
@@ -55,6 +52,30 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
         <arg name="controller" value="$(arg controller)"/>
     </include>
 
-    <!-- If we are in the simulation mode, loads Gazebo-->
+    <!-- Conditionally Launch ControlNode.py in a new terminal window -->
+    <group if="$(arg control_node)">
+        <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen" launch-prefix="xterm -e"/>
+    </group>
+
+    <!-- Conditionally Launch secondary_task.py in a new terminal window -->
+    <group if="$(arg secondary_task)">
+        <node name="secondary_task" pkg="co_learning_secondary_task" type="secondary_task.py" output="log"/>
+    </group>
+
+    <group if="$(arg detection)">
+        <node name="detection" pkg="co_learning_detection" type="detection.py" output="log"/>
+    </group>
+   
+    <group if="$(arg rviz)">
+        <arg name="rviz_config" default="/home/jesse/Thesis/co_learning_robot_personalities/rviz_configs/camera_view.rviz"/>
+        <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config)" output="screen"/>
+    </group>
+
+    <group if="$(arg qb_hand)">
+        <include file="$(find qb_hand_control)/launch/control_qbhand.launch">
+            <arg name="activate_on_initialization" value="true"/>
+            <arg name="standalone" value="true"/>
+        </include>
+    </group>
 
 </launch>
