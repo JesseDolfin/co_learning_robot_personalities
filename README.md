@@ -109,7 +109,7 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
   catkin_make
   ```
 7. Install additional dependencies:
-   ```sh pip install numpy==1.21 python-dateutil==2.8.2 mediapipe pyrealsense2 ultralytics gymnasium pygame pyserial  ```
+   ```pip install numpy==1.21 python-dateutil==2.8.2 mediapipe pyrealsense2 ultralytics gymnasium pygame pyserial  ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
