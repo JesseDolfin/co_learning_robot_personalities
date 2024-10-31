@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!--|
+Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
+    Free for all, no warranties whatsoever.
+|-->
+<launch>
+    <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${node}] [${time}]: ${message}"/>
+    <!-- These are the arguments you can pass this launch file, for example paused:=true -->
+    <arg name="paused" default="false"/>
+    <arg name="use_sim_time" default="true"/>
+    <arg name="gui" default="true"/>
+    <arg name="headless" default="false"/>
+    <arg name="debug" default="false"/>
+    <arg name="world_name" default="$(find iiwa_gazebo)/world/iiwa.world"/> 
+    <arg name="simulation" default="true"/>
+    <arg name="gzclient" default="false"/>
+    <arg name="schunk_hand" default="false"/>
+    <arg name="device_type" default="d455"/>
+    <arg name="filters" default=""/>
+    <arg name="output" default="log"/> 
+
+    <!-- Arguments to control node launching -->
+    <arg name="control_node" default="true"/>
+    <arg name="secondary_task" default="true"/>
+    <arg name="rviz" default="false"/>
+    <arg name="detection" default="true"/>
+    <arg name="qb_hand" default="true"/>
+
+    <!-- Select the robot -->
+    <arg name="robot_name" default="iiwa"/>
+    <arg name="model" default="7"/>
+
+    <!-- Select the controller -->
+    <arg name="controller" default="CartesianImpedanceController"/>
+
+    <group if="$(arg simulation)"> 
+        <!-- Loads the Gazebo world -->
+        <include unless="$(arg gzclient)"
+            file="$(find gazebo_ros)/launch/empty_world.launch">
+            <arg name="paused" value="$(arg paused)"/>
+            <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+            <arg name="gui" value="$(arg gui)" />
+            <arg name="headless" value="$(arg headless)"/>
+            <arg name="debug" value="$(arg debug)" />
+            <arg name="world_name" value="$(arg world_name)"/> 
+        </include>
+    </group>
+
+    <!--If we are not in simulation mode, start the FRI driver-->
+    <!--This bringup sets up iiwa, FRI if not on simulation, and the controller -->
+    <include file="$(find co_learning_controllers)/launch/driver_bringup.launch">
+        <arg name="simulation" value="$(arg simulation)"/>
+        <arg name="model" value="$(arg model)"/>
+        <arg name="robot_name" value="$(arg robot_name)"/>
+        <arg name="controller" value="$(arg controller)"/>
+    </include>
+
+    <!-- If we are in the simulation mode, loads Gazebo-->
+
+</launch>
