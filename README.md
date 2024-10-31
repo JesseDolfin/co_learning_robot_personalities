@@ -84,7 +84,7 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    mkdir <WORKSPACE_NAME> && cd <WORKSPACE_NAME>
    mkdir src
    ```
-2. Install the [iiwa_ros](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros) from the KUKA iiwa CoR lab's repository, following their installation instructions **except for the compilation instructions**. This means that all the cloned repos go into <WORKSPACE_NAME>.
+2. Install the [iiwa_ros](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros) package from the KUKA iiwa CoR lab's repository, following their installation instructions **except for the compilation instructions**. This means that all the cloned repos go into <WORKSPACE_NAME>.
 3. Go into the source folder and clone the iiwa_ros repo:
   ```sh
   cd src
