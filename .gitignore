@@ -7,14 +7,7 @@ devel/
 .catkin_workspace
 .catkin_tools/
 logs/
-qbhand-ros/
-qbdevice-ros/
-maxq/
 .vscode/
-install/
-yolov10m.pt
 *.pt
 *.task
 *.zip
-android_figurine/
-exported_model/
