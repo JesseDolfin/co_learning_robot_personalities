@@ -246,15 +246,15 @@ class RoboticArmControllerNode:
         while self.run:
             if not self.terminated:
                
-                # if self.phase == 0:
-                #     self.phase_0()
-                # if self.phase == 1:
-                #     self.action = 2
-                #     self.phase_1()
-                # if self.phase == 2:
-                #     self.phase_2()
-                # if self.phase == 3:
-                #     self.phase_3()
+                if self.phase == 0:
+                    self.phase_0()
+                if self.phase == 1:
+                    self.action = 2
+                    self.phase_1()
+                if self.phase == 2:
+                    self.phase_2()
+                if self.phase == 3:
+                    self.phase_3()
 
                 self.action, self.phase, self.terminated = self.rl_agent.train(
                     learning_rate=self.alpha,
@@ -264,8 +264,8 @@ class RoboticArmControllerNode:
                     real_time=True,
                 )
 
-                # if self.terminated:
-                #     self.phase_3()
+                if self.terminated:
+                    self.phase_3()
 
             else:
                 self.stop_rosbag_recording()
