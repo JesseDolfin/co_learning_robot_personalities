@@ -31,16 +31,16 @@
 <h3 align="center">Co-learning with robot personalities for KUKA iiwa7</h3>
 
   <p align="center">
-    <a href="https://github.com/JesseDolfin/Co-Learning-KUKA-RL/README.md"><strong>About the project</strong></a>
+    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities/README.md"><strong>About the project</strong></a>
     <br />
-    <a href="https://github.com/JesseDolfin/Co-Learning-KUKA-RL"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/JesseDolfin/Co-Learning-KUKA-RL">View Demo</a>
+    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities">View Demo</a>
     ·
-    <a href="https://github.com/JesseDolfin/Co-Learning-KUKA-RL/issues">Report Bug</a>
+    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities/issues">Report Bug</a>
     ·
-    <a href="https://github.com/JesseDolfin/Co-Learning-KUKA-RL/issues">Request Feature</a>
+    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities/issues">Request Feature</a>
   </p>
 </div>
 
