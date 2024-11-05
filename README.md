@@ -135,19 +135,15 @@ It is possible to selectively turn off nodes , make sure that you set ```allow_n
 <arg name="detection" default="true"/>
 <arg name="qb_hand" default="true"/>
 ```
-All the nodes are stand-alone except for the control_node, which needs at least the detection node to run. If you pass the parameter ```fake=true``` to the control node, you can run it without the qb_hand, as it does not depend on any of the other nodes.
+All the nodes are stand-alone except for the control_node, which needs at least the detection node to run. (This can be bypassed if you manually set the handover_successful field of the secondary_task_message to '0' or '1'. You have to publish this on the /Task_status topic.) If you pass the parameter ``fake:=true`` to the control launch file, it will run without the qb_hand launch file and will run the hand_controller node in fake mode (this allows the control node to run without the qb_hand present). 
 
 ### Running the full experiment
 Follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
 Then on machine A source the workspace in a terminal and run the following:
 ```sh
-roslaunch co_learning_controllers bringup.launch simulation:=false control_node:=false secondary_task:=false
+roslaunch co_learning_controllers bringup.launch simulation:=false secondary_task:=false participant_number:=<x> personality_type:=<y>
 ```
-
-In another terminal source the workspace and run the following:
-```sh
-rosrun co_learning_controllers control_node.py
-```
+Where the participant_number must be an integer and the personality type can be any of the following: "baseline, leader, follower, impatient, patient".
 
 On machine B connect the ethernet cable from the switch to the machine, source the workspace and run the following:
 ```sh
