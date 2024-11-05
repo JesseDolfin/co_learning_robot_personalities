@@ -11,3 +11,4 @@ logs/
 *.pt
 *.task
 *.zip
+data_collection/

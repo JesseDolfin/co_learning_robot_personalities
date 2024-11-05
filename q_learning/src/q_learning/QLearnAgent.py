@@ -19,6 +19,7 @@ class QLearningAgent:
         self.reset_experience()
         self.state, self.phase = self.env.reset()
         self.e_trace = np.zeros((self.env.state_size, self.env.action_size))
+        self.total_reward = 0
 
         self.initialize = True
         self.type = 'none'
@@ -68,6 +69,7 @@ class QLearningAgent:
 
         if real_time:
             if self.initialize:
+                self.total_reward = 0
                 self.state, self.phase = self.env.reset()
                 self.reset_experience()
                 terminated = False
@@ -88,6 +90,7 @@ class QLearningAgent:
                 )
 
                 if reward != 0 and valid:
+                    self.total_reward += reward
                     # To prevent the agent from getting stuck in a loop
                     self.update_q_table(
                         self.state, action, reward, next_state, alpha, gamma, lamda
@@ -149,10 +152,10 @@ class QLearningAgent:
             action = self.experience["action"][i]
             next_state = self.experience["next_state"][i]
             valid = self.experience["valid"][i]
-
             if valid:
                 # Increase the reward for this transition by the final reward per phase
                 reward = last_reward / self.env.phase_size
+                self.total_reward  += reward
                 self.update_q_table(state, action, reward, next_state, alpha, gamma, lamda)
 
     def reset_experience(self):

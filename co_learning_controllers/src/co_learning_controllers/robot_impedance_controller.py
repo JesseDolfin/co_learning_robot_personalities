@@ -34,6 +34,7 @@ class RoboticArmController:
         self.type = 'none'
         self.save_target = None
         self.robot = None
+        self.movement_finished = False
 
         self.ns = rospy.get_param('/namespaces', 'iiwa7')
         self.robot = Robot(model=self.ns.replace('/', ''))
@@ -90,6 +91,7 @@ class RoboticArmController:
 
     # Callback functions to handle action results and feedback
     def cartesian_trajectory_done_callback(self, status, result):
+        self.movement_finished = True
         rospy.loginfo(f"Cartesian trajectory execution done with status: {status}, {result}")
 
     def cartesian_trajectory_active_callback(self):
@@ -99,6 +101,7 @@ class RoboticArmController:
         pass  # Feedback handling can be implemented here if needed
 
     def joint_trajectory_done_callback(self, status, result):
+        self.movement_finished = True
         rospy.loginfo(f"Joint trajectory execution done with status: {status}, {result}")
 
     def joint_trajectory_active_callback(self):
@@ -193,6 +196,7 @@ class RoboticArmController:
             raise RuntimeError(f"An unexpected error occurred: {e}")
 
     def send_trajectory_goal(self, goal, mode):
+        self.movement_finished = False
         try:
             if mode == "cartesian":
                 if isinstance(goal, list):
@@ -240,6 +244,10 @@ class RoboticArmController:
             else:
                 rospy.logwarn("Invalid mode specified.")
                 raise ValueError("Mode must be either 'cartesian' or 'joint'")
+            
+            rate = rospy.Rate(10)
+            while not self.movement_finished:
+                rate.sleep()
 
         except Exception as e:
             rospy.logerr(f"Unexpected error in send_trajectory_goal: {e}")
