@@ -1,44 +1,30 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(co_learning_messages)
 
-## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
-
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS
-  actionlib_msgs
   std_msgs
   message_generation
 )
 
-## Generate messages in the 'msg' folder
+## Declare ROS messages
 add_message_files(
   FILES
-  secondary_task_message.msg
-  hand_pose.msg
-  Database.msg
-  Detection.msg
+    Database.msg
+    Detection.msg
+    hand_pose.msg
+    secondary_task_message.msg
 )
 
-## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
-
-
-## Generate added messages and services with any dependencies listed here
+## Generate added messages
 generate_messages(
-    DEPENDENCIES
-    actionlib_msgs
+  DEPENDENCIES
     std_msgs
 )
 
+## Declare a catkin package
 catkin_package(
-    CATKIN_DEPENDS actionlib_msgs std_msgs message_runtime
-)
-
-include_directories(
-  ${catkin_INCLUDE_DIRS}
+  CATKIN_DEPENDS
+    std_msgs
+    message_runtime
 )

@@ -6,7 +6,7 @@ import random
 from tqdm import tqdm
 import rosgraph
 import rospy
-from CoLearnEnvironment import CoLearn
+from q_learning.CoLearnEnvironment import CoLearn
 
 
 class QLearningAgent:
@@ -183,21 +183,22 @@ class QLearningAgent:
 
         self.e_trace *= gamma * lamda
 
-    def save_q_table(
-        self,
-        directory="co_learning_robot_personalities/src/q_learning/Q_tables",
-        prefix="q_table_",
-    ):
+    def save_q_table(self, filepath=None):
         """Saves the Q-table to a file."""
-        os.makedirs(directory, exist_ok=True)
+        if filepath is None:
+            directory = "co_learning_robot_personalities/src/q_learning/Q_tables"
+            os.makedirs(directory, exist_ok=True)
 
-        index = 1
-        while True:
-            filename = f"{prefix}{index}.npy"
-            filepath = os.path.join(directory, filename)
-            if not os.path.exists(filepath):
-                break
-            index += 1
+            index = 1
+            while True:
+                filename = f"q_table_{index}.npy"
+                filepath = os.path.join(directory, filename)
+                if not os.path.exists(filepath):
+                    break
+                index += 1
+        else:
+            directory = os.path.dirname(filepath)
+            os.makedirs(directory, exist_ok=True)
 
         np.save(filepath, self.q_table)
 

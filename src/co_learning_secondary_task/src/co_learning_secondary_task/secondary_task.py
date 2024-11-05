@@ -11,16 +11,11 @@ import time
 import rospy
 import rosgraph
 from math import exp
-
 from std_msgs.msg import String
-
-# Add the root directory to sys.path
-sys.path.append('/home/jesse/Thesis/co_learning_robot_personalities/src')
-
 from co_learning_messages.msg import secondary_task_message
-from co_learning_secondary_task.src.pantograph import Pantograph
-from co_learning_secondary_task.src.pyhapi import Mechanisms
-from co_learning_secondary_task.src.pshape import PShape      
+from co_learning_secondary_task.pantograph import Pantograph
+from co_learning_secondary_task.pyhapi import Mechanisms
+from co_learning_secondary_task.pshape import PShape      
 
 class secondary_task():
     def __init__(self):

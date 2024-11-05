@@ -1,30 +1,38 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(co_learning_controllers)
 
+## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS
-  actionlib_msgs # controller action server 
-  std_msgs #TODO: not sure if its needed to build msgs
+  rospy
+  std_msgs
+  actionlib_msgs
+  cor_tud_msgs
+  co_learning_messages
 )
 
+## Declare a catkin package
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES cor_tud_controllers
-	CATKIN_DEPENDS cor_tud_msgs
-#  DEPENDS system_lib
+  CATKIN_DEPENDS
+    rospy
+    std_msgs
+    actionlib_msgs
+    cor_tud_msgs
+    co_learning_messages
 )
 
-#include_directories(
-# include
-#  ${catkin_INCLUDE_DIRS}
-#)
-
-
+## Install Python modules
 catkin_python_setup()
 
+## Install launch files
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)
+
+## Install scripts
 catkin_install_python(PROGRAMS
-  src/control_node.py
-  src/hand_controller.py
-  src/robot_controller.py
-  src/robot_impedance_controller.py
+  src/co_learning_controllers/control_node.py
+  src/co_learning_controllers/hand_controller.py
+  src/co_learning_controllers/robot_impedance_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
+

@@ -3,12 +3,6 @@
 import sys
 import os
 
-# Modify the Python path to recognize the package.
-script_dir = os.path.dirname(os.path.abspath(__file__))
-workspace_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
-if workspace_root not in sys.path:
-    sys.path.append(workspace_root)
-
 import argparse
 import time
 import random
@@ -19,11 +13,12 @@ import numpy as np
 import rospy
 from std_msgs.msg import String
 
+from co_learning_controllers.robot_impedance_controller import RoboticArmController
+from co_learning_controllers.hand_controller import SoftHandController
 from co_learning_messages.msg import secondary_task_message, hand_pose
-from co_learning_controllers.src.hand_controller import SoftHandController
-from q_learning.src.QLearnAgent import QLearningAgent
-from q_learning.src.CoLearnEnvironment import CoLearn
-from co_learning_controllers.src.robot_controller import RoboticArmController
+from q_learning.QLearnAgent import QLearningAgent
+from q_learning.CoLearnEnvironment import CoLearn
+
 
 
 
@@ -39,6 +34,7 @@ class RoboticArmControllerNode:
         personality_type: Literal[
             'leader', 'follower', 'cautious', 'impatient', 'baseline'
         ] = 'baseline',
+        participant_number: int = 1,
         fake=False,
     ):
         self.num_test_runs = num_test_runs
@@ -91,30 +87,6 @@ class RoboticArmControllerNode:
         self.alpha = 0.15
         self.gamma = 0.8
         self.Lamda = 0.3
-
-        self.messages = {
-            'impatient': [
-                'Please hurry up!',
-                'We need to move faster!',
-                'Speed it up, please!',
-            ],
-            'leader': [
-                'Good job, please present your arm to me when you are ready',
-                'Looking forward to your next move!',
-                'Excellent work, keep it up!',
-            ],
-            'cautious': [
-                'Take your time!',
-                'No rush, proceed at your pace',
-                'Make sure everything is ready before proceeding',
-            ],
-            'follower': [
-                'What should we do now?',
-                'I am ready to follow your lead',
-                'Let me know the next step',
-            ],
-            'baseline': [''],
-        }
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -237,15 +209,6 @@ class RoboticArmControllerNode:
             _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION, None)
             self.run = False
 
-    def send_message(self, phase=None):
-        if self.msg is not None:
-            msg = self.msg
-        else:
-            msg = secondary_task_message()
-        if phase is not None:
-            msg.phase = phase
-        self.pub.publish(msg)
-
     def start_episode(self):
         """
         Implements the finite state machine of the actions the robot has to take
@@ -282,6 +245,7 @@ class RoboticArmControllerNode:
 
             else:
                 self.update_q_table()
+                self.save_information()
                 self.check_end_condition()
 
     def convert_action_to_orientation(self, action: int):
@@ -290,6 +254,27 @@ class RoboticArmControllerNode:
             4: np.deg2rad([55, -40, -8, 82, 5, 50, 0]),  # Drop
         }
         return positions.get(action, INTERMEDIATE_POSITION)
+    
+    def save_information(self):
+        """Saves the Q-table and handles directory creation based on participant number and personality type."""
+        # Construct the participant directory
+        participant_dir = os.path.join(f'participant_{self.participant_number}')
+        os.makedirs(participant_dir, exist_ok=True)
+        
+        # Construct the personality type directory within the participant directory
+        personality_dir = os.path.join(participant_dir, f'personality_type_{self.type}')
+        os.makedirs(personality_dir, exist_ok=True)
+        
+        # Construct the Q_tables directory within the personality directory
+        q_tables_dir = os.path.join(personality_dir, 'Q_tables')
+        os.makedirs(q_tables_dir, exist_ok=True)
+        
+        # Construct the filename for the Q-table
+        q_table_filename = f'Q_table_{self.episode}.npy'
+        q_table_filepath = os.path.join(q_tables_dir, q_table_filename)
+        
+        # Save the Q-table using self.rl_agent.save_q_table(), passing in the filepath
+        self.rl_agent.save_q_table(filepath=q_table_filepath)
 
     def reset(self):
         _, self.phase = self.rl_agent.reset()
@@ -325,11 +310,16 @@ if __name__ == '__main__':
     try:
         parser = argparse.ArgumentParser(description="Robotic Arm Controller Node")
         parser.add_argument('--fake', action='store_true', help="Run in fake mode")
+        parser.add_argument('--participant_number', type=int, required=True, help="Participant number")
         args = parser.parse_args()
         fake = args.fake
 
         node = RoboticArmControllerNode(
-            num_test_runs=10, exploration_factor=0.25, personality_type='follower', fake=fake
+            num_test_runs=10,
+            exploration_factor=0.25,
+            personality_type='follower',
+            participant_number=args.participant_number,  # Pass participant_number to the node
+            fake=fake
         )
         node.start_episode()
 

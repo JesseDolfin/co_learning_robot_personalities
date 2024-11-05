@@ -2,32 +2,26 @@
 <package format="2">
   <name>co_learning_controllers</name>
   <version>0.0.1</version>
-  <description>Defines the package that handles the controll of the robotic arm</description>
+  <description>Package handling the control of the robotic arm.</description>
 
-  <maintainer email="j.r.dolfin@student.tudelft.nl">Jesse</maintainer>
+  <maintainer email="j.r.dolfin@student.tudelft.nl">Jesse Dolfin</maintainer>
+  <license>Apache-2.0</license>
 
-  <license>Apach 2.0 - Free for all, no warranties whatsoever</license>
-
-  <author email="j.r.dolfin@student.tudelft.nl">Jesse</author>
-
-
-  <!-- TODO: should we set this? -->
+  <!-- Build tool dependencies -->
   <buildtool_depend>catkin</buildtool_depend>
-  
-  <build_depend>cor_tud_msgs</build_depend>
+
+  <!-- Build dependencies -->
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
   <build_depend>actionlib_msgs</build_depend>
+  <build_depend>cor_tud_msgs</build_depend>
   <build_depend>co_learning_messages</build_depend>
-  
-  <build_export_depend>cor_tud_msgs</build_export_depend>
-  <build_export_depend>actionlib_msgs</build_export_depend>
-  <build_export_depend>co_learning_messages</build_export_depend>
 
-   
-  <!--exec_depend>cartesian_impedance_controller</exec_depend-->
-  <!-- build_depend>std_msgs</build_depend -->
-  <!-- build_export_depend>std_msgs</build_export_depend -->
-      
-  <!-- exec_depend>actionlib_msgs</exec_depend -->
-  <!-- exec_depend>std_msgs</exec_depend -->
-
+  <!-- Run-time dependencies -->
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>actionlib_msgs</exec_depend>
+  <exec_depend>cor_tud_msgs</exec_depend>
+  <exec_depend>co_learning_messages</exec_depend>
 </package>
+

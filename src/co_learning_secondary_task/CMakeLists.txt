@@ -1,30 +1,35 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(co_learning_secondary_task)
 
+## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS
-  actionlib_msgs # controller action server 
-  std_msgs #TODO: not sure if its needed to build msgs
+  rospy
+  std_msgs
+  co_learning_messages
 )
 
+## Declare a catkin package
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES cor_tud_controllers
-	CATKIN_DEPENDS cor_tud_msgs
-#  DEPENDS system_lib
+  CATKIN_DEPENDS
+    rospy
+    std_msgs
+    co_learning_messages
 )
 
-#include_directories(
-# include
-#  ${catkin_INCLUDE_DIRS}
-#)
-
-
+## Install Python modules
 catkin_python_setup()
 
+## Install scripts
 catkin_install_python(PROGRAMS
-  src/secondary_task.py
-  src/pantograph.py
-  src/pshape.py
-  src/pyhapi.py
+  src/co_learning_secondary_task/secondary_task.py
+  src/co_learning_secondary_task/pantograph.py
+  src/co_learning_secondary_task/pshape.py
+  src/co_learning_secondary_task/pyhapi.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+## Install resources
+install(DIRECTORY src/co_learning_secondary_task/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  FILES_MATCHING PATTERN "*.mp3" PATTERN "*.png"
 )
