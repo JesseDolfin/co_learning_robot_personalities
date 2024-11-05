@@ -86,10 +86,10 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    ```
 2. Install the [iiwa_ros](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros) package from the KUKA iiwa CoR lab's repository, following their installation instructions **except for the compilation instructions**. This means that all the cloned repos go into ```<WORKSPACE_NAME>```.
 3. Go into the source folder and clone the iiwa_ros repo:
-  ```sh
-  cd src
-  git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/iiwa_ros.git
-  ```
+   ```sh
+   cd src
+   git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/iiwa_ros.git
+   ```
 4. Clone the impedance controller and checkout a specific branch that allows compatibility with the cor_tud iiwa_ros package:
    ```sh
    git clone git@gitlab.tudelft.nl:nickymol/iiwa_impedance_control.git
@@ -103,11 +103,11 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    git clone https://bitbucket.org/qbrobotics/qbhand-ros.git
    ```
 6. Lastly, clone this repository and build the workspace:
-  ```sh
-  git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
-  cd ..
-  catkin_make
-  ```
+   ```sh
+   git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
+   cd ..
+   catkin_make
+   ```
 7. Install additional dependencies:
    ```sh
    pip install numpy==1.21 python-dateutil==2.8.2 mediapipe pyrealsense2 ultralytics gymnasium pygame pyserial
