@@ -76,7 +76,7 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    ```sh
    sudo apt install ros-noetic-combined-robot-hw
    ```
-2. Install the RealSense SDK 2.0, to do this follow their [installation instructions](https://dev.intelrealsense.com/docs/compiling-librealsense-for-linux-ubuntu-guide)
+2. Install the RealSense SDK 2.0. To do this, follow their [installation instructions](https://dev.intelrealsense.com/docs/compiling-librealsense-for-linux-ubuntu-guide)
 
 ### Installation
 1. Create a workspace folder and go into it, then create a src folder
@@ -117,7 +117,7 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
 
 <!-- USAGE EXAMPLES -->
 ## Usage
-After installing and sourcing the software the simulation may be started using the following roslaunch command:
+After installing and sourcing the software, the simulation may be started using the following roslaunch command:
 ```sh
 roslaunch co_learning_controllers bringup.launch allow_nodes:=false
 ```
@@ -126,7 +126,7 @@ If you want to start this on the real robot, run the command with the prefix `si
 ```sh
 roslaunch co_learning_controllers co_learning_test_setup.launch simulation:=false
 ```
-It is possible to selectively turn off nodes , make sure that you set ```allow_nodes:=true``` or omit the option entirely as the default value is true. The full set of node control parameters are:
+It is possible to selectively turn off nodes, make sure that you set ```allow_nodes:=true``` or omit the option entirely as the default value is true. The full set of node control parameters are:
 ```xml
 <arg name="allow_nodes" default="true"/>
 <arg name="control_node" default="true"/>
@@ -135,21 +135,30 @@ It is possible to selectively turn off nodes , make sure that you set ```allow_n
 <arg name="detection" default="true"/>
 <arg name="qb_hand" default="true"/>
 ```
-All the nodes are stand-alone; however, the control_node requires input from the secondary_task_message.It is not possible to obtain a successful handover without the RealSense camera to monitor this; if you want to test the node with a positive handover input, you can bypass this check if you manually set the handover_successful field of the secondary_task_message to '-1' or '1'. You have to publish this on the /Task_status topic. If you pass the parameter ``fake:=true`` to the control launch file, it will run without the qb_hand launch file and will run the hand_controller node in fake mode (this allows the control node to run without the qb_hand present). 
+All the nodes are stand-alone; however, the control_node requires input from the secondary_task_message. It is impossible to obtain a successful handover without the RealSense camera to monitor it. If you want to test the experiment with a positive handover input, you can bypass this check if you manually set the handover_successful field of the secondary_task_message to '-1' or '1'. You have to publish this on the /Task_status topic. If you pass the parameter ``fake:=true`` to the control launch file, it will run without the qb_hand launch file and will run the hand_controller node in fake mode (this allows the control node to run without the qb_hand present). 
 
 ### Running the full experiment
-Follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
-Then on machine A source the workspace in a terminal and run the following:
+The experiment auto collects data, the base directory folder is hardcoded in the control_node.py file. You have to change the line:
+```py
+self.base_dir = os.path.expanduser('~/thesis/src/co_learning_robot_personalities/data_collection')
+```
+To:
+```py
+self.base_dir = os.path.expanduser('Your/file/path')
+```
+If you want the data to be collected in a folder of your choosing.
+
+Next, you need to follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
+Then, on machine A, source the workspace in a terminal and run the following:
 ```sh
 roslaunch co_learning_controllers bringup.launch simulation:=false secondary_task:=false participant_number:=<x> personality_type:=<y>
 ```
 Where the participant_number must be an integer and the personality type can be any of the following: "baseline, leader, follower, impatient, patient".
 
-On machine B connect the ethernet cable from the switch to the machine, source the workspace and run the following:
+On machine B, connect the ethernet cable from the switch to the machine, source the workspace and run the following:
 ```sh
 rosrun co_learning_secondary_task secondary_task.py 
 ```
-
 After all of this, start the FRIOverlay app in automatic mode on the tablet.  
 The robot arm should now be moving, to start the experiment simply start the simulation on machine B.
 
@@ -160,9 +169,9 @@ _For more examples, please refer to the [Documentation](https://google.com)_
 
 <!-- CONTRIBUTING -->
 ## Contributing
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+Contributions make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
 
-If you have a suggestion to improve this, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement."
+If you suggest improving this, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement."
 Don't forget to give the project a star! Thanks again!
 
 1. Fork the Project
