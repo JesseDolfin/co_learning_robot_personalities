@@ -65,7 +65,17 @@
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-[![Product Name Screen Shot][product-screenshot]](https://preview.free3d.com/img/2015/06/2205987029685109856/qyz27g5f.jpg)
+
+This project explores **co-learning in human-robot teams** by implementing distinct robot personalities that adjust the robot’s interaction style. By configuring the KUKA iiwa7 robot arm with a reinforcement learning (RL) algorithm, the setup enables the robot to adapt to human partners based on pre-set personality traits dynamically.
+
+### Key Features
+
+- **Personality Parameters**: Adjust the robot’s behaviour along different personality axes—e.g., *leader/follower* or *patient/impatient*—to observe how these traits impact collaborative efficiency and human perceptions.
+- **Reinforcement Learning**: Uses Q-learning to enable the robot to learn handover strategies based on human feedback, refining these strategies over repeated interactions.
+- **Human-Robot Interaction Insights**: Collects data on joint strategies, adaptation rates, and collaboration fluency to better understand the influence of robot personality in co-learning environments.
+
+This project is intended for researchers and developers in human-robot interaction and collaborative robotics. It aims to provide a practical toolkit for examining how robot personality traits can impact teamwork and learning dynamics.
+
 
 <!-- GETTING STARTED -->
 ## Getting Started
