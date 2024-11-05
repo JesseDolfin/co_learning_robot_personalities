@@ -31,7 +31,7 @@
 <h3 align="center">Co-learning with robot personalities for KUKA iiwa7</h3>
 
   <p align="center">
-    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities/README.md"><strong>About the project</strong></a>
+    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities/blob/master/README.md"><strong>About the project</strong></a>
     <br />
     <a href="https://github.com/JesseDolfin/co_learning_robot_personalities"><strong>Explore the docs »</strong></a>
     <br />
