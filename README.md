@@ -33,7 +33,7 @@
   <p align="center">
     <a href="https://github.com/JesseDolfin/co_learning_robot_personalities/blob/master/README.md"><strong>About the project</strong></a>
     <br />
-    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/JesseDolfin/co_learning_robot_personalities/blob/master/documents/Thesis-placeholder.pdf"><strong>Explore the docs »</strong></a>
     <br />
     <br />
     <a href="https://github.com/JesseDolfin/co_learning_robot_personalities">View Demo</a>
