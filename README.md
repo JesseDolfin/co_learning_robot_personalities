@@ -135,7 +135,7 @@ It is possible to selectively turn off nodes , make sure that you set ```allow_n
 <arg name="detection" default="true"/>
 <arg name="qb_hand" default="true"/>
 ```
-All the nodes are stand-alone except for the control_node, which needs at least the detection node to run. (This can be bypassed if you manually set the handover_successful field of the secondary_task_message to '0' or '1'. You have to publish this on the /Task_status topic.) If you pass the parameter ``fake:=true`` to the control launch file, it will run without the qb_hand launch file and will run the hand_controller node in fake mode (this allows the control node to run without the qb_hand present). 
+All the nodes are stand-alone; however, the control_node requires input from the secondary_task_message.It is not possible to obtain a successful handover without the RealSense camera to monitor this; if you want to test the node with a positive handover input, you can bypass this check if you manually set the handover_successful field of the secondary_task_message to '-1' or '1'. You have to publish this on the /Task_status topic. If you pass the parameter ``fake:=true`` to the control launch file, it will run without the qb_hand launch file and will run the hand_controller node in fake mode (this allows the control node to run without the qb_hand present). 
 
 ### Running the full experiment
 Follow the [Setup multimachine ROS guide](setup_multimachine_ros.md) 
