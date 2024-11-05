@@ -172,7 +172,7 @@ rosrun co_learning_secondary_task secondary_task.py
 After all of this, start the FRIOverlay app in automatic mode on the tablet.  
 The robot arm should now be moving, to start the experiment simply start the simulation on machine B.
 
-_For more examples, please refer to the [Documentation](https://google.com)_
+_For more examples, please refer to the [Documentation](https://github.com/JesseDolfin/co_learning_robot_personalities/blob/master/documents)_
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
