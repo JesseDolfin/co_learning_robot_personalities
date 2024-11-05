@@ -210,16 +210,17 @@ class RoboticArmControllerNode:
 
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")
-        # Define the topics to record
+
         topics_to_record = ['/Task_status', '/hand_pose','/CartesianImpedanceController/joint_states','/JointImpedanceController/joint_states']
-        # Construct the bag file path
+
         bag_files_dir = os.path.join(self.personality_dir, 'bag_files')
         os.makedirs(bag_files_dir, exist_ok=True)
         bag_filename = f'robot_state_episode_{self.episode}.bag'
         bag_filepath = os.path.join(bag_files_dir, bag_filename)
+
         # Construct the rosbag record command
         command = ['rosbag', 'record', '-O', bag_filepath] + topics_to_record
-        # Start the subprocess
+    
         self.rosbag_process = subprocess.Popen(command)
         time.sleep(2) # Allow rosbag to startup
  
@@ -285,37 +286,23 @@ class RoboticArmControllerNode:
 
         total_reward = self.rl_agent.total_reward
         successful_handover = self.successful_handover
-        # Base directory for storing data
-        base_dir = os.path.expanduser('~/thesis/src/co_learning_robot_personalities/data_collection')
-        
-        # Construct the participant directory within the base directory
-        participant_dir = os.path.join(base_dir, f'participant_{self.participant_number}')
-        os.makedirs(participant_dir, exist_ok=True)
-        
-        # Construct the personality type directory within the participant directory
-        personality_dir = os.path.join(participant_dir, f'personality_type_{self.type}')
-        os.makedirs(personality_dir, exist_ok=True)
-        
-        # Construct the Q_tables directory within the personality directory
-        q_tables_dir = os.path.join(personality_dir, 'Q_tables')
+
+        # Q_tables
+        q_tables_dir = os.path.join(self.personality_dir, 'Q_tables')
         os.makedirs(q_tables_dir, exist_ok=True)
-        
-        # Construct the filename for the Q-table
+
         q_table_filename = f'Q_table_{self.episode}.npy'
         q_table_filepath = os.path.join(q_tables_dir, q_table_filename)
         
-        # Save the Q-table using self.rl_agent.save_q_table(), passing in the filepath
         self.rl_agent.save_q_table(filepath=q_table_filepath)
         
-        # Construct the logs directory within the personality directory
-        logs_dir = os.path.join(personality_dir, 'logs')
+        # Log files
+        logs_dir = os.path.join(self.personality_dir, 'logs')
         os.makedirs(logs_dir, exist_ok=True)
         
-        # Construct the filename for the log
         log_filename = 'episode_logs.csv'
         log_filepath = os.path.join(logs_dir, log_filename)
         
-        # Check if the file exists
         file_exists = os.path.isfile(log_filepath)
         
         # Open the file in append mode
@@ -323,11 +310,9 @@ class RoboticArmControllerNode:
             fieldnames = ['episode', 'total_reward', 'successful_handover']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
-            # If the file didn't exist, write the header
             if not file_exists:
                 writer.writeheader()
             
-            # Write the data
             writer.writerow({'episode': self.episode, 
                             'total_reward': total_reward, 
                             'successful_handover': successful_handover})
