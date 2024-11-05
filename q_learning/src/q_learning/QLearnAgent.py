@@ -18,7 +18,6 @@ class QLearningAgent:
 
         self.reset_experience()
         self.state, self.phase = self.env.reset()
-        self.e_trace = np.zeros((self.env.state_size, self.env.action_size))
         self.total_reward = 0
 
         self.initialize = True
@@ -73,7 +72,6 @@ class QLearningAgent:
                 self.state, self.phase = self.env.reset()
                 self.reset_experience()
                 terminated = False
-                self.e_trace = np.zeros_like(self.q_table)
                 self.initialize = False
 
             phase = self.phase
@@ -110,7 +108,6 @@ class QLearningAgent:
                 self.state, self.phase = self.env.reset()
                 self.reset_experience()
                 terminated = False
-                self.e_trace = np.zeros_like(self.q_table)
 
                 while not terminated:
                     action = self.epsilon_greedy(epsilon)
@@ -174,17 +171,15 @@ class QLearningAgent:
         self.state, self.phase = self.env.reset()
         return self.state, self.phase
 
-    def update_q_table(self, state, action, reward, next_state, alpha, gamma, lamda):
-        """Updates the Q-table using the Q-learning update rule with eligibility traces."""
-        old_value = self.q_table[state, action]
-        next_max = np.max(self.q_table[next_state, :])
-        td_error = reward + gamma * next_max - old_value
+def update_q_table(self, state, action, reward, next_state, alpha, gamma):
+    """Updates the Q-table using the standard Q-learning update rule"""
+    old_value = self.q_table[state, action]
+    next_max = np.max(self.q_table[next_state, :])
+    td_error = reward + gamma * next_max - old_value
 
-        self.e_trace[state, action] += 1
+    # Update the Q-value directly
+    self.q_table[state, action] += alpha * td_error
 
-        self.q_table += alpha * td_error * self.e_trace
-
-        self.e_trace *= gamma * lamda
 
     def save_q_table(self, filepath=None):
         """Saves the Q-table to a file."""
