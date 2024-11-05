@@ -206,10 +206,9 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ## Contact
 Jesse Dolfin - jesse.dolfin@gmail.com
 
-Project Link: [https://github.com/JesseDolfin/Co-Learning-KUKA-RL](https://github.com/JesseDolfin/Co-Learning-KUKA-RL)
+Project Link: [https://github.com/JesseDolfin/co_learning_robot_personalities](https://github.com/JesseDolfin/co_learning_robot_personalities)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
