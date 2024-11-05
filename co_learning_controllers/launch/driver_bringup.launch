@@ -56,7 +56,7 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     <!-- Load joint controller config from YAML to param server -->
     <rosparam file="$(find iiwa_impedance_control)/config/iiwa_impedance_control.yaml" 
             command="load" ns="$(arg robot_name)$(arg model)"/>
-            
+
     <!-- Spawn controller -->
     <include file="$(find iiwa_impedance_control)/launch/iiwa_impedance_control.launch">
         <arg name="controller" value="$(arg controller)"/>

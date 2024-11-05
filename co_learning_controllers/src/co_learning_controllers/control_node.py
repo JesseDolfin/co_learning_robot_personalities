@@ -20,31 +20,23 @@ from q_learning.QLearnAgent import QLearningAgent
 from q_learning.CoLearnEnvironment import CoLearn
 
 
-
-
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
 INTERMEDIATE_POSITION = [np.pi / 2, 0, 0, 0, 0, 0, 0]
 
 
 class RoboticArmControllerNode:
-    def __init__(
-        self,
-        num_test_runs: int,
-        exploration_factor: float = 0.9,
-        personality_type: Literal[
-            'leader', 'follower', 'cautious', 'impatient', 'baseline'
-        ] = 'baseline',
-        participant_number: int = 1,
-        fake=False,
-    ):
-        self.num_test_runs = num_test_runs
+    def __init__(self,):
+        self.num_test_runs = rospy.get_param('~num_test_runs', 10)
+        self.type = rospy.get_param('~personality_type', 'baseline')
+        self.participant_number = rospy.get_param('~participant_number', 1)
+        self.fake = rospy.get_param('~fake', False)
 
-        if personality_type == 'leader':
+        if self.type == 'leader':
             self.exploration_factor = 0.8
-        elif personality_type == 'follower':
+        elif self.type == 'follower':
             self.exploration_factor = 0.6
         else:
-            self.exploration_factor = exploration_factor
+            self.exploration_factor = 0.25
 
         self.phase = 0
         self.terminated = False
@@ -57,7 +49,6 @@ class RoboticArmControllerNode:
         self.q = None
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
-        self.type = personality_type
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
@@ -66,19 +57,19 @@ class RoboticArmControllerNode:
         self.pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
 
         self.env = CoLearn()
-        if personality_type == 'leader':
+        if self.type == 'leader':
             self.env.type = 'leader'
 
         self.rl_agent = QLearningAgent(env=self.env)
-        if personality_type == 'follower':
+        if self.type == 'follower':
             self.rl_agent.type = 'follower'
 
-        self.hand_controller = SoftHandController(fake)
+        self.hand_controller = SoftHandController(self.fake)
         self.robot_arm_controller = RoboticArmController()
-        if personality_type == 'impatient':
+        if self.type == 'impatient':
             self.robot_arm_controller.type = 'fast'
             self.hand_time = 1
-        elif personality_type == 'cautious':
+        elif self.type == 'cautious':
             self.robot_arm_controller.type = 'slow'
             self.hand_time = 3
         else:
@@ -116,8 +107,8 @@ class RoboticArmControllerNode:
         Go to the home position and grab the object
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: Home")
-        _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION, None)
-        _ = self.robot_arm_controller.send_position_command(HOME_POSITION, None)
+        _ = self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
+        _ = self.robot_arm_controller.send_trajectory_goal(HOME_POSITION, 'joint')
         self.hand_controller.send_goal('open', self.hand_time)
         time.sleep(2)
         self.hand_controller.send_goal('close', self.hand_time)
@@ -170,8 +161,8 @@ class RoboticArmControllerNode:
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         position = self.convert_action_to_orientation(self.action)
-        _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION, None)
-        _ = self.robot_arm_controller.send_position_command(position, None)
+        _ = self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
+        _ = self.robot_arm_controller.send_trajectory_goal(position, 'joint')
         self.robot_arm_controller.move_towards_hand(update=True)
 
     def phase_3(self):
@@ -206,7 +197,7 @@ class RoboticArmControllerNode:
                 message = String()
                 message.data = message_text
         else:
-            _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION, None)
+            _ = self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
             self.run = False
 
     def start_episode(self):
@@ -308,20 +299,7 @@ class RoboticArmControllerNode:
 
 if __name__ == '__main__':
     try:
-        parser = argparse.ArgumentParser(description="Robotic Arm Controller Node")
-        parser.add_argument('--fake', action='store_true', help="Run in fake mode")
-        parser.add_argument('--participant_number', type=int, required=True, help="Participant number")
-        args = parser.parse_args()
-        fake = args.fake
-
-        node = RoboticArmControllerNode(
-            num_test_runs=10,
-            exploration_factor=0.25,
-            personality_type='follower',
-            participant_number=args.participant_number,  # Pass participant_number to the node
-            fake=fake
-        )
+        node = RoboticArmControllerNode()
         node.start_episode()
-
     except rospy.ROSInterruptException:
         pass

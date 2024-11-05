@@ -35,12 +35,14 @@ class RoboticArmController:
         self.save_target = None
         self.robot = None
 
+        self.ns = rospy.get_param('/namespaces', 'iiwa7')
+        self.robot = Robot(model=self.ns.replace('/', ''))
+
         self.init_action_servers()
         self.init_subscriber_publishers()
         self.reconfigure_parameters()
 
-        ns = rospy.get_param('/namespaces', 'iiwa7')
-        self.robot = Robot(model=ns.replace('/', ''))
+        
 
     def init_subscriber_publishers(self):
         self.joint_state = rospy.Subscriber("CartesianImpedanceController/joint_states", JointState, self.joint_callback, queue_size=10)
@@ -76,14 +78,14 @@ class RoboticArmController:
         except Exception as e:
             rospy.logwarn(f"Dynamic reconfigure server not found: {e}")
 
-        # try:
-        #     rospy.loginfo("Waiting for iiwa controller manager...")
-        #     rospy.wait_for_service('/iiwa/controller_manager/switch_controller')
-        #     self.controller_manager = rospy.ServiceProxy('/iiwa/controller_manager/switch_controller',
-        #                                                 SwitchController)
-        #     rospy.loginfo("Iiwa controller manager found!")
-        # except Exception as e:
-        #     rospy.logwarn(f"Iiwa controller manager not found: {e}")
+        try:
+            rospy.loginfo("Waiting for iiwa controller manager...")
+            rospy.wait_for_service(self.ns+'/controller_manager/switch_controller')
+            self.controller_manager = rospy.ServiceProxy(self.ns+'/controller_manager/switch_controller',
+                                                        SwitchController)
+            rospy.loginfo("iiwa controller manager found!")
+        except Exception as e:
+            rospy.logwarn(f"iiwa controller manager not found: {e}")
         rospy.sleep(2)  # Allow servers to start up
 
     # Callback functions to handle action results and feedback
@@ -97,7 +99,7 @@ class RoboticArmController:
         pass  # Feedback handling can be implemented here if needed
 
     def joint_trajectory_done_callback(self, status, result):
-        rospy.loginfo(f"Joint trajectory execution done with status: {status}")
+        rospy.loginfo(f"Joint trajectory execution done with status: {status}, {result}")
 
     def joint_trajectory_active_callback(self):
         rospy.loginfo("Joint trajectory execution is active.")
@@ -193,17 +195,34 @@ class RoboticArmController:
     def send_trajectory_goal(self, goal, mode):
         try:
             if mode == "cartesian":
-                if not isinstance(goal, CartesianTrajectoryExecutionGoal):
-                    raise TypeError("Goal must be a CartesianTrajectoryExecutionGoal when mode is 'cartesian'")
-                self.cartesian_action_client.send_goal(
-                    goal,
-                    self.cartesian_trajectory_done_callback,
-                    self.cartesian_trajectory_active_callback,
-                    self.cartesian_trajectory_feedback_callback)
-            elif mode == "joint":
-                if not isinstance(goal, JointTrajectoryExecutionGoal):
-                    raise TypeError("Goal must be a JointTrajectoryExecutionGoal when mode is 'joint'")
+                if isinstance(goal, list):
+                    if len(goal) != 7:
+                        raise ValueError("For Cartesian mode, goal must be a list with exactly 7 elements.")
+                    rospy.logwarn("Goal is not a CartesianTrajectoryExecutionGoal; using provided list as the target.")
+                    goal = self.create_cartesian_goal(target=goal)
 
+                response = self.controller_manager(
+                    start_controllers=['/CartesianImpedanceController'],
+                    stop_controllers=['/JointImpedanceController'],
+                    strictness=1, start_asap=True, timeout=0.0)
+
+                if not response.ok:
+                    rospy.logerr("Failed to switch controllers")
+                    raise RuntimeError("Controller switch failed")
+                else:
+                    self.cartesian_action_client.send_goal(
+                        goal,
+                        self.cartesian_trajectory_done_callback,
+                        self.cartesian_trajectory_active_callback,
+                        self.cartesian_trajectory_feedback_callback)
+
+            elif mode == "joint":
+                if isinstance(goal, list):
+                    if len(goal) != 7:
+                        raise ValueError("For Joint mode, goal must be a list with exactly 7 elements.")
+                    rospy.logwarn("Goal is not a JointTrajectoryExecutionGoal; using provided list as joint positions.")
+                    goal = self.create_joint_goal(joint_positions_goal=goal)
+                
                 response = self.controller_manager(
                     start_controllers=['/JointImpedanceController'],
                     stop_controllers=['/CartesianImpedanceController'],
@@ -226,10 +245,17 @@ class RoboticArmController:
             rospy.logerr(f"Unexpected error in send_trajectory_goal: {e}")
             raise
 
-    def create_joint_goal(self, joint_positions_goal: List[float], joint_velocities_goal: List[float]):
+
+
+    def create_joint_goal(self, joint_positions_goal: List[float], joint_velocities_goal: List[float] = None):
         try:
-            if len(joint_positions_goal) != 7 or len(joint_velocities_goal) != 7:
-                raise ValueError("Joint positions and velocities must have exactly 7 elements.")
+            if len(joint_positions_goal) != 7:
+                raise ValueError("Joint positions must have exactly 7 elements.")
+            
+            if joint_velocities_goal is None:
+                joint_velocities_goal = [0.5] * 7
+            elif len(velocity) != 7:
+                raise ValueError("Velocity must have exactly 7 elements")
 
             goal = JointTrajectoryExecutionGoal()
 
@@ -251,10 +277,15 @@ class RoboticArmController:
             rospy.logerr(f"Unexpected error in create_joint_goal: {e}")
             raise RuntimeError(f"An unexpected error occurred in create_joint_goal: {e}")
 
-    def create_cartesian_goal(self, target: List[float], velocity: List[float], begin_point: List[float] = None):
+    def create_cartesian_goal(self, target: List[float], velocity: List[float] = None, begin_point: List[float] = None):
         try:
-            if len(target) != 7 or len(velocity) != 2:
-                raise ValueError("Target must have 7 elements, velocity must have 2 elements.")
+            if len(target) != 7:
+                raise ValueError("Target must have 7 elements")
+            
+            if velocity is None:
+                velocity = [0.5, 0.5]
+            elif len(velocity) != 2:
+                raise ValueError("Velocity must have 2 elements.")
 
             if begin_point is None:
                 begin_point = [99] * 7
