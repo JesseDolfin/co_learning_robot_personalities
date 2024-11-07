@@ -6,7 +6,6 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   actionlib_msgs
-  cor_tud_msgs
   co_learning_messages
 )
 
@@ -16,7 +15,6 @@ catkin_package(
     rospy
     std_msgs
     actionlib_msgs
-    cor_tud_msgs
     co_learning_messages
 )
 
