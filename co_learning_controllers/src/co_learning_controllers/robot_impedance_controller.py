@@ -26,7 +26,7 @@ class RoboticArmController:
     def __init__(self):
         self.q = None
         self.q_dot = None
-        self.ee_pose = [0, 0, 0, 0, 0, 0]
+        self.ee_pose = None
         self._effort_mag_save = 0
         self.goal_time = 5.0
         self.hand_pose = [0, 0, 0]
@@ -34,6 +34,7 @@ class RoboticArmController:
         self.save_target = None
         self.robot = None
         self.movement_finished = False
+        self.fixed_orientation = None
 
         self.init_action_servers()
         self.init_subscriber_publishers()
@@ -41,6 +42,7 @@ class RoboticArmController:
 
     def init_subscriber_publishers(self):
         self.joint_state = rospy.Subscriber("CartesianImpedanceController/joint_states", JointState, self.joint_callback, queue_size=10)
+        self.cartesian_state = rospy.Subscriber("CartesianImpedanceController/cartesian_pose", PoseStamped, self.cartesian_callback,queue_size=10)
         self.hand_pose_sub = rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
         self.publish_human_input = rospy.Publisher('human_input', Bool, queue_size=1)
 
@@ -123,14 +125,8 @@ class RoboticArmController:
         effort_magnitude = np.linalg.norm(effort)
         self._effort_mag_save = effort_magnitude
 
-        if self.robot is not None and self.q is not None:
-            ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
-
-            translation = ee_T[:3, 3]
-            rot_mat = ee_T[:3, :3]
-            r = R.from_matrix(rot_mat)
-            quaternion = r.as_quat()
-            self.ee_pose = np.hstack((translation, quaternion))
+    def cartesian_callback(self,msg):
+        self.ee_pose = msg.pose
 
     def hand_pose_callback(self, msg):
         """Callback function for hand_pose subscriber."""
@@ -143,7 +139,7 @@ class RoboticArmController:
         nullspace_stiffness: List[float] = [100.0, 100.0, 50.0, 50.0, 50.0, 50.0, 10.0],
         nulspace_damping: List[float] = [0.7] * 7,
         seperate_axis: bool = False,
-        translational_stiffness: float = 400.0,
+        translational_stiffness: float = 1000.0,
         rotational_stiffness: float = 400.0
     ) -> None:
         """Reconfigure parameters for the Cartesian impedance controller."""
@@ -398,47 +394,75 @@ class RoboticArmController:
         Move the robot's end-effector towards the detected hand position.
 
         Parameters:
-            update (bool): Whether to update the target based on the current hand position.
+            update (bool): Whether to update the target's orienation based on the current hand orientation.
         """
         rospy.loginfo("Moving towards hand")
 
-        self.fixed_orientation = self.ee_pose[3:]  # Quaternion
-
-        if update:
-            self.q_save = self.q
+        # Turn on cartesian controller to obtain ee_pose
+        ok = False
+        if self.is_controller_running('/JointImpedanceController'): 
+            ok = self.controller_manager( 
+                    start_controllers=['/CartesianImpedanceController'],
+                    stop_controllers=['/JointImpedanceController'],
+                    strictness=1, start_asap=True, timeout=0.0)
+        elif self.is_controller_running('/CartesianImpedanceController'):
+            ok = True
         else:
-            self.q_save = None
+            raise RuntimeError(
+                "No correct controller is currently running. Ensure that either "
+                "JointImpedanceController or CartesianImpedanceController is active.")
+
+        rate = rospy.Rate(10)
+        while not ok: 
+            rate.sleep()
+
+        self.ee_pose = None # obtain latest pose information
+        while self.ee_pose is None:
+            rate.sleep()
+
+        if self.fixed_orientation is None or update:
+            ori = self.ee_pose.orientation
+            self.fixed_orientation = np.array([ori.x,ori.y,ori.z,ori.w])
+        else:
+            self.fixed_orientation = [0.27,0.56,0.32,0.72] # safe orientiation
+
+        pos = self.ee_pose.position
+        current_position = np.array([pos.x,pos.y,pos.z])
 
         # Wait for hand to be detected if not already
-        rate = rospy.Rate(10)
+        
         while np.all(np.array(self.hand_pose) == 0):
             rospy.loginfo("Waiting for hand to be detected...")
             rate.sleep()
 
         self.saved_pose = np.array(self.hand_pose)
         target_position_arm = self.frame_transform(self.saved_pose)
-        target_position_arm[2] = max(target_position_arm[2], 0.1)
-        current_position = np.array(self.ee_pose[:3])
+        target_position_arm[2] = max(target_position_arm[2], 0.1) # Z- value cannot be too low
 
-        # Define position threshold
+        target_position_arm = np.array([-0.30,-0.40,0.6]) # REMOVE
+
+        error = np.linalg.norm(target_position_arm - current_position)
+
         position_threshold = 0.2
-
-        while np.linalg.norm(target_position_arm - current_position) > position_threshold:
-
+        rate = rospy.Rate(10)
+        while error > position_threshold:
             self.saved_pose = np.array(self.hand_pose)
             target_position_arm = self.frame_transform(self.saved_pose)
             target_position_arm[2] = max(target_position_arm[2], 0.1)
+            target_position_arm = np.array([-0.30,-0.40,0.6]) # REMOVE
             target_pose = np.hstack((target_position_arm, self.fixed_orientation))
         
-            velocity = [0.5, 0.5] 
+            velocity = [0.1, 0.5] 
             goal = self.create_cartesian_goal(target=target_pose, velocity=velocity)
+            rospy.loginfo(goal)
             self.send_trajectory_goal(goal, "cartesian")
 
-            current_position = np.array(self.ee_pose[:3])
+            pos = self.ee_pose.position
+            current_position = np.array([pos.x,pos.y,pos.z])
+
+            rate.sleep()
             error = np.linalg.norm(target_position_arm - current_position)
             rospy.loginfo(f"Error norm: {error:.3f}, threshold: {position_threshold}")
-
-            rospy.sleep(0.1)  # Sleep to prevent overloading the CPU
 
         rospy.loginfo("Reached the hand position")
 
@@ -487,20 +511,25 @@ if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
     controller = RoboticArmController()
 
+    #drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
+    controller.send_trajectory_goal(drop,'joint')
+
+    controller.move_towards_hand(True)
+
     # Define the Euler angles for a 90-degree rotation around the z-axis
-    roll, pitch, yaw = 0, 90, 0
+    # roll, pitch, yaw = 0, 90, 0
 
-    # Convert the Euler angles to a quaternion
-    rotation = R.from_euler('xyz', [roll, pitch, yaw], degrees=True)
-    quaternion = rotation.as_quat()  # [x, y, z, w]
+    # # Convert the Euler angles to a quaternion
+    # rotation = R.from_euler('xyz', [roll, pitch, yaw], degrees=True)
+    # quaternion = rotation.as_quat()  # [x, y, z, w]
 
-    # Define the goal with the quaternion for orientation
-    goal = controller.create_cartesian_goal([0.2, 0.2, 0.5, *quaternion], [0.01, 0.01])
+    # # Define the goal with the quaternion for orientation
+    # goal = controller.create_cartesian_goal([0.2, 0.2, 0.5, *quaternion], [0.01, 0.01])
 
-    # Send the goal to the controller
-    controller.send_trajectory_goal([0,np.pi/2,0,0,0,0,0],'joint')
-    controller.send_trajectory_goal(INTERMEDIATE_POSITION,'joint')
-    controller.send_trajectory_goal(goal, mode="cartesian")
+    # # Send the goal to the controller
+    # controller.send_trajectory_goal([0,np.pi/2,0,0,0,0,0],'joint')
+    # controller.send_trajectory_goal(INTERMEDIATE_POSITION,'joint')
+    # controller.send_trajectory_goal(goal, mode="cartesian")
 
     rospy.spin()
 

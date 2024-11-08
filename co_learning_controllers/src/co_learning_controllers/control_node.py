@@ -22,7 +22,7 @@ from q_learning.CoLearnEnvironment import CoLearn
 
 
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
-INTERMEDIATE_POSITION = [0, 0, 0, 0, 0, 0, 0]
+INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 
 class RoboticArmControllerNode:
