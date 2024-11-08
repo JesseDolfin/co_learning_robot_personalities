@@ -112,7 +112,7 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
 4. Go into the source folder and clone the iiwa_ros repo:
    ```sh
    cd src
-   git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/iiwa_ros.git
+   git clone https://github.com/epfl-lasa/iiwa_ros.git
    ```
 5. Clone the impedance controller and checkout a specific branch that removes the need for a specific end-effector:
    ```sh
