@@ -12,3 +12,4 @@ logs/
 *.task
 *.zip
 data_collection/
+camera_calibration.py

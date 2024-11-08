@@ -25,10 +25,16 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     <arg name="qb_hand" default="true"/>
 
      <!-- Arguments to modify experiment behaviour -->
-    <arg name="personality_type" default="baseline"/>
-    <arg name="participant_number" default="1"/>
+    <arg name="personality_type" default="fake"/>
+    <arg name="participant_number" default="-1"/>
     <arg name="fake" default="false"/>
-    <arg name="num_test_runs" default="10"/>
+    <arg name="num_test_runs" default="20"/>
+
+    <!-- Set these as parameters on the parameter server -->
+    <param name="personality_type" value="$(arg personality_type)"/>
+    <param name="participant_number" value="$(arg participant_number)"/>
+    <param name="fake" value="$(arg fake)"/>
+    <param name="num_test_runs" value="$(arg num_test_runs)"/>
 
     <!-- Select the robot -->
     <arg name="robot_name" default="iiwa"/>
@@ -58,15 +64,14 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
         <arg name="controller" value="$(arg controller)"/>
     </include>
 
+
+            
+
     
     <!-- IF allow_nodes:=false, launch just the barebone interface -->
     <group if="$(arg allow_nodes)">
         <group if="$(arg control_node)">
-            <!-- Set parameters in the node's private namespace -->
-            <param name="personality_type" value="$(arg personality_type)"/>
-            <param name="participant_number" value="$(arg participant_number)"/>
-            <param name="fake" value="$(arg fake)"/>
-            <param name="num_test_runs" value="$(arg num_test_runs)"/>
+            
 
             <node name="control_node"
                 pkg="co_learning_controllers"
