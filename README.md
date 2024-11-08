@@ -88,37 +88,51 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    ```
 2. Install the RealSense SDK 2.0. To do this, follow their [installation instructions](https://dev.intelrealsense.com/docs/compiling-librealsense-for-linux-ubuntu-guide)
 
+
 ### Installation
 1. Create a workspace folder and go into it, then create a src folder
    ```sh
    mkdir <WORKSPACE_NAME> && cd <WORKSPACE_NAME>
    mkdir src
    ```
-2. Install the [iiwa_ros](https://gitlab.tudelft.nl/kuka-iiwa-7-cor-lab/iiwa_ros) package from the KUKA iiwa CoR lab's repository, following their installation instructions **except for the compilation instructions**. This means that all the cloned repos go into ```<WORKSPACE_NAME>```.
-3. Go into the source folder and clone the iiwa_ros repo:
+2. Install the kuka-fri repository
+   ```sh
+   git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/kuka_fri.git
+   cd kuka_fri
+   git checkout legacy
+   # Apply SIMD patch:
+   wget https://gist.githubusercontent.com/matthias-mayr/0f947982474c1865aab825bd084e7a92/raw/244f1193bd30051ae625c8f29ed241855a59ee38/0001-Config-Disables-SIMD-march-native-by-default.patch
+   git am 0001-Config-Disables-SIMD-march-native-by-default.patch
+   # Build
+   ./waf configure
+   ./waf
+   sudo ./waf install
+   ```
+3. Install the [iiwa_ros](https://github.com/epfl-lasa/iiwa_ros) package from the epfl-lasa repository, following their installation instructions, except for the kuka-fri repository, as you have already installed this. This means that all the cloned repos go into ```<WORKSPACE_NAME>```. **DON'T RUN:** ```export CXXFLAGS="-march=native -faligned-new"``` The installation of the kuka-fri repository has disabled the SIMD flag, running -march=native will run this flag, causing segmentation fault issues later on.
+4. Go into the source folder and clone the iiwa_ros repo:
    ```sh
    cd src
    git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/iiwa_ros.git
    ```
-4. Clone the impedance controller and checkout a specific branch that allows compatibility with the cor_tud iiwa_ros package:
+5. Clone the impedance controller and checkout a specific branch that allows compatibility with the cor_tud iiwa_ros package:
    ```sh
    git clone git@gitlab.tudelft.nl:nickymol/iiwa_impedance_control.git
    cd iiwa_impedance_control
    git checkout cor_tud_compatibility
    cd ..
    ```
-5. Clone the qb_hand repositories:
+6. Clone the qb_hand repositories:
    ```sh
    git clone --recurse-submodules https://bitbucket.org/qbrobotics/qbdevice-ros.git
    git clone https://bitbucket.org/qbrobotics/qbhand-ros.git
    ```
-6. Lastly, clone this repository and build the workspace:
+7. Lastly, clone this repository and build the workspace:
    ```sh
    git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
    cd ..
    catkin_make
    ```
-7. Install additional dependencies:
+8. Install additional dependencies:
    ```sh
    pip install numpy==1.21 python-dateutil==2.8.2 mediapipe pyrealsense2 ultralytics gymnasium pygame pyserial
    ```
