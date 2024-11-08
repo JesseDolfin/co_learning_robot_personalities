@@ -22,28 +22,28 @@ from q_learning.CoLearnEnvironment import CoLearn
 
 
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
-INTERMEDIATE_POSITION = [np.pi / 2, 0, 0, 0, 0, 0, 0]
+INTERMEDIATE_POSITION = [0, 0, 0, 0, 0, 0, 0]
 
 
 class RoboticArmControllerNode:
     def __init__(self,):
-        
+        self.fake = rospy.get_param('/fake', False)
+        rospy.logwarn(self.fake)
         self.num_test_runs = rospy.get_param('/num_test_runs', 10)
 
         allowed_personality_types = {'baseline', 'leader', 'follower', 'impatient', 'patient'}
         self.type = rospy.get_param('/personality_type', 'baseline')
-        if self.type not in allowed_personality_types:
+        if not self.fake and self.type not in allowed_personality_types:
             raise ValueError(f"Invalid personality type '{self.type}'. Allowed values are: {', '.join(allowed_personality_types)}")
         
         self.participant_number = rospy.get_param('/participant_number', 1)
-        self.fake = rospy.get_param('/fake', False)
-
-        self.rosbag_process = None
+        
+        
         self.base_dir = os.path.expanduser('~/thesis/src/co_learning_robot_personalities/data_collection')
         self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
         self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
 
-        if os.path.exists(self.personality_dir):
+        if not self.fake and os.path.exists(self.personality_dir):
             raise FileExistsError(f"Directory '{self.personality_dir}' already exists for participant {self.participant_number}. "
                                   f"Each participant can only have one directory per personality type.")
 
@@ -67,6 +67,7 @@ class RoboticArmControllerNode:
         self.q = None
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
+        self.rosbag_process = None
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
@@ -96,6 +97,8 @@ class RoboticArmControllerNode:
         self.alpha = 0.15
         self.gamma = 0.8
         self.Lamda = 0.3
+
+        rospy.loginfo("Finished init of control node, now starting rosbag recorder")
 
         self.start_rosbag_recording()
 
@@ -152,18 +155,11 @@ class RoboticArmControllerNode:
             self.msg.reset = False
             self.original_orientation = self.orientation
 
-            first_message = True
             while (
                 self.original_orientation == self.orientation
                 and self.draining_done == 0
                 and self.successful_handover != -1
             ):
-                if first_message:
-                    first_message = False
-                    message_text = self.get_random_message(self.type)
-                    if message_text:
-                        message = String()
-                        message.data = message_text
                 rate.sleep()
 
     def phase_2(self):
@@ -276,8 +272,8 @@ class RoboticArmControllerNode:
 
     def convert_action_to_orientation(self, action: int):
         positions = {
-            3: np.deg2rad([107, -47, -11, 100, -82, -82, -35]),  # Serve
-            4: np.deg2rad([55, -40, -8, 82, 5, 50, 0]),  # Drop
+            3: np.deg2rad([107, -47, -11, 100, -82, -82, -35]).tolist(),  # Serve
+            4: np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist(),  # Drop
         }
         return positions.get(action, INTERMEDIATE_POSITION)
     
