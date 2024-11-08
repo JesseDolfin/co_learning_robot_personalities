@@ -108,17 +108,17 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    ./waf
    sudo ./waf install
    ```
-3. Install the [iiwa_ros](https://github.com/epfl-lasa/iiwa_ros) package from the epfl-lasa repository, following their installation instructions, except for the kuka-fri repository, as you have already installed this. This means that all the cloned repos go into ```<WORKSPACE_NAME>```. **DON'T RUN:** ```export CXXFLAGS="-march=native -faligned-new"``` The installation of the kuka-fri repository has disabled the SIMD flag, running -march=native will run this flag, causing segmentation fault issues later on.
+3. Install the **Dependencies** from the [iiwa_ros](https://github.com/epfl-lasa/iiwa_ros) package, except for the kuka-fri repository, as you have already installed this. This means that all the cloned repos go into ```<WORKSPACE_NAME>```. **DON'T RUN:** ```export CXXFLAGS="-march=native -faligned-new"``` The installation of the kuka-fri repository has disabled the SIMD flag, running -march=native will run this flag, causing segmentation fault issues later on.
 4. Go into the source folder and clone the iiwa_ros repo:
    ```sh
    cd src
    git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/iiwa_ros.git
    ```
-5. Clone the impedance controller and checkout a specific branch that allows compatibility with the cor_tud iiwa_ros package:
+5. Clone the impedance controller and checkout a specific branch that allows removes the need for a specific end-effector:
    ```sh
    git clone git@gitlab.tudelft.nl:nickymol/iiwa_impedance_control.git
    cd iiwa_impedance_control
-   git checkout cor_tud_compatibility
+   git checkout no_end_effector
    cd ..
    ```
 6. Clone the qb_hand repositories:
