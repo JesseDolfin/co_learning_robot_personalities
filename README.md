@@ -125,12 +125,10 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    git clone --recurse-submodules https://bitbucket.org/qbrobotics/qbdevice-ros.git
    git clone https://bitbucket.org/qbrobotics/qbhand-ros.git
    ```
-7. Lastly, clone this repository and checkout this specific branch, then build the workspace:
+7. Lastly, clone this repository and build the workspace:
    ```sh
    git clone https://github.com/JesseDolfin/co_learning_robot_personalities.git
-   cd co_learning_robot_personalities
-   git checkout official_iiwa_ros
-   cd ../..
+   cd ..
    catkin_make
    ```
 8. Install additional dependencies:
