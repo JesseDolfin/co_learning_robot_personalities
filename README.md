@@ -97,9 +97,8 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    ```
 2. Install the kuka-fri repository
    ```sh
-   git clone git@gitlab.tudelft.nl:kuka-iiwa-7-cor-lab/kuka_fri.git
+   git clone git@gitlab.tudelft.nl:nickymol/kuka_fri.git
    cd kuka_fri
-   git checkout legacy
    # Apply SIMD patch:
    wget https://gist.githubusercontent.com/matthias-mayr/0f947982474c1865aab825bd084e7a92/raw/244f1193bd30051ae625c8f29ed241855a59ee38/0001-Config-Disables-SIMD-march-native-by-default.patch
    git am 0001-Config-Disables-SIMD-march-native-by-default.patch
