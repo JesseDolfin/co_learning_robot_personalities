@@ -4,11 +4,15 @@ import sys
 import csv  
 import os
 
-
+import webbrowser
 import time
 import signal
 from typing import Literal
 import subprocess
+
+import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
 
 import numpy as np
 import rospy
@@ -16,13 +20,14 @@ from std_msgs.msg import String
 
 from co_learning_controllers.robot_impedance_controller import RoboticArmController
 from co_learning_controllers.hand_controller import SoftHandController
+from co_learning_controllers.questionaire_controller import GoogleFormHandler
 from co_learning_messages.msg import secondary_task_message, hand_pose
 from q_learning.QLearnAgent import QLearningAgent
 from q_learning.CoLearnEnvironment import CoLearn
 
 
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
-INTERMEDIATE_POSITION = [0, 0, 0, 0, 0, 0, 0]
+INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 
 class RoboticArmControllerNode:
@@ -98,7 +103,11 @@ class RoboticArmControllerNode:
         self.gamma = 0.8
         self.Lamda = 0.3
 
-        rospy.loginfo("Finished init of control node, now starting rosbag recorder")
+        form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA" 
+        sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
+        key_path = "/home/jesse/thesis_cor_tud/Documentation/psyched-loader-422713-u4-efcf9b902f7b.json"
+
+        self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
         self.start_rosbag_recording()
 
@@ -192,10 +201,6 @@ class RoboticArmControllerNode:
         self.rl_agent.experience_replay(self.alpha, self.gamma, self.Lamda)
 
     def check_end_condition(self):
-        """
-        Checks if the terminal condition is reached.
-        Sends a message at the end to embed more of the personality.
-        """
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
@@ -203,6 +208,11 @@ class RoboticArmControllerNode:
         else:
             _ = self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
             self.run = False
+
+            # Run the form workflow for the current personality type
+            self.form_handler.run_workflow(personality_dir=self.personality_dir)
+
+
 
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")

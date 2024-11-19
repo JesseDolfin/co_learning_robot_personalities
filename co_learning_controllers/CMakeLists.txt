@@ -6,7 +6,6 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   actionlib_msgs
-  cor_tud_msgs
   co_learning_messages
 )
 
@@ -16,7 +15,6 @@ catkin_package(
     rospy
     std_msgs
     actionlib_msgs
-    cor_tud_msgs
     co_learning_messages
 )
 
@@ -33,6 +31,7 @@ catkin_install_python(PROGRAMS
   src/co_learning_controllers/control_node.py
   src/co_learning_controllers/hand_controller.py
   src/co_learning_controllers/robot_impedance_controller.py
+  src/co_learning_controllers/questionaire_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

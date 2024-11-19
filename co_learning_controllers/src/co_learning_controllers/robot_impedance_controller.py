@@ -15,10 +15,9 @@ from iiwa_impedance_control.msg import JointTrajectoryExecutionAction, Cartesian
 from geometry_msgs.msg import PoseStamped
 from co_learning_messages.msg import hand_pose
 from dynamic_reconfigure.client import Client
-from controller_manager_msgs.srv import SwitchController
+from controller_manager_msgs.srv import SwitchController, ListControllers
 from iiwa_impedance_control.msg import CartesianTrajectoryExecutionGoal
 from iiwa_impedance_control.msg import JointTrajectoryExecutionGoal
-from robot.robot import Robot
 
 
 # Constants
@@ -30,7 +29,7 @@ class RoboticArmController:
     def __init__(self):
         self.q = None
         self.q_dot = None
-        self.ee_pose = [0, 0, 0, 0, 0, 0]
+        self.ee_pose = None
         self._effort_mag_save = 0
         self.goal_time = 5.0
         self.hand_pose = [0, 0, 0]
@@ -38,49 +37,29 @@ class RoboticArmController:
         self.save_target = None
         self.robot = None
         self.movement_finished = False
-
-        self.ns = rospy.get_param('/namespaces', 'iiwa7')
-        self.robot = Robot(model=self.ns.replace('/', ''))
+        self.fixed_orientation = None
 
         self.init_action_servers()
         self.init_subscriber_publishers()
         
         self.reconfigure_parameters()
 
-        rate = rospy.Rate(5)
-        while self.q is None:
-            rate.sleep()
-
-        pre_goal = self.create_joint_goal([*self.q],[0.1]*7)
-        self.send_trajectory_goal(pre_goal,'joint') # pre-send this value so the arm does not space the fuck out
-        rospy.sleep(4) # ALSO GIVE THE FRI-OVERLAY TIME TO START UP BECAUSE YA KNOW IT FUCKING LAUNCHES INTO FUCKING SPACE OTHERWSIE
-        
-
-        signal.signal(signal.SIGINT, self.signal_handler)
-
-    def signal_handler(self, sig, frame):
-        rospy.signal_shutdown("Shutdown signal received.")
-        sys.exit(0)
-
-    def home_arm(self):
-        rospy.loginfo("homing_arm")
-        goal_joint = self.create_joint_goal(INTERMEDIATE_POSITION_JOINT,[0.5]*7) # Slowly startup the arm
-        goal_cart = self.create_cartesian_goal(HOME_POSITION,[0.1]*2)
-        self.send_trajectory_goal(goal_joint,'joint')
-
     def init_subscriber_publishers(self):
         self.joint_state = rospy.Subscriber("CartesianImpedanceController/joint_states", JointState, self.joint_callback, queue_size=10)
+        self.cartesian_state = rospy.Subscriber("CartesianImpedanceController/cartesian_pose", PoseStamped, self.cartesian_callback,queue_size=10)
         self.hand_pose_sub = rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
         self.publish_human_input = rospy.Publisher('human_input', Bool, queue_size=1)
 
     def init_action_servers(self):
+        # Initialize action clients
         self.cartesian_action_client = actionlib.SimpleActionClient(
             '/CartesianImpedanceController/cartesian_trajectory_execution_action',
             CartesianTrajectoryExecutionAction)
         self.cartesian_action_client.wait_for_server()
         self.joint_action_client = actionlib.SimpleActionClient(
             '/JointImpedanceController/joint_trajectory_execution_action', JointTrajectoryExecutionAction)
-        self.joint_action_client.wait_for_server()
+
+        # Wait for action servers to become available
         try:
             rospy.loginfo("Waiting for cartesian_trajectory_execution action server...")
             self.cartesian_action_client.wait_for_server()
@@ -95,6 +74,7 @@ class RoboticArmController:
         except Exception as e:
             rospy.logwarn(f"Joint trajectory action server not found: {e}")
 
+        # Initialize dynamic reconfigure client for Cartesian Impedance Controller
         try:
             rospy.loginfo("Waiting for dynamic reconfigure CartesianImpedanceController server...")
             self.dynamic_reconfigure_cartesian_impedance_controller_client = Client(
@@ -103,14 +83,22 @@ class RoboticArmController:
         except Exception as e:
             rospy.logwarn(f"Dynamic reconfigure server not found: {e}")
 
+        # Set up controller manager service proxies
         try:
-            rospy.loginfo("Waiting for iiwa controller manager...")
-            rospy.wait_for_service(self.ns+'/controller_manager/switch_controller')
-            self.controller_manager = rospy.ServiceProxy(self.ns+'/controller_manager/switch_controller',
-                                                        SwitchController)
-            rospy.loginfo("iiwa controller manager found!")
+            rospy.loginfo("Waiting for iiwa controller manager services...")
+            
+            # Switch controller service
+            rospy.wait_for_service('iiwa/controller_manager/switch_controller')
+            self.controller_manager = rospy.ServiceProxy('iiwa/controller_manager/switch_controller', SwitchController)
+            
+            # List controllers service
+            rospy.wait_for_service('iiwa/controller_manager/list_controllers')
+            self.list_controllers = rospy.ServiceProxy('iiwa/controller_manager/list_controllers', ListControllers)
+
+            rospy.loginfo("iiwa controller manager services found!")
         except Exception as e:
-            rospy.logwarn(f"iiwa controller manager not found: {e}")
+            rospy.logwarn(f"iiwa controller manager services not found: {e}")
+
 
     # Callback functions to handle action results and feedback
     def cartesian_trajectory_done_callback(self, status, result):
@@ -142,15 +130,8 @@ class RoboticArmController:
         effort_magnitude = np.linalg.norm(effort)
         self._effort_mag_save = effort_magnitude
 
-        if self.robot is not None and self.q is not None:
-            ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
-
-            translation = ee_T[:3, 3]
-            rot_mat = ee_T[:3, :3]
-            r = R.from_matrix(rot_mat)
-            quaternion = r.as_quat()
-
-            self.ee_pose = np.hstack((translation, quaternion))
+    def cartesian_callback(self,msg):
+        self.ee_pose = msg.pose
 
     def hand_pose_callback(self, msg):
         """Callback function for hand_pose subscriber."""
@@ -163,8 +144,8 @@ class RoboticArmController:
         nullspace_stiffness: List[float] = [100.0, 100.0, 50.0, 50.0, 50.0, 50.0, 10.0],
         nulspace_damping: List[float] = [0.7] * 7,
         seperate_axis: bool = False,
-        translational_stiffness: float = 300.0,
-        rotational_stiffness: float = 20.0
+        translational_stiffness: float = 1000.0,
+        rotational_stiffness: float = 400.0
     ) -> None:
         """Reconfigure parameters for the Cartesian impedance controller."""
         try:
@@ -218,66 +199,82 @@ class RoboticArmController:
         except Exception as e:
             rospy.logerr(f"Unexpected error: {e}")
             raise RuntimeError(f"An unexpected error occurred: {e}")
+        
+    def is_controller_running(self, controller_name):
+        try:
+            rospy.wait_for_service('/controller_manager/list_controllers', timeout=5)
+            controllers = self.list_controllers().controller
+            for controller in controllers:
+                if controller.name == controller_name and controller.state == 'running':
+                    return True
+        except rospy.ServiceException as e:
+            rospy.logerr(f"Service call to list_controllers failed: {e}")
+        return False
 
     def send_trajectory_goal(self, goal, mode: Literal["joint", "cartesian"]):
         self.movement_finished = False
         try:
+            # Determine which controller to start and stop
+            start_controller = '/CartesianImpedanceController' if mode == 'cartesian' else '/JointImpedanceController'
+            stop_controller = '/JointImpedanceController' if mode == 'cartesian' else '/CartesianImpedanceController'
+
+            # Check if the target controller is already running
+            if self.is_controller_running(start_controller):
+                rospy.loginfo(f"{start_controller} is already running; no switch necessary.")
+            else:
+                rospy.loginfo(f"Switching to {start_controller}...")
+                response = self.controller_manager(
+                    start_controllers=[start_controller],
+                    stop_controllers=[stop_controller],
+                    strictness=1, start_asap=True, timeout=0.0)
+                
+                if not response.ok:
+                    rospy.logerr("Failed to switch controllers")
+                    raise RuntimeError("Controller switch failed")
+            # Check and create goal based on mode
             if mode == "cartesian":
+                # If the goal is a list, verify its length and create a Cartesian goal
                 if isinstance(goal, list):
                     if len(goal) != 7:
-                        raise ValueError("For Cartesian mode, goal must be a list with exactly 7 elements.")
+                        raise ValueError("For Cartesian mode, goal must be a list with exactly 7 elements (x, y, z, x, y, z, w).")
                     rospy.logwarn("Goal is not a CartesianTrajectoryExecutionGoal; using provided list as the target.")
                     goal = self.create_cartesian_goal(target=goal)
 
-
-                response = self.controller_manager(
-                    start_controllers=['/CartesianImpedanceController'],
-                    stop_controllers=['/JointImpedanceController'],
-                    strictness=1, start_asap=True, timeout=0.0)
-
-                if not response.ok:
-                    rospy.logerr("Failed to switch controllers")
-                    raise RuntimeError("Controller switch failed")
-                else:
-                    self.cartesian_action_client.send_goal(
-                        goal,
-                        self.cartesian_trajectory_done_callback,
-                        self.cartesian_trajectory_active_callback,
-                        self.cartesian_trajectory_feedback_callback)
+                # Send the Cartesian goal
+                self.cartesian_action_client.send_goal(
+                    goal,
+                    self.cartesian_trajectory_done_callback,
+                    self.cartesian_trajectory_active_callback,
+                    self.cartesian_trajectory_feedback_callback)
 
             elif mode == "joint":
+                # If the goal is a list, verify its length and create a Joint goal
                 if isinstance(goal, list):
                     if len(goal) != 7:
-                        raise ValueError("For Joint mode, goal must be a list with exactly 7 elements.")
+                        raise ValueError("For Joint mode, goal must be a list with exactly 7 elements (joint positions).")
                     rospy.logwarn("Goal is not a JointTrajectoryExecutionGoal; using provided list as joint positions.")
                     goal = self.create_joint_goal(joint_positions_goal=goal)
+                    rospy.loginfo("Joint goal created")
                 
-                response = self.controller_manager(
-                    start_controllers=['/JointImpedanceController'],
-                    stop_controllers=['/CartesianImpedanceController'],
-                    strictness=1, start_asap=True, timeout=0.0)
-
-                if not response.ok:
-                    rospy.logerr("Failed to switch controllers")
-                    raise RuntimeError("Controller switch failed")
-                else:
-                    self.joint_action_client.send_goal(
-                        goal,
-                        self.joint_trajectory_done_callback,
-                        self.joint_trajectory_active_callback,
-                        self.joint_trajectory_feedback_callback)
+                # Send the Joint goal
+                rospy.loginfo("sending goal")
+                self.joint_action_client.send_goal(
+                    goal,
+                    self.joint_trajectory_done_callback,
+                    self.joint_trajectory_active_callback,
+                    self.joint_trajectory_feedback_callback)
+            
             else:
                 rospy.logwarn("Invalid mode specified.")
                 raise ValueError("Mode must be either 'cartesian' or 'joint'")
             
-            rate = rospy.Rate(10) 
+            # Monitor the movement
+            rate = rospy.Rate(10)
             while not self.movement_finished:
                 rate.sleep()
 
         except Exception as e:
             rospy.logerr(f"Unexpected error in send_trajectory_goal: {e}")
-            raise
-
 
 
     def create_joint_goal(self, joint_positions_goal: List[float], joint_velocities_goal: List[float] = None):
@@ -286,7 +283,7 @@ class RoboticArmController:
                 raise ValueError("Joint positions must have exactly 7 elements.")
             
             if joint_velocities_goal is None:
-                joint_velocities_goal = [0.1] * 7
+                joint_velocities_goal = [0.5] * 7
             elif len(joint_velocities_goal) != 7:
                 raise ValueError("Velocity must have exactly 7 elements")
 
@@ -402,47 +399,75 @@ class RoboticArmController:
         Move the robot's end-effector towards the detected hand position.
 
         Parameters:
-            update (bool): Whether to update the target based on the current hand position.
+            update (bool): Whether to update the target's orienation based on the current hand orientation.
         """
         rospy.loginfo("Moving towards hand")
 
-        self.fixed_orientation = self.ee_pose[3:]  # Quaternion
-
-        if update:
-            self.q_save = self.q
+        # Turn on cartesian controller to obtain ee_pose
+        ok = False
+        if self.is_controller_running('/JointImpedanceController'): 
+            ok = self.controller_manager( 
+                    start_controllers=['/CartesianImpedanceController'],
+                    stop_controllers=['/JointImpedanceController'],
+                    strictness=1, start_asap=True, timeout=0.0)
+        elif self.is_controller_running('/CartesianImpedanceController'):
+            ok = True
         else:
-            self.q_save = None
+            raise RuntimeError(
+                "No correct controller is currently running. Ensure that either "
+                "JointImpedanceController or CartesianImpedanceController is active.")
+
+        rate = rospy.Rate(10)
+        while not ok: 
+            rate.sleep()
+
+        self.ee_pose = None # obtain latest pose information
+        while self.ee_pose is None:
+            rate.sleep()
+
+        if self.fixed_orientation is None or update:
+            ori = self.ee_pose.orientation
+            self.fixed_orientation = np.array([ori.x,ori.y,ori.z,ori.w])
+        else:
+            self.fixed_orientation = [0.27,0.56,0.32,0.72] # safe orientiation
+
+        pos = self.ee_pose.position
+        current_position = np.array([pos.x,pos.y,pos.z])
 
         # Wait for hand to be detected if not already
-        rate = rospy.Rate(10)
+        
         while np.all(np.array(self.hand_pose) == 0):
             rospy.loginfo("Waiting for hand to be detected...")
             rate.sleep()
 
         self.saved_pose = np.array(self.hand_pose)
         target_position_arm = self.frame_transform(self.saved_pose)
-        target_position_arm[2] = max(target_position_arm[2], 0.1)
-        current_position = np.array(self.ee_pose[:3])
+        target_position_arm[2] = max(target_position_arm[2], 0.1) # Z- value cannot be too low
 
-        # Define position threshold
+        target_position_arm = np.array([-0.30,-0.40,0.6]) # REMOVE
+
+        error = np.linalg.norm(target_position_arm - current_position)
+
         position_threshold = 0.2
-
-        while np.linalg.norm(target_position_arm - current_position) > position_threshold:
-
+        rate = rospy.Rate(10)
+        while error > position_threshold:
             self.saved_pose = np.array(self.hand_pose)
             target_position_arm = self.frame_transform(self.saved_pose)
             target_position_arm[2] = max(target_position_arm[2], 0.1)
+            target_position_arm = np.array([-0.30,-0.40,0.6]) # REMOVE
             target_pose = np.hstack((target_position_arm, self.fixed_orientation))
         
-            velocity = [0.5, 0.5] 
+            velocity = [0.1, 0.5] 
             goal = self.create_cartesian_goal(target=target_pose, velocity=velocity)
+            rospy.loginfo(goal)
             self.send_trajectory_goal(goal, "cartesian")
 
-            current_position = np.array(self.ee_pose[:3])
+            pos = self.ee_pose.position
+            current_position = np.array([pos.x,pos.y,pos.z])
+
+            rate.sleep()
             error = np.linalg.norm(target_position_arm - current_position)
             rospy.loginfo(f"Error norm: {error:.3f}, threshold: {position_threshold}")
-
-            rospy.sleep(0.1)  # Sleep to prevent overloading the CPU
 
         rospy.loginfo("Reached the hand position")
 
@@ -495,18 +520,25 @@ if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
     controller = RoboticArmController()
 
+    #drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
+    controller.send_trajectory_goal(drop,'joint')
+
+    controller.move_towards_hand(True)
+
     # Define the Euler angles for a 90-degree rotation around the z-axis
-    roll, pitch, yaw = 0, 90, 0
+    # roll, pitch, yaw = 0, 90, 0
 
-    # Convert the Euler angles to a quaternion
-    rotation = R.from_euler('xyz', [roll, pitch, yaw], degrees=True)
-    quaternion = rotation.as_quat()  # [x, y, z, w]
+    # # Convert the Euler angles to a quaternion
+    # rotation = R.from_euler('xyz', [roll, pitch, yaw], degrees=True)
+    # quaternion = rotation.as_quat()  # [x, y, z, w]
 
-    # Define the goal with the quaternion for orientation
-    goal = controller.create_cartesian_goal([0.2, 0.2, 0.5, *quaternion], [0.01, 0.01])
-    rospy.loginfo(f"cartsian goal:{goal}")
+    # # Define the goal with the quaternion for orientation
+    # goal = controller.create_cartesian_goal([0.2, 0.2, 0.5, *quaternion], [0.01, 0.01])
 
-    # Send the goal to the controller
-    controller.send_trajectory_goal([0,0,0,0,0,0,0],'joint')
-    controller.send_trajectory_goal(INTERMEDIATE_POSITION_JOINT,'joint')
-    controller.send_trajectory_goal(goal, mode="cartesian")
+    # # Send the goal to the controller
+    # controller.send_trajectory_goal([0,np.pi/2,0,0,0,0,0],'joint')
+    # controller.send_trajectory_goal(INTERMEDIATE_POSITION,'joint')
+    # controller.send_trajectory_goal(goal, mode="cartesian")
+
+    rospy.spin()
+

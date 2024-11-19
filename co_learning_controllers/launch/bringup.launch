@@ -1,26 +1,30 @@
 <?xml version="1.0"?>
+
 <!--|
-Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
-    Free for all, no warranties whatsoever.
+    Author: Jesse Dolfin
+    Email: j.r.dolfin@student.tudelf.nl
+    Date: November 7, 2024
+    Description: Bringup launch for co learning with robot personalities package
 |-->
+
 <launch>
     <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${node}] [${time}]: ${message}"/>
 
-    <!-- Arguments to modify simulation parameters -->
+    <!-- Simulation arguments -->
     <arg name="paused" default="false"/>
     <arg name="use_sim_time" default="true"/>
     <arg name="gui" default="true"/>
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
-    <arg name="world_name" default="$(find iiwa_gazebo)/world/iiwa.world"/> 
-    <arg name="simulation" default="true"/>
+    <arg name="world_name" default="$(find iiwa_gazebo)/world/iiwa.world"/>
     <arg name="gzclient" default="false"/>
+    <arg name="simulation" default="true"/>
+    <arg name="rviz" default="false"/>
 
     <!-- Arguments to control node launching -->
     <arg name="allow_nodes" default="true"/>
     <arg name="control_node" default="true"/>
     <arg name="secondary_task" default="true"/>
-    <arg name="rviz" default="false"/>
     <arg name="detection" default="true"/>
     <arg name="qb_hand" default="true"/>
 
@@ -43,41 +47,60 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
     <!-- Select the controller -->
     <arg name="controller" default="CartesianImpedanceController"/>
 
-    <group if="$(arg simulation)"> 
-        <!-- Loads the Gazebo world -->
+    <!-- Define hardware interface based on the selected controller -->
+    <arg if="$(eval controller == 'PositionController' or controller == 'PositionTrajectoryController')"
+        name="hardware_interface" value="PositionJointInterface"/>
+    <arg unless="$(eval controller == 'PositionController' or controller == 'PositionTrajectoryController')"
+        name="hardware_interface" value="EffortJointInterface"/>
+
+    <!-- Upload iiwa URDF -->
+    <include file="$(find iiwa_description)/launch/iiwa$(arg model)_upload.launch">
+        <arg name="hardware_interface" value="$(arg hardware_interface)"/>
+        <arg name="robot_name" value="$(arg robot_name)"/>
+    </include>
+   
+    <!-- Spawn iiwa service -->
+    <include file="$(find iiwa_tools)/launch/iiwa_service.launch"/>
+
+    <!-- Spawn iiwa FRI driver -->
+    <node pkg="iiwa_driver" type="iiwa_driver" name="iiwa_driver" respawn="false" output="screen" unless="$(arg simulation)">
+        <remap from="/joint_states" to="/iiwa/joint_states"/>
+        <remap from="/controller_manager" to="/iiwa/controller_manager"/>
+        <remap from="/commanding_status" to="/iiwa/commanding_status"/>
+        <!-- Load configurations from YAML file to parameter server -->
+        <rosparam file="$(find iiwa_driver)/config/iiwa.yaml" command="load"/>
+    </node>
+    <node pkg="iiwa_driver" type="iiwa_driver" name="iiwa_driver" respawn="false" output="screen" if="$(arg simulation)">
+        <!-- Load configurations from YAML file to parameter server -->
+        <rosparam file="$(find iiwa_driver)/config/iiwa.yaml" command="load"/>
+    </node>
+
+    <!-- Loads the Gazebo world -->
+    <group if="$(arg simulation)">
         <include unless="$(arg gzclient)"
-            file="$(find gazebo_ros)/launch/empty_world.launch">
+                 file="$(find gazebo_ros)/launch/empty_world.launch">
+            <arg name="world_name" value="$(arg world_name)"/>
+            <arg name="debug" value="$(arg debug)"/>
+            <arg name="gui" value="$(arg gui)"/>
             <arg name="paused" value="$(arg paused)"/>
             <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-            <arg name="gui" value="$(arg gui)" />
             <arg name="headless" value="$(arg headless)"/>
-            <arg name="debug" value="$(arg debug)" />
-            <arg name="world_name" value="$(arg world_name)"/> 
         </include>
     </group>
 
-    <!--If we are not in simulation mode, start the FRI driver-->
-    <include file="$(find co_learning_controllers)/launch/driver_bringup.launch">
-        <arg name="simulation" value="$(arg simulation)"/>
-        <arg name="model" value="$(arg model)"/>
-        <arg name="robot_name" value="$(arg robot_name)"/>
+    <!-- Run a python script to send a service call to gazebo_ros to spawn a URDF robot -->
+    <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+          args="-urdf -model iiwa -param robot_description" if="$(arg simulation)"/>
+
+    <!-- Spawn controller -->
+    <include file="$(find iiwa_impedance_control)/launch/iiwa_impedance_control.launch">
         <arg name="controller" value="$(arg controller)"/>
     </include>
 
-
-            
-
-    
     <!-- IF allow_nodes:=false, launch just the barebone interface -->
     <group if="$(arg allow_nodes)">
         <group if="$(arg control_node)">
-            
-
-            <node name="control_node"
-                pkg="co_learning_controllers"
-                type="control_node.py"
-                output="screen"
-                />
+            <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen"/>
         </group>
 
         <!-- Conditionally Launch secondary_task.py in a new terminal window -->
@@ -101,5 +124,5 @@ Authors: Jesse Dolfin <j.r.dolfin@student.tudelft.nl>
             </include>
         </group>
     </group>
-
 </launch>
+
