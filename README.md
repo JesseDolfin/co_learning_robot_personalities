@@ -135,7 +135,7 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
    ```sh
    pip install numpy==1.21 python-dateutil==2.8.2 mediapipe pyrealsense2 ultralytics gymnasium pygame pyserial
    ```
-## Posterior modifications
+### Posterior modifications
 Now that everything is installed, you need to modify the config of the iiwa_ros package to work with the iiwa 7 at TU Delft. Browse t: ```iiwa_ros/iiwa_driver/config/iiwa.yaml``` and modify the port and robot_ip to:
 ```
   port: 30207
