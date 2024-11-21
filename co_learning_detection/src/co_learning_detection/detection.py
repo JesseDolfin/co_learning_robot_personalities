@@ -36,11 +36,17 @@ class MPDetector:
         self.fps = fps
         self.msg = None
 
+        rospy.loginfo("setting up realsense")
+
         if not fake:
             self.setup_realsense()
             self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
             self.secondary_pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
             rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
+
+        rospy.loginfo("realsense setup finished")
+
+        rospy.loginfo("initializing mediapipe")
 
         self.setup_mediapipe()
 
@@ -66,15 +72,18 @@ class MPDetector:
         self.mp_draw = mp.solutions.drawing_utils
 
         # Set the path to your model
-        model_path = '../jesse/co_learning_robot_personalities/src/co_learning_detection/src/exported_model/efficientdet_lite2.tflite'
+        model_path = '/home/worker-20/jesse/ws/src/co_learning_robot_personalities/co_learning_detection/src/exported_model/efficientdet_lite2.tflite'
         model_path_2 = 'src/co_learning_detection/src/exported_model/efficientdet_lite2.tflite' 
-
-        # Setup the detection model
-        base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.ObjectDetectorOptions(
-            base_options=base_options, score_threshold=0.10
-        )
-        self.object_detector = vision.ObjectDetector.create_from_options(options)
+        
+        try:
+            # Setup the detection model
+            base_options = python.BaseOptions(model_asset_path=model_path)
+            options = vision.ObjectDetectorOptions(
+                base_options=base_options, score_threshold=0.10
+            )
+            self.object_detector = vision.ObjectDetector.create_from_options(options)
+        except Exception as e:
+            rospy.logwarn(e)
 
     def setup_realsense(self):
         self.pipeline = rs.pipeline()

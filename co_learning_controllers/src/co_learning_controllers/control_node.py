@@ -43,23 +43,30 @@ class RoboticArmControllerNode:
         
         self.participant_number = rospy.get_param('/participant_number', 1)
         
+        self.base_dir = os.path.expanduser('/home/worker-20/jesse/ws/src/co_learning_robot_personalities/data_collection')
         
-        self.base_dir = os.path.expanduser('~/thesis/src/co_learning_robot_personalities/data_collection')
-        self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
-        self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
-
-        if not self.fake and os.path.exists(self.personality_dir):
-            raise FileExistsError(f"Directory '{self.personality_dir}' already exists for participant {self.participant_number}. "
-                                  f"Each participant can only have one directory per personality type.")
-
+        # Loop to ensure unique participant and personality directories
+        while True:
+            self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
+            self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
+            
+            # If the directory doesn't exist, break the loop
+            if not self.fake and not os.path.exists(self.personality_dir):
+                break
+            
+            # Otherwise, increment participant number or personality type index and try again
+            self.participant_number += 1
+        
         os.makedirs(self.personality_dir, exist_ok=True)
 
+        # Set the exploration factor based on the personality type
         if self.type == 'leader':
             self.exploration_factor = 0.8
         elif self.type == 'follower':
             self.exploration_factor = 0.6
         else:
             self.exploration_factor = 0.25
+
 
         self.phase = 0
         self.terminated = False
@@ -90,6 +97,9 @@ class RoboticArmControllerNode:
 
         self.hand_controller = SoftHandController(self.fake)
         self.robot_arm_controller = RoboticArmController()
+
+        input("Press any key to start the application")
+
         if self.type == 'impatient':
             self.robot_arm_controller.type = 'fast'
             self.hand_time = 1
@@ -103,9 +113,9 @@ class RoboticArmControllerNode:
         self.gamma = 0.8
         self.Lamda = 0.3
 
-        form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA" 
+        form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA"
         sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
-        key_path = "/home/jesse/thesis_cor_tud/Documentation/psyched-loader-422713-u4-efcf9b902f7b.json"
+        key_path = "/home/worker-20/jesse/ws/psyched-loader-422713-u4-0fbb54ca49b0.json"
 
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 

@@ -28,11 +28,14 @@
     <arg name="detection" default="true"/>
     <arg name="qb_hand" default="true"/>
 
-     <!-- Arguments to modify experiment behaviour -->
-    <arg name="personality_type" default="fake"/>
-    <arg name="participant_number" default="-1"/>
+ 
+    <!-- Arguments to modify experiment behaviour -->
+    <arg name="personality_type" default="baseline"/>
     <arg name="fake" default="false"/>
+    <arg name="participant_number" default="-1"/>
     <arg name="num_test_runs" default="20"/>
+
+ 
 
     <!-- Set these as parameters on the parameter server -->
     <param name="personality_type" value="$(arg personality_type)"/>
@@ -108,7 +111,7 @@
             <node name="secondary_task" pkg="co_learning_secondary_task" type="secondary_task.py" output="log"/>
         </group>
 
-        <group if="$(eval arg('detection') == 'true' and arg('fake') == 'false')">
+        <group if="$(arg detection)">
             <node name="detection" pkg="co_learning_detection" type="detection.py" output="log"/>
         </group>
     
@@ -117,7 +120,7 @@
             <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config)" output="screen"/>
         </group>
 
-        <group if="$(eval arg('qb_hand') == 'true' and arg('fake') == 'false')">
+        <group if="$(arg qb_hand)">
             <include file="$(find qb_hand_control)/launch/control_qbhand.launch">
                 <arg name="activate_on_initialization" value="true"/>
                 <arg name="standalone" value="true"/>

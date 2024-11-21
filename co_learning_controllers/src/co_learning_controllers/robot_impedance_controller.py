@@ -41,7 +41,7 @@ class RoboticArmController:
 
         self.init_action_servers()
         self.init_subscriber_publishers()
-        
+ 
         self.reconfigure_parameters()
 
     def init_subscriber_publishers(self):
@@ -136,6 +136,7 @@ class RoboticArmController:
     def hand_pose_callback(self, msg):
         """Callback function for hand_pose subscriber."""
         self.hand_pose = [msg.x, msg.y, msg.z]
+        self.hand_pose_ee = self.frame_transform(self.hand_pose)
 
     def reconfigure_parameters(
         self,
@@ -144,8 +145,8 @@ class RoboticArmController:
         nullspace_stiffness: List[float] = [100.0, 100.0, 50.0, 50.0, 50.0, 50.0, 10.0],
         nulspace_damping: List[float] = [0.7] * 7,
         seperate_axis: bool = False,
-        translational_stiffness: float = 1000.0,
-        rotational_stiffness: float = 400.0
+        translational_stiffness: float = 300.0,
+        rotational_stiffness: float = 10.0
     ) -> None:
         """Reconfigure parameters for the Cartesian impedance controller."""
         try:
@@ -202,7 +203,7 @@ class RoboticArmController:
         
     def is_controller_running(self, controller_name):
         try:
-            rospy.wait_for_service('/controller_manager/list_controllers', timeout=5)
+            rospy.wait_for_service('iiwa/controller_manager/list_controllers')
             controllers = self.list_controllers().controller
             for controller in controllers:
                 if controller.name == controller_name and controller.state == 'running':
@@ -213,6 +214,7 @@ class RoboticArmController:
 
     def send_trajectory_goal(self, goal, mode: Literal["joint", "cartesian"]):
         self.movement_finished = False
+        rospy.loginfo("sending trajectory goal")
         try:
             # Determine which controller to start and stop
             start_controller = '/CartesianImpedanceController' if mode == 'cartesian' else '/JointImpedanceController'
@@ -283,7 +285,7 @@ class RoboticArmController:
                 raise ValueError("Joint positions must have exactly 7 elements.")
             
             if joint_velocities_goal is None:
-                joint_velocities_goal = [0.5] * 7
+                joint_velocities_goal = [0.3] * 7
             elif len(joint_velocities_goal) != 7:
                 raise ValueError("Velocity must have exactly 7 elements")
 
@@ -313,7 +315,7 @@ class RoboticArmController:
                 raise ValueError("Target must have 7 elements")
             
             if velocity is None:
-                velocity = [0.5, 0.5]
+                velocity = [0.01, 0.2]
             elif len(velocity) != 2:
                 raise ValueError("Velocity must have 2 elements.")
 
@@ -426,8 +428,7 @@ class RoboticArmController:
             rate.sleep()
 
         if self.fixed_orientation is None or update:
-            ori = self.ee_pose.orientation
-            self.fixed_orientation = np.array([ori.x,ori.y,ori.z,ori.w])
+            self.fixed_orientation = self.ee_pose.orientation
         else:
             self.fixed_orientation = [0.27,0.56,0.32,0.72] # safe orientiation
 
@@ -436,30 +437,26 @@ class RoboticArmController:
 
         # Wait for hand to be detected if not already
         
-        while np.all(np.array(self.hand_pose) == 0):
+        while np.all(self.hand_pose) == 0:
             rospy.loginfo("Waiting for hand to be detected...")
             rate.sleep()
 
-        self.saved_pose = np.array(self.hand_pose)
-        target_position_arm = self.frame_transform(self.saved_pose)
+        target_position_arm = self.hand_pose_ee
         target_position_arm[2] = max(target_position_arm[2], 0.1) # Z- value cannot be too low
-
-        target_position_arm = np.array([-0.30,-0.40,0.6]) # REMOVE
 
         error = np.linalg.norm(target_position_arm - current_position)
 
         position_threshold = 0.2
         rate = rospy.Rate(10)
+
         while error > position_threshold:
-            self.saved_pose = np.array(self.hand_pose)
-            target_position_arm = self.frame_transform(self.saved_pose)
+   
+            target_position_arm = self.hand_pose_ee
             target_position_arm[2] = max(target_position_arm[2], 0.1)
-            target_position_arm = np.array([-0.30,-0.40,0.6]) # REMOVE
             target_pose = np.hstack((target_position_arm, self.fixed_orientation))
         
-            velocity = [0.1, 0.5] 
+            velocity = [0.01, 0.2] 
             goal = self.create_cartesian_goal(target=target_pose, velocity=velocity)
-            rospy.loginfo(goal)
             self.send_trajectory_goal(goal, "cartesian")
 
             pos = self.ee_pose.position
@@ -504,8 +501,6 @@ class RoboticArmController:
         rot_tot = np.dot(rot_x_180, rot_z_90)
 
         r = R.from_matrix(rot_tot)
-        quaternion = r.as_quat()
-        rospy.logwarn(quaternion)
 
         transform = np.column_stack((rot_tot, offset))
         transform = np.vstack((transform, np.array([0, 0, 0, 1])))
@@ -520,10 +515,12 @@ if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
     controller = RoboticArmController()
 
-    #drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
-    controller.send_trajectory_goal(drop,'joint')
-
     controller.move_towards_hand(True)
+
+
+    #drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
+    #controller.send_trajectory_goal(INTERMEDIATE_POSITION_JOINT,'joint')
+
 
     # Define the Euler angles for a 90-degree rotation around the z-axis
     # roll, pitch, yaw = 0, 90, 0
