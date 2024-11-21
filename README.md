@@ -138,8 +138,8 @@ This package is tested with Ubuntu 20.2 and ROS noetic; it uses Python version 3
 ### Posterior modifications
 Now that everything is installed, you need to modify the config of the iiwa_ros package to work with the iiwa 7 at TU Delft. Browse to: ```iiwa_ros/iiwa_driver/config/iiwa.yaml``` and modify the port and robot_ip to:
 ```
-  port: 30207
-  robot_ip: 192.180.1.7
+port: 30207
+robot_ip: 192.180.1.7
 ```
 This should now allow for a connection via the fri overlay app on the smart pad.
 
