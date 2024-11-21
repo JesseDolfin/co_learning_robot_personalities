@@ -420,28 +420,25 @@ class RoboticArmController:
                 "JointImpedanceController or CartesianImpedanceController is active.")
 
         rate = rospy.Rate(10)
-        while not ok: 
-            rate.sleep()
-
         self.ee_pose = None # obtain latest pose information
         while self.ee_pose is None:
             rate.sleep()
 
         if self.fixed_orientation is None or update:
-            self.fixed_orientation = self.ee_pose.orientation
+            self.fixed_orientation = self.ee_pose.orientation # ROS MSG
         else:
-            self.fixed_orientation = [0.27,0.56,0.32,0.72] # safe orientiation
+            self.fixed_orientation = [-0.5,-0.3,0.6,0.27,0.56,0.32,0.72] #TODO: find correct orientation
 
         pos = self.ee_pose.position
         current_position = np.array([pos.x,pos.y,pos.z])
+        #TODO: change hand pose to also use a PoseStamed msg? -> orientation does not translate well in that case
 
         # Wait for hand to be detected if not already
-        
         while np.all(self.hand_pose) == 0:
             rospy.loginfo("Waiting for hand to be detected...")
             rate.sleep()
 
-        target_position_arm = self.hand_pose_ee
+        target_position_arm = self.hand_pose_ee 
         target_position_arm[2] = max(target_position_arm[2], 0.1) # Z- value cannot be too low
 
         error = np.linalg.norm(target_position_arm - current_position)
@@ -452,11 +449,33 @@ class RoboticArmController:
         while error > position_threshold:
    
             target_position_arm = self.hand_pose_ee
-            target_position_arm[2] = max(target_position_arm[2], 0.1)
-            target_pose = np.hstack((target_position_arm, self.fixed_orientation))
+            target_position_arm[2] = max(target_position_arm[2], 0.1) 
+            velocity = [0.01, 0.1]
+
+            # Manual pose message creation to provide orientation
+            goal = CartesianTrajectoryExecutionGoal()
+            goal_pose_msg = PoseStamped()
+            goal_pose_msg.header.stamp = rospy.Time.now()
+            goal_pose_msg.pose.position.x = target_position_arm[0]
+            goal_pose_msg.pose.position.y = target_position_arm[1]
+            goal_pose_msg.pose.position.z = target_position_arm[2]
+            goal_pose_msg.pose.orientation = self.fixed_orientation
         
-            velocity = [0.01, 0.2] 
-            goal = self.create_cartesian_goal(target=target_pose, velocity=velocity)
+            start_pose_msg = PoseStamped()
+            start_pose_msg.header.stamp = rospy.Time.now()
+            start_pose_msg.pose.position.x = 99
+            start_pose_msg.pose.position.y = 99
+            start_pose_msg.pose.position.z = 99
+            start_pose_msg.pose.orientation.x = 99
+            start_pose_msg.pose.orientation.y = 99
+            start_pose_msg.pose.orientation.z = 99
+            start_pose_msg.pose.orientation.w = 99
+
+            goal.pose_start = start_pose_msg
+            goal.pose_goal = goal_pose_msg
+            goal.translational_velocity_goal = velocity[0]
+            goal.rotational_velocity_goal = velocity[1]
+
             self.send_trajectory_goal(goal, "cartesian")
 
             pos = self.ee_pose.position
@@ -469,7 +488,7 @@ class RoboticArmController:
         rospy.loginfo("Reached the hand position")
 
         # Wait for arm to settle
-        rospy.sleep(2.0)
+        time.sleep(1.0)
 
         interaction_detected = self.detect_human_interaction(duration=5.0)
         msg = Bool()
