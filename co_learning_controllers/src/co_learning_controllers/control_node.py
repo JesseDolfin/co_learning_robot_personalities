@@ -2,22 +2,25 @@
 
 import sys
 import os
+import csv
 
 import argparse
 import time
-import random
+
 import signal
-from typing import Literal
+import subprocess
+
 
 import numpy as np
 import rospy
 from std_msgs.msg import String
 
 from co_learning_messages.msg import secondary_task_message, hand_pose
-from co_learning_controllers.src.hand_controller import SoftHandController
-from q_learning.src.QLearnAgent import QLearningAgent
-from q_learning.src.CoLearnEnvironment import CoLearn
-from co_learning_controllers.src.robot_controller import RoboticArmController
+from co_learning_controllers.hand_controller import SoftHandController
+from co_learning_controllers.questionaire_controller import GoogleFormHandler
+from q_learning.QLearnAgent import QLearningAgent
+from q_learning.CoLearnEnvironment import CoLearn
+from co_learning_controllers.robot_controller import RoboticArmController
 
 
 
@@ -26,23 +29,42 @@ INTERMEDIATE_POSITION = [np.pi / 2, 0, 0, 0, 0, 0, 0]
 
 
 class RoboticArmControllerNode:
-    def __init__(
-        self,
-        num_test_runs: int,
-        exploration_factor: float = 0.9,
-        personality_type: Literal[
-            'leader', 'follower', 'cautious', 'impatient', 'baseline'
-        ] = 'baseline',
-        fake=False,
-    ):
-        self.num_test_runs = num_test_runs
+    def __init__(self):
+        self.fake = rospy.get_param('/fake', False)
+        rospy.logwarn(self.fake)
+        self.num_test_runs = rospy.get_param('/num_test_runs', 10)
 
-        if personality_type == 'leader':
+        allowed_personality_types = {'baseline', 'leader', 'follower', 'impatient', 'patient'}
+        self.type = rospy.get_param('/personality_type', 'baseline')
+        if not self.fake and self.type not in allowed_personality_types:
+            raise ValueError(f"Invalid personality type '{self.type}'. Allowed values are: {', '.join(allowed_personality_types)}")
+        
+        self.participant_number = rospy.get_param('/participant_number', 1)
+        
+        self.base_dir = os.path.expanduser('/home/worker-20/jesse/ws/src/co_learning_robot_personalities/data_collection')
+        
+        # Loop to ensure unique participant and personality directories
+        while True:
+            self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
+            self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
+            
+            # If the directory doesn't exist, break the loop
+            if not self.fake and not os.path.exists(self.personality_dir):
+                break
+            
+            # Otherwise, increment participant number or personality type index and try again
+            self.participant_number += 1
+        
+        os.makedirs(self.personality_dir, exist_ok=True)
+
+        # Set the exploration factor based on the personality type
+        if self.type == 'leader':
             self.exploration_factor = 0.8
-        elif personality_type == 'follower':
+        elif self.type == 'follower':
             self.exploration_factor = 0.6
         else:
-            self.exploration_factor = exploration_factor
+            self.exploration_factor = 0.25
+
 
         self.phase = 0
         self.terminated = False
@@ -55,7 +77,7 @@ class RoboticArmControllerNode:
         self.q = None
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
-        self.type = personality_type
+        self.rosbag_process = None
 
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
@@ -64,19 +86,20 @@ class RoboticArmControllerNode:
         self.pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
 
         self.env = CoLearn()
-        if personality_type == 'leader':
+        if self.type == 'leader':
             self.env.type = 'leader'
 
         self.rl_agent = QLearningAgent(env=self.env)
-        if personality_type == 'follower':
+        if self.type == 'follower':
             self.rl_agent.type = 'follower'
 
-        self.hand_controller = SoftHandController(fake)
+        self.hand_controller = SoftHandController(self.fake)
         self.robot_arm_controller = RoboticArmController()
-        if personality_type == 'impatient':
+
+        if self.type == 'impatient':
             self.robot_arm_controller.type = 'fast'
             self.hand_time = 1
-        elif personality_type == 'cautious':
+        elif self.type == 'cautious':
             self.robot_arm_controller.type = 'slow'
             self.hand_time = 3
         else:
@@ -86,29 +109,13 @@ class RoboticArmControllerNode:
         self.gamma = 0.8
         self.Lamda = 0.3
 
-        self.messages = {
-            'impatient': [
-                'Please hurry up!',
-                'We need to move faster!',
-                'Speed it up, please!',
-            ],
-            'leader': [
-                'Good job, please present your arm to me when you are ready',
-                'Looking forward to your next move!',
-                'Excellent work, keep it up!',
-            ],
-            'cautious': [
-                'Take your time!',
-                'No rush, proceed at your pace',
-                'Make sure everything is ready before proceeding',
-            ],
-            'follower': [
-                'What should we do now?',
-                'I am ready to follow your lead',
-                'Let me know the next step',
-            ],
-            'baseline': [''],
-        }
+        form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA"
+        sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
+        key_path = "/home/worker-20/jesse/ws/psyched-loader-422713-u4-0fbb54ca49b0.json"
+
+        self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
+
+        self.start_rosbag_recording()
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -126,12 +133,6 @@ class RoboticArmControllerNode:
         self.hand_pose = [msg.x, msg.y, msg.z]
         self.orientation = msg.orientation
 
-    def get_random_message(self, personality_type):
-        if personality_type in self.messages:
-            messages = self.messages[personality_type]
-            if random.random() < 0.5:
-                return random.choice(messages)
-        return None
 
     def phase_0(self):
         """
@@ -215,30 +216,40 @@ class RoboticArmControllerNode:
         self.rl_agent.experience_replay(self.alpha, self.gamma, self.Lamda)
 
     def check_end_condition(self):
-        """
-        Checks if the terminal condition is reached.
-        Sends a message at the end to embed more of the personality.
-        """
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
-            message_text = self.get_random_message(self.type)
-            if message_text:
-                message = String()
-                message.data = message_text
         else:
-            _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION, None)
+            _ = self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
             self.run = False
 
-    def send_message(self, phase=None):
-        if self.msg is not None:
-            msg = self.msg
-        else:
-            msg = secondary_task_message()
-        if phase is not None:
-            msg.phase = phase
-        self.pub.publish(msg)
+            # Run the form workflow for the current personality type
+            self.form_handler.run_workflow(personality_dir=self.personality_dir)
+
+    def start_rosbag_recording(self):
+        rospy.loginfo("Starting rosbag ...")
+
+        topics_to_record = ['/Task_status', '/hand_pose','/CartesianImpedanceController/joint_states','/JointImpedanceController/joint_states']
+
+        bag_files_dir = os.path.join(self.personality_dir, 'bag_files')
+        os.makedirs(bag_files_dir, exist_ok=True)
+        bag_filename = f'robot_state_episode_{self.episode}.bag'
+        bag_filepath = os.path.join(bag_files_dir, bag_filename)
+
+        # Construct the rosbag record command
+        command = ['rosbag', 'record', '-O', bag_filepath] + topics_to_record
+    
+        self.rosbag_process = subprocess.Popen(command)
+        time.sleep(2) # Allow rosbag to startup
+
+    def stop_rosbag_recording(self):
+        if self.rosbag_process:
+            rospy.loginfo("Stopping rosbag ...")
+            # Send SIGINT to rosbag process to ensure it writes the bag file correctly
+            self.rosbag_process.send_signal(signal.SIGINT)
+            self.rosbag_process.wait()
+            self.rosbag_process = None
 
     def start_episode(self):
         """
@@ -275,7 +286,9 @@ class RoboticArmControllerNode:
                     self.phase_3()
 
             else:
+                self.stop_rosbag_recording()
                 self.update_q_table()
+                self.save_information()
                 self.check_end_condition()
 
     def convert_action_to_orientation(self, action: int):
@@ -284,6 +297,42 @@ class RoboticArmControllerNode:
             4: np.deg2rad([55, -40, -8, 82, 5, 50, 0]),  # Drop
         }
         return positions.get(action, INTERMEDIATE_POSITION)
+    
+    def save_information(self):
+        """Saves the Q-table and logs total_reward and successful_handover to a CSV file."""
+
+        total_reward = self.rl_agent.total_reward
+        successful_handover = self.successful_handover
+
+        # Q_tables
+        q_tables_dir = os.path.join(self.personality_dir, 'Q_tables')
+        os.makedirs(q_tables_dir, exist_ok=True)
+
+        q_table_filename = f'Q_table_{self.episode}.npy'
+        q_table_filepath = os.path.join(q_tables_dir, q_table_filename)
+        
+        self.rl_agent.save_q_table(filepath=q_table_filepath)
+        
+        # Log files
+        logs_dir = os.path.join(self.personality_dir, 'logs')
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        log_filename = 'episode_logs.csv'
+        log_filepath = os.path.join(logs_dir, log_filename)
+        
+        file_exists = os.path.isfile(log_filepath)
+        
+        # Open the file in append mode
+        with open(log_filepath, 'a', newline='') as csvfile:
+            fieldnames = ['episode', 'total_reward', 'successful_handover']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            if not file_exists:
+                writer.writeheader()
+            
+            writer.writerow({'episode': self.episode, 
+                            'total_reward': total_reward, 
+                            'successful_handover': successful_handover})    
 
     def reset(self):
         _, self.phase = self.rl_agent.reset()
@@ -291,6 +340,7 @@ class RoboticArmControllerNode:
         self.reset_msg()
         self.robot_arm_controller.hand_pose = None
         self.rl_agent.print_q_table()
+        self.start_rosbag_recording()
 
         if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor * 0.9, 0.20)
@@ -312,7 +362,6 @@ class RoboticArmControllerNode:
         self.orientation = 'None'
         self.original_orientation = None
         self.successful_handover = 0
-        self.send_message()
 
 
 if __name__ == '__main__':
