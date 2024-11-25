@@ -3,12 +3,6 @@
 import sys
 import os
 
-# Modify the Python path to recognize the package.
-script_dir = os.path.dirname(os.path.abspath(__file__))
-workspace_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
-if workspace_root not in sys.path:
-    sys.path.append(workspace_root)
-
 import argparse
 import time
 import random
