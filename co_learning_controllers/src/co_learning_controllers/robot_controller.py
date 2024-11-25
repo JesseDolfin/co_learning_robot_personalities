@@ -2,33 +2,23 @@
 
 import sys
 import time
-from tracemalloc import start
 from typing import Union
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-try:
-    import rospy
-    import actionlib
-    from sensor_msgs.msg import JointState
-    from std_msgs.msg import Bool
-    from cor_tud_msgs.msg import ControllerAction, ControllerGoal
-    from co_learning_messages.msg import hand_pose
-except ImportError as e:
-    print(f"Import Error: {e}")
-    sys.exit(1)
+import rospy
+import actionlib
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
+from cor_tud_msgs.msg import ControllerAction, ControllerGoal
+from co_learning_messages.msg import hand_pose
 
-try:
-    from robot.robot import Robot
-except ImportError as e:
-    rospy.logerr(f"Could not import Robot class: {e}")
-    Robot = None
+from robot.robot import Robot
 
 # Constants
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
 INTERMEDIATE_POSITION = [np.pi / 2, 0, 0, 0, 0, 0, 0]
-
 
 class RoboticArmController:
     def __init__(self):
@@ -63,7 +53,7 @@ class RoboticArmController:
         self.client.wait_for_server()
         rospy.loginfo("Server initialized")
 
-        rospy.sleep(2.5)  # Give enough time for the FRIoverlay app to start up
+        input("press ENTER to start the robot controller")
 
     def joint_callback(self, msg):
         """Callback function for joint_states subscriber."""
@@ -73,15 +63,6 @@ class RoboticArmController:
         effort = msg.effort
         effort_magnitude = np.linalg.norm(effort)
         self._effort_mag_save = effort_magnitude
-
-        if self.robot is not None and self.q is not None:
-            ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
-
-            translation = ee_T[:3, 3]
-            rot_mat = ee_T[:3, :3]
-            r = R.from_matrix(rot_mat)
-            euler_angles = r.as_euler('xyz', degrees=False)
-            self.ee_pose = np.hstack((translation, np.flip(euler_angles)))
 
     def hand_pose_callback(self, msg):
         """Callback function for hand_pose subscriber."""
@@ -165,6 +146,7 @@ class RoboticArmController:
         Returns:
             bool: True if the goal was sent successfully, False otherwise.
         """
+        rospy.loginfo("sending position command")
         if not isinstance(position, ControllerGoal):
             goal = self.create_goal(position, nullspace, goal_time, mode)
         else:
@@ -228,6 +210,15 @@ class RoboticArmController:
             update (bool): Whether to update the target based on the current hand position.
         """
         rospy.loginfo("Moving towards hand")
+        if self.robot is not None and self.q is not None:
+            ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
+
+            translation = ee_T[:3, 3]
+            rot_mat = ee_T[:3, :3]
+            r = R.from_matrix(rot_mat)
+            euler_angles = r.as_euler('xyz', degrees=False)
+            self.ee_pose = np.hstack((translation, np.flip(euler_angles)))
+            rospy.loginfo(f"ee_pose:{self.ee_pose}")
 
         if update:
             self.fixed_orientation = self.ee_pose[3:]
@@ -263,6 +254,15 @@ class RoboticArmController:
         update_pose = False
 
         while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand:
+            if self.robot is not None and self.q is not None:
+                ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
+
+                translation = ee_T[:3, 3]
+                rot_mat = ee_T[:3, :3]
+                r = R.from_matrix(rot_mat)
+                euler_angles = r.as_euler('xyz', degrees=False)
+                self.ee_pose = np.hstack((translation, np.flip(euler_angles)))
+
             if np.any(np.array(self.hand_pose) != 0):  # When a hand is in the workspace
                 hand_movement = np.linalg.norm(np.array(self.hand_pose) - self.saved_pose)
                 update_pose = hand_movement > 0.0  # Update pose if hand moved significantly
@@ -339,160 +339,20 @@ class RoboticArmController:
 
         return transformed_target
 
-    def test(self,experiment,positions = None):
-        rot= np.deg2rad([107, -47, -11, 100, -82, -82, -35])
-        count = 0
+    def test(self,n=0):
+        if n == 0:
+            self.send_position_command([0,0,0,0,0,0,0]) # go to position 0
 
-        initialise = True
-
-        #random set of x,y,z coordinates from simulated camera:
-        if positions == None:
-            positions= np.array([[-0.6,0.5,2.1],
-                                [-0.7,0.4,2.0],
-                                [-0.6,0.3,2.1],
-                                [-0.5,0.4,2.0]])
-                           
-        while not rospy.is_shutdown():
-            if experiment == 0:
-                rospy.loginfo("Sending pre-defined position command")
-                self.send_position_command(rot,None)
-
-                if self.delta > self.delta_save:
-                    self.delta_save = self.delta
-
-                rospy.loginfo(f"maximum delta:{self.delta_save:.2f}, current delta:{self.delta:.2f}")
-
-                target = self.ee_pose
-        
-                # for some reason this axis is inverted
-                target[4] = -target[4] 
-            
-                # Modify values to test if arm orientation changes
-                target[0] += 0.1
-                target[1] -= 0.1
-                target[2] += 0.1
-
-                rospy.loginfo("sending dynamic position command, forward")
-                self.send_position_command(target,None)
-
-                if self.delta > self.delta_save:
-                    self.delta_save = self.delta
-
-                rospy.loginfo(f"maximum delta:{self.delta_save:.2f}, current delta:{self.delta:.2f}")
-
-                target = self.ee_pose
-                target[4] = -target[4] 
-
-                # Move back to original position
-                target[0] -= 0.1
-                target[1] += 0.1
-                target[2] -= 0.1
-
-                rospy.loginfo("sending dynamic position command, backwards")
-                self.send_position_command(target,None)
-
-                if self.delta > self.delta_save:
-                    self.delta_save = self.delta
-
-                rospy.loginfo(f"maximum delta:{self.delta_save:.2f}, current delta:{self.delta:.2f}")
-
-    
-
-            if experiment == 1:
-                if initialise:
-                    self.send_position_command(rot,None)
-                    count = 0
-                    orientation = self.ee_pose[3:6]
-                    orientation[1] = -orientation[1] #BUG
-                    full_pose = self.q
-                    initialise = False
-                    
-                print("ee_pose at handover orientation:",orientation)
-
-                xyz = self.frame_transform()
-
-                target = np.hstack((xyz,orientation))
-
-                print("target:",target)
-
-                self.send_position_command(target,None)
-
-                count+=1
-                if count == 4:
-                    count = 0
-
-            if experiment == 2:
-                if initialise:
-                    self.send_position_command(rot,None)
-                    initialise = False
-                    saved_pose = self.ee_pose
-                    saved_pose[4] = -saved_pose[4] 
-                    initialise = False
-
-                print("current pose:",self.ee_pose)
-
-                print(f"switching to ee_control input:{saved_pose}")
-
-                self.send_position_command(saved_pose,None)
-
-            if experiment == 3:
-                serve = np.deg2rad([107, -47, -11, 100, -82, -82, -35]) # Serve
-                drop = np.deg2rad([55, -40, -8, 82, 5, 20, 0]) # Drop
-                self.send_position_command(serve,None)
-                #print("self.q for drop:",self.q)
-                self.move_towards_hand(update=True)
-                
-
-                self.send_position_command(serve,None)
-                # print("self.q for serve:",self.q)
-                self.move_towards_hand(update=True)
-               
-                #self.move_towards_hand()
+        if n == 1:
+            self.send_position_command([ 0.02075587, -0.50972173,  0.24752321,  0.66051142,  -1.35919863, -2.69775329]) # Serve from forward kinematics
 
 
-            if experiment == 4:
-                if initialise:
-                    self.send_position_command(rot,None)
-
-                    fixed_orientation = self.ee_pose[3:]
-                    fixed_orientation[1] = -fixed_orientation[1] #BUG
-                    
-                    initialise = False
-
-                 
-                target_positions= {0: [-0.32212266, -0.53631857,  0.42099988],
-                                    1: [-0.36131503, -0.5264838,   0.49599993],
-                                    2: [-0.33462706, -0.65330973,  0.26599991],
-                                    3: [-0.49206611, -0.63994768,  0.14599978],
-                                    4: [-0.28143831, -0.39959577,  0.33499991],
-                                    5: [-0.14201932, -0.28211292,  0.1739999 ],
-                                    6: [-0.21154168, -0.2970249,   0.08799993]}
-                 
-                goal = target_positions[count] + fixed_orientation
-
-                print(target_positions[count])
-                 
-                self.send_position_command(goal,None,mode='ee_cartesian')
-
-                count += 1
-
-                if count == 7:
-                    count = 0
-
-
-if __name__=='__main__':
-    rospy.init_node("test")
-    controller = RoboticArmController()
-    #controller.send_position_command([0,0,0,0,0,0,0],None)
-    #controller.test(0)
-    #while True:
-        #controller.send_position_command([0,0,0,0,0,0,0],None)
-        #controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
-    # controller.move_towards_hand(update=True)
-    # while True:
-    # #     controller.send_position_command(np.deg2rad([107, -47, -11, 100, -82, -82, -35]),None)
-    #     controller.move_towards_hand()
-    
-    controller.test(3)
-    #controller.test(1)
-    #print(controller.frame_transform(np.array([0.8,0.2,2.6])))
+if __name__ == '__main__':
+    try:
+        rospy.init_node("RoboticArmController")
+        node = RoboticArmController()
+        node.test(0)
+        #node.move_towards_hand()
+        node.test(1)
+    except rospy.ROSInterruptException:
+        pass

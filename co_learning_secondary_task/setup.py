@@ -3,7 +3,7 @@ from distutils.core import setup
 from catkin_pkg.python_setup import generate_distutils_setup
 
 d = generate_distutils_setup(
-   packages=['secondary_task', 'pantograph', 'pshape','pyhapi'],
+   packages=['co_learning_secondary_task'],
    package_dir={'':'src'},
 )
 

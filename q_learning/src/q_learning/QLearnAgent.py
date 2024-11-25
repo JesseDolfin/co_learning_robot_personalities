@@ -6,7 +6,7 @@ import random
 from tqdm import tqdm
 import rosgraph
 import rospy
-from CoLearnEnvironment import CoLearn
+from q_learning.CoLearnEnvironment import CoLearn
 
 
 class QLearningAgent:

@@ -18,10 +18,9 @@ from std_msgs.msg import String
 from co_learning_messages.msg import secondary_task_message, hand_pose
 from co_learning_controllers.hand_controller import SoftHandController
 from co_learning_controllers.questionaire_controller import GoogleFormHandler
+from co_learning_controllers.robot_controller import RoboticArmController
 from q_learning.QLearnAgent import QLearningAgent
 from q_learning.CoLearnEnvironment import CoLearn
-from co_learning_controllers.robot_controller import RoboticArmController
-
 
 
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
@@ -30,8 +29,9 @@ INTERMEDIATE_POSITION = [np.pi / 2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
     def __init__(self):
+   
         self.fake = rospy.get_param('/fake', False)
-        rospy.logwarn(self.fake)
+    
         self.num_test_runs = rospy.get_param('/num_test_runs', 10)
 
         allowed_personality_types = {'baseline', 'leader', 'follower', 'impatient', 'patient'}
@@ -41,21 +41,22 @@ class RoboticArmControllerNode:
         
         self.participant_number = rospy.get_param('/participant_number', 1)
         
-        self.base_dir = os.path.expanduser('/home/worker-20/jesse/ws/src/co_learning_robot_personalities/data_collection')
-        
+        self.base_dir = os.path.expanduser('~/python/src/co_learning_robot_personalities/data_collection')
+
         # Loop to ensure unique participant and personality directories
         while True:
             self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
             self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
             
-            # If the directory doesn't exist, break the loop
-            if not self.fake and not os.path.exists(self.personality_dir):
+            # If the directory doesn't exist, create it and break the loop
+            if not os.path.exists(self.personality_dir):
+                os.makedirs(self.personality_dir, exist_ok=True)
                 break
-            
-            # Otherwise, increment participant number or personality type index and try again
+                
+            # Otherwise, increment participant number and try again
             self.participant_number += 1
-        
-        os.makedirs(self.personality_dir, exist_ok=True)
+            
+            os.makedirs(self.personality_dir, exist_ok=True)
 
         # Set the exploration factor based on the personality type
         if self.type == 'leader':
@@ -94,7 +95,9 @@ class RoboticArmControllerNode:
             self.rl_agent.type = 'follower'
 
         self.hand_controller = SoftHandController(self.fake)
+        
         self.robot_arm_controller = RoboticArmController()
+
 
         if self.type == 'impatient':
             self.robot_arm_controller.type = 'fast'
@@ -111,11 +114,12 @@ class RoboticArmControllerNode:
 
         form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA"
         sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
-        key_path = "/home/worker-20/jesse/ws/psyched-loader-422713-u4-0fbb54ca49b0.json"
+        key_path = "/home/jesse/thesis/psyched-loader-422713-u4-efcf9b902f7b.json"
 
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
-        self.start_rosbag_recording()
+        #self.start_rosbag_recording()
+
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -156,34 +160,25 @@ class RoboticArmControllerNode:
         if self.action == 1:
             while self.draining_start == 0:
                 self.msg.reset = True
-                self.send_message()
                 rate.sleep()
                 if self.successful_handover == -1:
                     break
         if self.action == 2:
             while self.draining_start == 0:
                 self.msg.reset = True
-                self.send_message()
+               
                 rate.sleep()
                 if self.successful_handover == -1:
                     break
 
             self.msg.reset = False
-            self.send_message()
             self.original_orientation = self.orientation
-
-            first_message = True
             while (
                 self.original_orientation == self.orientation
                 and self.draining_done == 0
                 and self.successful_handover != -1
             ):
-                if first_message:
-                    first_message = False
-                    message_text = self.get_random_message(self.type)
-                    if message_text:
-                        message = String()
-                        message.data = message_text
+               
                 rate.sleep()
 
     def phase_2(self):
@@ -364,17 +359,10 @@ class RoboticArmControllerNode:
         self.successful_handover = 0
 
 
+
 if __name__ == '__main__':
     try:
-        parser = argparse.ArgumentParser(description="Robotic Arm Controller Node")
-        parser.add_argument('--fake', action='store_true', help="Run in fake mode")
-        args = parser.parse_args()
-        fake = args.fake
-
-        node = RoboticArmControllerNode(
-            num_test_runs=10, exploration_factor=0.25, personality_type='follower', fake=fake
-        )
+        node = RoboticArmControllerNode()
         node.start_episode()
-
     except rospy.ROSInterruptException:
         pass
