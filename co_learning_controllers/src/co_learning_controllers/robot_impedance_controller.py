@@ -41,8 +41,10 @@ class RoboticArmController:
 
         self.init_action_servers()
         self.init_subscriber_publishers()
- 
+    
         self.reconfigure_parameters()
+
+        input("press enter to start the robot controller")
 
     def init_subscriber_publishers(self):
         self.joint_state = rospy.Subscriber("CartesianImpedanceController/joint_states", JointState, self.joint_callback, queue_size=10)
@@ -89,7 +91,7 @@ class RoboticArmController:
             
             # Switch controller service
             rospy.wait_for_service('iiwa/controller_manager/switch_controller')
-            self.controller_manager = rospy.ServiceProxy('iiwa/controller_manager/switch_controller', SwitchController)
+            self.controller_manager = rospy.ServiceProxy('iiwa/controller_manager/switch_controller', SwitchController,persistent=True)
             
             # List controllers service
             rospy.wait_for_service('iiwa/controller_manager/list_controllers')
@@ -452,29 +454,8 @@ class RoboticArmController:
             target_position_arm[2] = max(target_position_arm[2], 0.1) 
             velocity = [0.01, 0.1]
 
-            # Manual pose message creation to provide orientation
-            goal = CartesianTrajectoryExecutionGoal()
-            goal_pose_msg = PoseStamped()
-            goal_pose_msg.header.stamp = rospy.Time.now()
-            goal_pose_msg.pose.position.x = target_position_arm[0]
-            goal_pose_msg.pose.position.y = target_position_arm[1]
-            goal_pose_msg.pose.position.z = target_position_arm[2]
-            goal_pose_msg.pose.orientation = self.fixed_orientation
-        
-            start_pose_msg = PoseStamped()
-            start_pose_msg.header.stamp = rospy.Time.now()
-            start_pose_msg.pose.position.x = 99
-            start_pose_msg.pose.position.y = 99
-            start_pose_msg.pose.position.z = 99
-            start_pose_msg.pose.orientation.x = 99
-            start_pose_msg.pose.orientation.y = 99
-            start_pose_msg.pose.orientation.z = 99
-            start_pose_msg.pose.orientation.w = 99
-
-            goal.pose_start = start_pose_msg
-            goal.pose_goal = goal_pose_msg
-            goal.translational_velocity_goal = velocity[0]
-            goal.rotational_velocity_goal = velocity[1]
+            goal = self.create_cartesian_goal([target_position_arm,0,0,0,1],velocity) # Fake orientation
+            goal.orientation = self.fixed_orientation # Correct orientation
 
             self.send_trajectory_goal(goal, "cartesian")
 
@@ -528,13 +509,53 @@ class RoboticArmController:
         transformed_target = np.dot(transform, target_hom)[:3]
 
         return transformed_target
+    
+    def test(self,n = 0):
+        drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
+        if n == 0:
+            goal = self.create_joint_goal(drop)
+            self.send_trajectory_goal(goal,'joint')
+
+        if n == 1:
+            ok = self.controller_manager( 
+                        start_controllers=['/CartesianImpedanceController'],
+                        stop_controllers=['/JointImpedanceController'],
+                        strictness=1, start_asap=True, timeout=0.5)
+            
+            rospy.loginfo(f"controller switched with {ok}")
+
+            pos = self.ee_pose.position
+            ori = self.ee_pose.orientation
+
+            rospy.loginfo(f"obtained ee_pose:{pos}")
+            rospy.loginfo(f"obtained orientation{ori}")
+
+            rospy.loginfo("creating goal ...")
+
+            velocity = [0.01, 0.1]
+
+            goal = self.create_cartesian_goal([pos.x,pos.y,pos.z,0,0,0,1],velocity) # Fake orientation
+            goal.orientation = ori # Correct orientation
+
+            rospy.loginfo(f"created goal is:{goal}")
+            rospy.loginfo("sending goal ...")
+
+            self.send_trajectory_goal(goal,'cartesian')
+
+
+
+
 
 
 if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
     controller = RoboticArmController()
+    controller.test(0)
+    controller.test(1)
 
-    controller.move_towards_hand(True)
+    
+
+    #controller.move_towards_hand(True)
 
 
     #drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()

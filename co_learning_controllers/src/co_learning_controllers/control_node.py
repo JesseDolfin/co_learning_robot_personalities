@@ -98,8 +98,6 @@ class RoboticArmControllerNode:
         self.hand_controller = SoftHandController(self.fake)
         self.robot_arm_controller = RoboticArmController()
 
-        input("Press any key to start the application")
-
         if self.type == 'impatient':
             self.robot_arm_controller.type = 'fast'
             self.hand_time = 1
