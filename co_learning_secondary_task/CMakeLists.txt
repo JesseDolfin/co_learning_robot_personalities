@@ -22,9 +22,10 @@ catkin_package(
 catkin_python_setup()
 
 catkin_install_python(PROGRAMS
-  src/secondary_task.py
-  src/pantograph.py
-  src/pshape.py
-  src/pyhapi.py
+  src/co_learning_secondary_task/secondary_task.py
+  src/co_learning_secondary_task/pantograph.py
+  src/co_learning_secondary_task/pshape.py
+  src/co_learning_secondary_task/pyhapi.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
+

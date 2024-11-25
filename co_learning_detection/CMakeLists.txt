@@ -22,7 +22,7 @@ catkin_package(
 catkin_python_setup()
 
 catkin_install_python(PROGRAMS
-  src/detection.py
-  src/object_detection_test.py
+  src/co_learning_detection/detection.py
+  src/co_learning_detection/object_detection_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

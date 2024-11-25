@@ -22,7 +22,7 @@ catkin_package(
 catkin_python_setup()
 
 catkin_install_python(PROGRAMS
-  src/CoLearnEnvironment.py
-  src/QLearnAgent.py
+  src/q_learning/CoLearnEnvironment.py
+  src/q_learning/QLearnAgent.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
