@@ -33,7 +33,7 @@ class Robot(ERobot):
 
     def __init__(self, model):
         rospack = rospkg.RosPack()
-        base_dir = rospack.get_path('cor_tud_controllers')
+        base_dir = rospack.get_path('iiwa_description')
         
         #print('trying to read: '+ base_dir + '/urdf/%s.urdf.xacro' % model)
         
@@ -58,7 +58,7 @@ class Robot(ERobot):
 
 
 if __name__ == "__main__":
-    robot = iiwa('iiwa14')
+    robot = iiwa('iiwa7')
     print(robot)
 
     for link in robot.grippers[0].links:

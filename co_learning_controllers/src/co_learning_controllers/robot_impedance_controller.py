@@ -19,6 +19,8 @@ from controller_manager_msgs.srv import SwitchController, ListControllers
 from iiwa_impedance_control.msg import CartesianTrajectoryExecutionGoal
 from iiwa_impedance_control.msg import JointTrajectoryExecutionGoal
 
+from robot.robot import Robot
+
 
 # Constants
 HOME_POSITION = [0.0,  0.0,   1.3,  1.0, -0.0, -0.0, -0.0]
@@ -38,6 +40,10 @@ class RoboticArmController:
         self.robot = None
         self.movement_finished = False
         self.fixed_orientation = None
+        self.pose_obtained = False
+
+
+        self.robot = Robot(model="iiwa7")
 
         self.init_action_servers()
         self.init_subscriber_publishers()
@@ -116,6 +122,15 @@ class RoboticArmController:
     def joint_trajectory_done_callback(self, status, result):
         self.movement_finished = True
         rospy.loginfo(f"Joint trajectory execution done with status: {status}, {result}")
+    
+        response = self.controller_manager(start_controllers=['/CartesianImpedanceController'],
+                                        stop_controllers=['/JointImpedanceController'], strictness=1,
+                                        start_asap=True, timeout=0.0)
+        if not response.ok:
+            rospy.logerr("Failed to switch controllers")
+        else:
+            rospy.loginfo("Controllers switched")
+  
 
     def joint_trajectory_active_callback(self):
         rospy.loginfo("Joint trajectory execution is active.")
@@ -124,6 +139,7 @@ class RoboticArmController:
         pass  # Feedback handling can be implemented here if needed
 
     def joint_callback(self, msg):
+        self.pose_obtained = False
         """Callback function for joint_states subscriber."""
         self.q = msg.position
         self.q_dot = msg.velocity
@@ -134,6 +150,7 @@ class RoboticArmController:
 
     def cartesian_callback(self,msg):
         self.ee_pose = msg.pose
+        self.pose_obtained = True
 
     def hand_pose_callback(self, msg):
         """Callback function for hand_pose subscriber."""
@@ -317,7 +334,7 @@ class RoboticArmController:
                 raise ValueError("Target must have 7 elements")
             
             if velocity is None:
-                velocity = [0.01, 0.2]
+                velocity = [0.5, 0.2]
             elif len(velocity) != 2:
                 raise ValueError("Velocity must have 2 elements.")
 
@@ -511,47 +528,79 @@ class RoboticArmController:
         return transformed_target
     
     def test(self,n = 0):
-        drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
+        drop = np.deg2rad([0, -40, 0, 65, 0, -70, 0]).tolist()
         if n == 0:
             goal = self.create_joint_goal(drop)
             self.send_trajectory_goal(goal,'joint')
 
+        rospy.loginfo(f"joint angles are:{self.q}")
+
+        ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
+
+        # Extract the translation and rotation matrix
+        translation = ee_T[:3, 3]
+        rot_mat = ee_T[:3, :3]
+
+        # Convert the rotation matrix to a quaternion
+        r = R.from_matrix(rot_mat)
+        quaternion = r.as_quat()  # Returns [x, y, z, w]
+
+        # Combine translation and quaternion into one array
+        
+        ee_pose_from_joint = np.hstack((translation, quaternion))
+
+        rospy.loginfo(f"ee_pose, from joint is: {ee_pose_from_joint}")
+        
+
         if n == 1:
-            ok = self.controller_manager( 
+            input("press enter to switch controllers")
+            response = self.controller_manager( 
                         start_controllers=['/CartesianImpedanceController'],
                         stop_controllers=['/JointImpedanceController'],
-                        strictness=1, start_asap=True, timeout=0.5)
+                        strictness=2, start_asap=True, timeout=0.0)
             
-            rospy.loginfo(f"controller switched with {ok}")
+            ok = response.ok
+            rospy.loginfo(f"controller switched with status: {ok}")
+
+            time.sleep(0.1) # give some time to obtain the ee_pose
 
             pos = self.ee_pose.position
             ori = self.ee_pose.orientation
 
-            rospy.loginfo(f"obtained ee_pose:{pos}")
-            rospy.loginfo(f"obtained orientation{ori}")
+            
+
+            rospy.loginfo(f"obtained ee_pose:\n{pos}")
+            rospy.loginfo(f"obtained orientation:\n{ori}")
 
             rospy.loginfo("creating goal ...")
 
             velocity = [0.01, 0.1]
 
-            goal = self.create_cartesian_goal([pos.x,pos.y,pos.z,0,0,0,1],velocity) # Fake orientation
-            goal.orientation = ori # Correct orientation
+            goal = self.create_cartesian_goal([pos.x,pos.y,pos.z,0,0,0,1]) # Fake orientation
+            goal.pose_goal.pose.orientation = ori # Correct orientation
 
-            rospy.loginfo(f"created goal is:{goal}")
+            rospy.loginfo(f"created goal is:\n{goal}")
             rospy.loginfo("sending goal ...")
 
             self.send_trajectory_goal(goal,'cartesian')
 
-
-
-
-
-
 if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
+
+
+    test_pos = [0,0,1.25,0,0,0,1] # home
+
+    test_pos2 = [-0.45654, -0.2770,  0.44700, 0.4089022, -0.8158419, 0.4089022, 2.737305] # manual calculation
+
+    
+
     controller = RoboticArmController()
+    #controller.send_trajectory_goal([0,0,0,0,0,0,0,],'joint')
     controller.test(0)
+    controller.send_trajectory_goal(test_pos2,'cartesian')
     controller.test(1)
+
+    #controller.send_trajectory_goal(test_pos2,'cartesian')
 
     
 
