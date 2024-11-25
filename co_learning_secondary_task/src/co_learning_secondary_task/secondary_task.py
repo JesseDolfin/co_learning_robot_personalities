@@ -15,9 +15,9 @@ from math import exp
 from std_msgs.msg import String
 
 from co_learning_messages.msg import secondary_task_message
-from pantograph import Pantograph
-from pyhapi import Mechanisms
-from pshape import PShape      
+from co_learning_secondary_task.pantograph import Pantograph
+from co_learning_secondary_task.pyhapi import Mechanisms
+from co_learning_secondary_task.pshape import PShape      
 
 class secondary_task():
     def __init__(self):
@@ -630,8 +630,6 @@ class secondary_task():
             difficulty_modifier = max(difficulty_modifier,0.7)
         else:
             difficulty_modifier = 1
-
-        print(difficulty_modifier)
 
         # Implements a sine wave parallel to the needle
         needle_direction = np.array([cos_alpha, sin_alpha])

@@ -29,7 +29,7 @@ INTERMEDIATE_POSITION = [np.pi / 2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
     def __init__(self):
-   
+        rospy.init_node('robotic_arm_controller_node', anonymous=True)
         self.fake = rospy.get_param('/fake', False)
     
         self.num_test_runs = rospy.get_param('/num_test_runs', 10)
@@ -80,7 +80,7 @@ class RoboticArmControllerNode:
         self.orientation = 'None'
         self.rosbag_process = None
 
-        rospy.init_node('robotic_arm_controller_node', anonymous=True)
+        
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
@@ -118,7 +118,7 @@ class RoboticArmControllerNode:
 
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
-        #self.start_rosbag_recording()
+        self.start_rosbag_recording()
 
 
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -126,6 +126,15 @@ class RoboticArmControllerNode:
     def signal_handler(self, sig, frame):
         rospy.signal_shutdown("Shutdown signal received.")
         sys.exit(0)
+
+    def send_message(self, phase=None):
+        if self.msg is not None:
+            msg = self.msg
+        else:
+            msg = secondary_task_message()
+        if phase is not None:
+            msg.phase = phase
+        self.pub.publish(msg)
 
     def status_callback(self, msg):
         self.msg = msg
@@ -160,18 +169,22 @@ class RoboticArmControllerNode:
         if self.action == 1:
             while self.draining_start == 0:
                 self.msg.reset = True
+                self.send_message()
                 rate.sleep()
                 if self.successful_handover == -1:
                     break
         if self.action == 2:
             while self.draining_start == 0:
                 self.msg.reset = True
-               
+                self.send_message(
+
+                )
                 rate.sleep()
                 if self.successful_handover == -1:
                     break
 
             self.msg.reset = False
+            self.send_message()
             self.original_orientation = self.orientation
             while (
                 self.original_orientation == self.orientation
@@ -208,7 +221,7 @@ class RoboticArmControllerNode:
 
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
-        self.rl_agent.experience_replay(self.alpha, self.gamma, self.Lamda)
+        self.rl_agent.experience_replay(self.alpha, self.gamma)
 
     def check_end_condition(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
@@ -225,7 +238,7 @@ class RoboticArmControllerNode:
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")
 
-        topics_to_record = ['/Task_status', '/hand_pose','/CartesianImpedanceController/joint_states','/JointImpedanceController/joint_states']
+        topics_to_record = ['/Task_status', '/hand_pose','/iiwa7/joint_states']
 
         bag_files_dir = os.path.join(self.personality_dir, 'bag_files')
         os.makedirs(bag_files_dir, exist_ok=True)
@@ -357,6 +370,7 @@ class RoboticArmControllerNode:
         self.orientation = 'None'
         self.original_orientation = None
         self.successful_handover = 0
+        self.send_message()
 
 
 

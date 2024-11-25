@@ -18,7 +18,7 @@ class QLearningAgent:
 
         self.reset_experience()
         self.state, self.phase = self.env.reset()
-        self.e_trace = np.zeros((self.env.state_size, self.env.action_size))
+        self.total_reward = 0
 
         self.initialize = True
         self.type = 'none'
@@ -68,10 +68,10 @@ class QLearningAgent:
 
         if real_time:
             if self.initialize:
+                self.total_reward = 0
                 self.state, self.phase = self.env.reset()
                 self.reset_experience()
                 terminated = False
-                self.e_trace = np.zeros_like(self.q_table)
                 self.initialize = False
 
             phase = self.phase
@@ -88,9 +88,10 @@ class QLearningAgent:
                 )
 
                 if reward != 0 and valid:
+                    self.total_reward += reward
                     # To prevent the agent from getting stuck in a loop
                     self.update_q_table(
-                        self.state, action, reward, next_state, alpha, gamma, lamda
+                        self.state, action, reward, next_state, alpha, gamma
                     )
 
                 self.state = next_state
@@ -107,7 +108,6 @@ class QLearningAgent:
                 self.state, self.phase = self.env.reset()
                 self.reset_experience()
                 terminated = False
-                self.e_trace = np.zeros_like(self.q_table)
 
                 while not terminated:
                     action = self.epsilon_greedy(epsilon)
@@ -120,7 +120,7 @@ class QLearningAgent:
                     )
                     self.state = next_state
 
-                self.experience_replay(alpha, gamma, lamda)
+                self.experience_replay(alpha, gamma)
 
     def epsilon_greedy(self, epsilon):
         """Selects an action using epsilon-greedy policy."""
@@ -138,7 +138,7 @@ class QLearningAgent:
         self.experience["reward"].append(reward)
         self.experience["valid"].append(valid)
 
-    def experience_replay(self, alpha, gamma, lamda):
+    def experience_replay(self, alpha, gamma):
         """Updates the Q-table using experience replay."""
         if self.ros_running:
             rospy.loginfo("Updating Q-table with experience")
@@ -149,11 +149,11 @@ class QLearningAgent:
             action = self.experience["action"][i]
             next_state = self.experience["next_state"][i]
             valid = self.experience["valid"][i]
-
             if valid:
                 # Increase the reward for this transition by the final reward per phase
                 reward = last_reward / self.env.phase_size
-                self.update_q_table(state, action, reward, next_state, alpha, gamma, lamda)
+                self.total_reward  += reward
+                self.update_q_table(state, action, reward, next_state, alpha, gamma)
 
     def reset_experience(self):
         """Resets the experience buffer."""
@@ -171,33 +171,30 @@ class QLearningAgent:
         self.state, self.phase = self.env.reset()
         return self.state, self.phase
 
-    def update_q_table(self, state, action, reward, next_state, alpha, gamma, lamda):
-        """Updates the Q-table using the Q-learning update rule with eligibility traces."""
+    def update_q_table(self, state, action, reward, next_state, alpha, gamma):
+        """Updates the Q-table using the standard Q-learning update rule"""
         old_value = self.q_table[state, action]
         next_max = np.max(self.q_table[next_state, :])
         td_error = reward + gamma * next_max - old_value
+        self.q_table[state, action] += alpha * td_error
 
-        self.e_trace[state, action] += 1
 
-        self.q_table += alpha * td_error * self.e_trace
-
-        self.e_trace *= gamma * lamda
-
-    def save_q_table(
-        self,
-        directory="co_learning_robot_personalities/src/q_learning/Q_tables",
-        prefix="q_table_",
-    ):
+    def save_q_table(self, filepath=None):
         """Saves the Q-table to a file."""
-        os.makedirs(directory, exist_ok=True)
+        if filepath is None:
+            directory = "co_learning_robot_personalities/src/q_learning/Q_tables"
+            os.makedirs(directory, exist_ok=True)
 
-        index = 1
-        while True:
-            filename = f"{prefix}{index}.npy"
-            filepath = os.path.join(directory, filename)
-            if not os.path.exists(filepath):
-                break
-            index += 1
+            index = 1
+            while True:
+                filename = f"q_table_{index}.npy"
+                filepath = os.path.join(directory, filename)
+                if not os.path.exists(filepath):
+                    break
+                index += 1
+        else:
+            directory = os.path.dirname(filepath)
+            os.makedirs(directory, exist_ok=True)
 
         np.save(filepath, self.q_table)
 

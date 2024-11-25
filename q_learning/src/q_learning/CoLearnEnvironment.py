@@ -240,4 +240,3 @@ class CoLearn(Env):
 
     def close(self):
         pass
-
