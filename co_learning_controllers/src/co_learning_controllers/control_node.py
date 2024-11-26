@@ -41,7 +41,7 @@ class RoboticArmControllerNode:
         
         self.participant_number = rospy.get_param('/participant_number', 1)
         
-        self.base_dir = os.path.expanduser('~/python/src/co_learning_robot_personalities/data_collection')
+        self.base_dir = os.path.expanduser('~/jesse/python/src/co_learning_robot_personalities/data_collection')
 
         # Loop to ensure unique participant and personality directories
         while True:
@@ -114,7 +114,7 @@ class RoboticArmControllerNode:
 
         form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA"
         sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
-        key_path = "/home/jesse/thesis/psyched-loader-422713-u4-efcf9b902f7b.json"
+        key_path = "/home/worker-20/jesse/ws/psyched-loader-422713-u4-0fbb54ca49b0.json"
 
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
@@ -229,11 +229,11 @@ class RoboticArmControllerNode:
             self.episode += 1
             self.reset()
         else:
-            _ = self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
+            _ = self.robot_arm_controller.send_position_command(INTERMEDIATE_POSITION,None)
             self.run = False
 
             # Run the form workflow for the current personality type
-            self.form_handler.run_workflow(personality_dir=self.personality_dir)
+            self.form_handler.run_workflow(dir=self.personality_dir)
 
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")
@@ -289,6 +289,12 @@ class RoboticArmControllerNode:
                     exploration_factor=self.exploration_factor,
                     real_time=True,
                 )
+
+                if self.successful_handover in [-1,1]:
+                    self.stop_rosbag_recording()
+                    self.update_q_table()
+                    self.save_information()
+                    self.check_end_condition()
 
                 if self.terminated:
                     self.phase_3()

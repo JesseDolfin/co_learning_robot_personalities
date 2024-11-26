@@ -13,6 +13,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool
 from cor_tud_msgs.msg import ControllerAction, ControllerGoal
 from co_learning_messages.msg import hand_pose
+from co_learning_messages.msg import secondary_task_message
 
 from robot.robot import Robot
 
@@ -46,6 +47,7 @@ class RoboticArmController:
         self.client = actionlib.SimpleActionClient(f"{ns}/torque_controller", ControllerAction)
         self.joint_state_sub = rospy.Subscriber(f"{ns}/joint_states", JointState, self.joint_callback, queue_size=10)
         self.hand_pose_sub = rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
+        self.task_status = rospy.Subscriber("/Task_status", secondary_task_message, self.task_status)
 
         self.publish_human_input = rospy.Publisher('human_input', Bool, queue_size=1)
 
@@ -54,6 +56,8 @@ class RoboticArmController:
         rospy.loginfo("Server initialized")
 
         input("press ENTER to start the robot controller")
+    def task_status(self,msg):
+        self.handover_status = msg.handover_successful
 
     def joint_callback(self, msg):
         """Callback function for joint_states subscriber."""
@@ -243,6 +247,9 @@ class RoboticArmController:
             self.q_save = None
             wait_for_hand = False
 
+        rospy.logwarn(f"self.q:{self.q}")
+        rospy.logwarn(f"self.ee_pose[:3]:{self.ee_pose[:3]}")
+
         if self.save_target is not None:
             target_position_arm = self.save_target
         else:
@@ -254,6 +261,8 @@ class RoboticArmController:
         update_pose = False
 
         while (np.linalg.norm(target_position_arm - current_position) > position_threshold) or wait_for_hand:
+            if self.handover_status in [-1,1]:
+                break
             if self.robot is not None and self.q is not None:
                 ee_T = np.array(self.robot.fkine(self.q, end='iiwa_link_7', start='iiwa_link_0'))
 
@@ -297,16 +306,18 @@ class RoboticArmController:
         rospy.loginfo("Reached the hand position")
         rospy.loginfo("Waiting for 5 seconds to detect human interaction...")
         time.sleep(2) # give the arm time to settle
-        interaction_detected = self.detect_human_interaction(duration=5.0)
 
-        msg = Bool()
-        if interaction_detected:
-            rospy.loginfo("Human interaction is detected during waiting period.")
-            msg.data = True
-        else:
-            rospy.loginfo("No human interaction detected during waiting period.")
-            msg.data = False
-        self.publish_human_input.publish(msg)
+        if self.handover_status not in [-1,1]:
+            interaction_detected = self.detect_human_interaction(duration=5.0)
+
+            msg = Bool()
+            if interaction_detected:
+                rospy.loginfo("Human interaction is detected during waiting period.")
+                msg.data = True
+            else:
+                rospy.loginfo("No human interaction detected during waiting period.")
+                msg.data = False
+            self.publish_human_input.publish(msg)
 
         self.hand_pose = [0, 0, 0]
 

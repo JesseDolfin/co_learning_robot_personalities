@@ -32,5 +32,6 @@ catkin_install_python(PROGRAMS
   src/co_learning_controllers/hand_controller.py
   src/co_learning_controllers/robot_controller.py
   src/co_learning_controllers/questionaire_controller.py
+  src/co_learning_controllers/handover_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
