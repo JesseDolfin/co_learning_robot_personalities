@@ -18,7 +18,7 @@ import numpy as np
 import rospy
 from std_msgs.msg import String
 
-from co_learning_controllers.robot_impedance_controller import RoboticArmController
+from co_learning_controllers.robot_controller import RobotArmController
 from co_learning_controllers.hand_controller import SoftHandController
 from co_learning_controllers.questionaire_controller import GoogleFormHandler
 from co_learning_messages.msg import secondary_task_message, hand_pose
@@ -32,6 +32,7 @@ INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 class RoboticArmControllerNode:
     def __init__(self,):
+        rospy.init_node('robotic_arm_controller_node', anonymous=True)
         self.fake = rospy.get_param('/fake', False)
         rospy.logwarn(self.fake)
         self.num_test_runs = rospy.get_param('/num_test_runs', 10)
@@ -81,7 +82,7 @@ class RoboticArmControllerNode:
         self.orientation = 'None'
         self.rosbag_process = None
 
-        rospy.init_node('robotic_arm_controller_node', anonymous=True)
+
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
@@ -96,16 +97,7 @@ class RoboticArmControllerNode:
             self.rl_agent.type = 'follower'
 
         self.hand_controller = SoftHandController(self.fake)
-        self.robot_arm_controller = RoboticArmController()
-
-        if self.type == 'impatient':
-            self.robot_arm_controller.type = 'fast'
-            self.hand_time = 1
-        elif self.type == 'cautious':
-            self.robot_arm_controller.type = 'slow'
-            self.hand_time = 3
-        else:
-            self.hand_time = 2
+        self.robot_arm_controller = RobotArmController()
 
         self.alpha = 0.15
         self.gamma = 0.8
@@ -278,6 +270,13 @@ class RoboticArmControllerNode:
                     exploration_factor=self.exploration_factor,
                     real_time=True,
                 )
+
+                if self.successful_handover in [-1,1]:
+                    self.terminated = True
+                    self.stop_rosbag_recording()
+                    self.update_q_table()
+                    self.save_information()
+                    self.check_end_condition()
 
                 if self.terminated:
                     self.phase_3()

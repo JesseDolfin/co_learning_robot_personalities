@@ -12,17 +12,24 @@ class SoftHandController:
     def __init__(self, fake=False):
         self.fake = fake
         self.position = None
+        type = rospy.get_param('/personality_type', 'baseline')  # Store type as instance variable
+        
+        # Set duration based on personality type
+        if type == 'impatient':
+            self.hand_time = 1
+        elif type == 'patient':
+            self.hand_time = 3
+        else:
+            self.hand_time = 2
 
         if not self.fake:
             if not rosgraph.is_master_online():
                 print("ROS is offline! Shutting down")
                 sys.exit(0)
-
             try:
                 rospy.init_node('hand_controller')
             except rospy.exceptions.ROSException as e:
                 rospy.logwarn(f"Cannot initialize node 'hand_controller' as it has already been initialized")
-
             # Initialize publisher and subscriber
             self.pub = rospy.Publisher(
                 '/qbhand1/control/qbhand1_synergy_trajectory_controller/command',
@@ -39,28 +46,28 @@ class SoftHandController:
         if not self.fake:
             self.position = msg.position[0]
 
-    def send_goal(self, mode: str, duration: int):
+    def send_goal(self, mode: str, duration: int = None):
         """
         Sends a goal to the hand controller.
-
         Parameters:
-            mode (str): Mode of operation ('open', 'close', 'partial').
-            duration (int): Duration in seconds for the movement.
+        mode (str): Mode of operation ('open', 'close', 'partial').
+        duration (int): Duration in seconds for the movement. If None, uses personality-based duration.
         """
         if mode not in ['open', 'close', 'partial']:
             raise ValueError("Invalid mode. Expected 'open', 'close', or 'partial'.")
 
+        # Use personality-based duration if none provided
+        if duration is None:
+            duration = self.hand_time
+
         if not self.fake:
             rospy.loginfo(f"{mode} for {duration} s")
-        
-        goal = self.get_qbhand_goal(mode, duration)
-
-        if not self.fake:
-            self.pub.publish(goal)
+            goal = self.get_qbhand_goal(mode, duration)
+            if not self.fake:
+                self.pub.publish(goal)
         else:
             print(f"[MOCK] Published goal for mode: {mode}")
-
-        time.sleep(duration)
+            time.sleep(duration)
 
     def get_qbhand_goal(self, mode='open', duration=5, n_interval=20):
         """

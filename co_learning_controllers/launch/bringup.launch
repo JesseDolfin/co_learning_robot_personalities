@@ -27,6 +27,7 @@
     <arg name="secondary_task" default="true"/>
     <arg name="detection" default="true"/>
     <arg name="qb_hand" default="true"/>
+    <arg name="dremel" default="false"/>
 
  
     <!-- Arguments to modify experiment behaviour -->
@@ -34,8 +35,6 @@
     <arg name="fake" default="false"/>
     <arg name="participant_number" default="-1"/>
     <arg name="num_test_runs" default="20"/>
-
- 
 
     <!-- Set these as parameters on the parameter server -->
     <param name="personality_type" value="$(arg personality_type)"/>
@@ -57,7 +56,11 @@
         name="hardware_interface" value="EffortJointInterface"/>
 
     <!-- Upload iiwa URDF -->
-    <include file="$(find iiwa_description)/launch/iiwa$(arg model)_upload.launch">
+    <include unless="$(arg dremel)" file="$(find iiwa_description)/launch/iiwa$(arg model)_upload.launch">
+        <arg name="hardware_interface" value="$(arg hardware_interface)"/>
+        <arg name="robot_name" value="$(arg robot_name)"/>
+    </include>
+    <include if="$(arg dremel)" file="$(find iiwa_dremel_description)/launch/iiwa$(arg model)_dremel_upload.launch">
         <arg name="hardware_interface" value="$(arg hardware_interface)"/>
         <arg name="robot_name" value="$(arg robot_name)"/>
     </include>
