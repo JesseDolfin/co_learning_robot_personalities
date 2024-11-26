@@ -18,3 +18,4 @@ yolov10m.pt
 *.zip
 android_figurine/
 exported_model/
+data_collection/
