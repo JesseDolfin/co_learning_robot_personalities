@@ -106,7 +106,6 @@ class RoboticArmControllerNode:
 
         workspace_root = os.path.dirname(self.base_dir)
         key_path = os.path.join(workspace_root, 'psyched-loader-422713-u4-0fbb54ca49b0.json')
-        key_path = "/home/worker-20/jesse/ws/psyched-loader-422713-u4-0fbb54ca49b0.json"
 
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
