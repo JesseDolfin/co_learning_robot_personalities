@@ -400,7 +400,7 @@ class RobotArmController():
 if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
 
-    controller = testController()
+    controller = RobotArmController()
 
     target_joint = np.deg2rad([0, 30, -50, -50, 20, 0, 0]).tolist()
     target_joint_2 = [0] * 7

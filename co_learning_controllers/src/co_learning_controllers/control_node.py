@@ -17,6 +17,7 @@ import pandas as pd
 import numpy as np
 import rospy
 from std_msgs.msg import String
+import rospkg
 
 from co_learning_controllers.robot_controller import RobotArmController
 from co_learning_controllers.hand_controller import SoftHandController
@@ -34,30 +35,27 @@ class RoboticArmControllerNode:
     def __init__(self,):
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         self.fake = rospy.get_param('/fake', False)
-        rospy.logwarn(self.fake)
+        rospy.loginfo(f"Running in fake mode:{self.fake}")
         self.num_test_runs = rospy.get_param('/num_test_runs', 10)
 
         allowed_personality_types = {'baseline', 'leader', 'follower', 'impatient', 'patient'}
         self.type = rospy.get_param('/personality_type', 'baseline')
         if not self.fake and self.type not in allowed_personality_types:
             raise ValueError(f"Invalid personality type '{self.type}'. Allowed values are: {', '.join(allowed_personality_types)}")
-        
+
         self.participant_number = rospy.get_param('/participant_number', 1)
-        
-        self.base_dir = os.path.expanduser('/home/worker-20/jesse/ws/src/co_learning_robot_personalities/data_collection')
-        
-        # Loop to ensure unique participant and personality directories
-        while True:
-            self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
-            self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
-            
-            # If the directory doesn't exist, break the loop
-            if not self.fake and not os.path.exists(self.personality_dir):
-                break
-            
-            # Otherwise, increment participant number or personality type index and try again
-            self.participant_number += 1
-        
+        rospack = rospkg.RosPack()
+        controller_path = rospack.get_path('co_learning_controllers')
+        project_root = os.path.dirname(controller_path)
+        self.base_dir = os.path.join(project_root, 'data_collection')
+        print(self.base_dir)
+
+        self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
+        self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
+
+        if not self.fake and os.path.exists(self.personality_dir):
+            raise ValueError(f"Directory already exists: {self.personality_dir}")
+
         os.makedirs(self.personality_dir, exist_ok=True)
 
         # Set the exploration factor based on the personality type
@@ -72,7 +70,7 @@ class RoboticArmControllerNode:
         self.phase = 0
         self.terminated = False
         self.episode = 0
-        self.successful_handover = 0
+        self.task_status = 0
         self.run = True
         self.action = 0
         self.msg = secondary_task_message()
@@ -120,14 +118,13 @@ class RoboticArmControllerNode:
 
     def status_callback(self, msg):
         self.msg = msg
-        self.successful_handover = msg.handover_successful
+        self.task_status = msg.handover_successful
         self.draining_start = msg.draining_starts
         self.draining_done = msg.draining_successful
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
         self.orientation = msg.orientation
-
 
     def phase_0(self):
         """
@@ -152,13 +149,13 @@ class RoboticArmControllerNode:
             while self.draining_start == 0:
                 self.msg.reset = True
                 rate.sleep()
-                if self.successful_handover == -1:
+                if self.task_status == -1:
                     break
         if self.action == 2:
             while self.draining_start == 0:
                 self.msg.reset = True
                 rate.sleep()
-                if self.successful_handover == -1:
+                if self.task_status == -1:
                     break
 
             self.msg.reset = False
@@ -167,7 +164,7 @@ class RoboticArmControllerNode:
             while (
                 self.original_orientation == self.orientation
                 and self.draining_done == 0
-                and self.successful_handover != -1
+                and self.task_status != -1
             ):
                 rate.sleep()
 
@@ -271,7 +268,7 @@ class RoboticArmControllerNode:
                     real_time=True,
                 )
 
-                if self.successful_handover in [-1,1]:
+                if self.task_status in [-1,1]:
                     self.terminated = True
                     self.stop_rosbag_recording()
                     self.update_q_table()
@@ -295,10 +292,10 @@ class RoboticArmControllerNode:
         return positions.get(action, INTERMEDIATE_POSITION)
     
     def save_information(self):
-        """Saves the Q-table and logs total_reward and successful_handover to a CSV file."""
+        """Saves the Q-table and logs total_reward and task_status to a CSV file."""
 
         total_reward = self.rl_agent.total_reward
-        successful_handover = self.successful_handover
+        task_status = self.task_status
 
         # Q_tables
         q_tables_dir = os.path.join(self.personality_dir, 'Q_tables')
@@ -320,7 +317,7 @@ class RoboticArmControllerNode:
         
         # Open the file in append mode
         with open(log_filepath, 'a', newline='') as csvfile:
-            fieldnames = ['episode', 'total_reward', 'successful_handover']
+            fieldnames = ['episode', 'total_reward', 'task_status']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
             if not file_exists:
@@ -328,7 +325,7 @@ class RoboticArmControllerNode:
             
             writer.writerow({'episode': self.episode, 
                             'total_reward': total_reward, 
-                            'successful_handover': successful_handover})
+                            'task_status': task_status})
 
     def reset(self):
         _, self.phase = self.rl_agent.reset()
@@ -357,7 +354,7 @@ class RoboticArmControllerNode:
         self.draining_start = 0
         self.orientation = 'None'
         self.original_orientation = None
-        self.successful_handover = 0
+        self.task_status = 0
 
 
 if __name__ == '__main__':

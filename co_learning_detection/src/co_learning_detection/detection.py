@@ -237,7 +237,7 @@ class MPDetector:
     def process_frames(self, draw=False):
         try:
             frame_counter = 0
-            detection_interval = 30  # Number of frames skipped
+            detection_interval = 30  
 
             while not rospy.is_shutdown():
                 color_frame, depth_frame = self.get_frames()
@@ -247,7 +247,6 @@ class MPDetector:
                 depth_image = np.asanyarray(depth_frame.get_data())
                 color_image = np.asanyarray(color_frame.get_data())
 
-                # Zoom into workspace to increase detection capabilities of hand
                 x, y, _ = color_image.shape
                 self.x_offset = 200
                 self.y_offset = 500
@@ -278,18 +277,19 @@ class MPDetector:
                     orientation = 'none'
                     self.publish_message(orientation, point)
 
-                frame_counter += 1
-                if frame_counter >= detection_interval:
-                    rospy.loginfo("Running object detection")
-                    object_detected = self.run_object_detection(visualize=draw)
+                # Commenting out detection code that was causing premature handover success
+                # frame_counter += 1
+                # if frame_counter >= detection_interval:
+                #     rospy.loginfo("Running object detection")
+                #     object_detected = self.run_object_detection(visualize=draw)
 
-                    if self.msg is None:
-                        self.msg = secondary_task_message()
+                #     if self.msg is None:
+                #         self.msg = secondary_task_message()
 
-                    if object_detected:
-                        self.msg.handover_successful = 1
-                        self.secondary_pub.publish(self.msg)
-                    frame_counter = 0
+                #     if object_detected:
+                #         self.msg.handover_successful = 1
+                #         self.secondary_pub.publish(self.msg)
+                #     frame_counter = 0
 
         except rospy.ROSInterruptException:
             pass

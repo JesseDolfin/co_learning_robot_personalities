@@ -106,7 +106,7 @@
     <!-- IF allow_nodes:=false, launch just the barebone interface -->
     <group if="$(arg allow_nodes)">
         <group if="$(arg control_node)">
-            <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen"/>
+            <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen" launch-prefix="gnome-terminal --"/>
         </group>
 
         <!-- Conditionally Launch secondary_task.py in a new terminal window -->
