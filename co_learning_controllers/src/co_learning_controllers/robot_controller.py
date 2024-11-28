@@ -13,6 +13,8 @@ from iiwa_impedance_control.msg import CartesianTrajectoryExecutionAction, Carte
 from iiwa_impedance_control.msg import JointTrajectoryExecutionAction, JointTrajectoryExecutionGoal
 from co_learning_messages.msg import hand_pose
 from co_learning_messages.msg import secondary_task_message
+from geometry_msgs.msg import Quaternion
+
 
 class RobotArmController():
     def __init__(self):
@@ -30,7 +32,7 @@ class RobotArmController():
         else: self.type = 'baseline'
 
         self.init_ros()
-        self.reconfigure_parameters()
+        #self.reconfigure_parameters()
         input("Press ENTER to start the robot controller")
 
     def init_ros(self):
@@ -400,11 +402,27 @@ if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
 
     controller = RobotArmController()
+    target = [0.0] * 7
 
     target_joint = np.deg2rad([0.0, 30.0, -50.0, -50.0, 20.0, 0.0, 0.0]).tolist()
     target_joint_2 = [0.0] * 7
     velocity = [0.3] * 7
+
+    controller.send_joint_trajectory_goal(target,velocity)
+
     controller.send_joint_trajectory_goal(target_joint,velocity)
-    # input("send to joint 2")
+
+    target_cart = [0.0,0.0,1.255]
+
+    orientation = Quaternion()
+    orientation.w = 1.0  # Default/neutral orientation
+    orientation.x = 0.0
+    orientation.y = 0.0
+    orientation.z = 0.0
+
+    controller.send_cartesian_trajectory_goal(target_cart,orientation)
+
+    
+    # # input("send to joint 2")
     # controller.send_joint_trajectory_goal(target_joint_2,velocity)
-    # rospy.spin()
+    #rospy.spin()
