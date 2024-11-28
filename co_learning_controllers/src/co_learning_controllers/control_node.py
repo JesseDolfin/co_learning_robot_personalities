@@ -175,15 +175,22 @@ class RoboticArmControllerNode:
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
         self.orientation = msg.orientation
+        
+    def send_message(self, phase=None):
+        if self.msg is not None:
+            msg = self.msg
+        else:
+            msg = secondary_task_message()
+        if phase is not None:
+            msg.phase = phase
+        self.pub.publish(msg)
 
     def phase_0(self):
         """
         Go to the home position and grab the object
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: Home")
-        input("send arm to intermediate")
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
-        input("send arm to home")
         self.robot_arm_controller.send_joint_trajectory_goal(HOME_POSITION)
         self.hand_controller.send_goal('open')
         time.sleep(2)
@@ -200,17 +207,20 @@ class RoboticArmControllerNode:
         if self.action == 1:
             while self.draining_start == 0:
                 self.msg.reset = True
+                self.send_message()
                 rate.sleep()
                 if self.task_status == -1:
                     break
         if self.action == 2:
             while self.draining_start == 0:
                 self.msg.reset = True
+                self.send_message()
                 rate.sleep()
                 if self.task_status == -1:
                     break
 
             self.msg.reset = False
+            self.send_message()
             self.original_orientation = self.orientation
 
             while (
@@ -229,14 +239,17 @@ class RoboticArmControllerNode:
         position = self.convert_action_to_orientation(self.action)
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
         self.robot_arm_controller.send_joint_trajectory_goal(position)
-        self.robot_arm_controller.move_towards_hand(update=True)
+
+        if not self.task_status == -1:
+            self.robot_arm_controller.move_towards_hand(update=True)
 
     def phase_3(self):
         """
         Decide to open or close the hand based on the action.
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
-        self.robot_arm_controller.move_towards_hand()
+        if not self.task_status == -1:
+            self.robot_arm_controller.move_towards_hand()
 
         if self.action == 5:
             self.hand_controller.send_goal('open')
@@ -317,16 +330,6 @@ class RoboticArmControllerNode:
                     exploration_factor=self.exploration_factor,
                     real_time=True,
                 )
-
-                if self.task_status in [-1,1]:
-                    self.terminated = True
-                    self.stop_rosbag_recording()
-                    self.update_q_table()
-                    self.save_information()
-                    self.check_end_condition()
-
-                if self.terminated:
-                    self.phase_3()
 
             else:
                 self.stop_rosbag_recording()

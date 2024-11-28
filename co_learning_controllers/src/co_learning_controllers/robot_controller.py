@@ -23,6 +23,7 @@ class RobotArmController():
         self.pose_ref = None
         self.fixed_orientation = None
         self.trajectory_state = False
+        self.hand_pose = [0,0,0]
         type = rospy.get_param('/personality_type', 'baseline')
 
         if type == 'impatient':
