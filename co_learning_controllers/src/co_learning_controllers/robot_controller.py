@@ -395,27 +395,16 @@ class RobotArmController():
         transformed_target = np.dot(transform, target_hom)[:3]
 
         return transformed_target
-            
-  
-            
+                    
 if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
 
     controller = RobotArmController()
 
-    target_joint = np.deg2rad([0, 30, -50, -50, 20, 0, 0]).tolist()
-    target_joint_2 = [0] * 7
+    target_joint = np.deg2rad([0.0, 30.0, -50.0, -50.0, 20.0, 0.0, 0.0]).tolist()
+    target_joint_2 = [0.0] * 7
     velocity = [0.3] * 7
     controller.send_joint_trajectory_goal(target_joint,velocity)
-    controller.send_joint_trajectory_goal(target_joint_2,velocity)
-
-    pose = controller.pose
-
-    rospy.loginfo(pose)
-
-    cart_pos = [0.59666935,-0.3086399,0.8449138,0.17270191,0.564667941,-0.289578023,0.753305204]
-
-    velocity = [0.3,0.3]
-    controller.send_cartesian_trajectory_goal(cart_pos,velocity)
-
-    rospy.spin()
+    # input("send to joint 2")
+    # controller.send_joint_trajectory_goal(target_joint_2,velocity)
+    # rospy.spin()

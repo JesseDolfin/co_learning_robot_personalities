@@ -27,8 +27,8 @@ from q_learning.QLearnAgent import QLearningAgent
 from q_learning.CoLearnEnvironment import CoLearn
 
 
-HOME_POSITION = [np.pi / 2, np.pi / 4, 0, -np.pi / 4, 0, np.pi / 4, 0]
-INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
+HOME_POSITION = [np.pi / 2, np.pi / 4, 0.0, -np.pi / 4, 0.0, np.pi / 4, 0.0]
+INTERMEDIATE_POSITION = [np.pi/2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 
 class RoboticArmControllerNode:
@@ -140,6 +140,8 @@ class RoboticArmControllerNode:
         if self.type == 'follower':
             self.rl_agent.type = 'follower'
 
+
+
         self.hand_controller = SoftHandController(self.fake)
         self.robot_arm_controller = RobotArmController()
 
@@ -150,13 +152,12 @@ class RoboticArmControllerNode:
         form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA"
         sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
 
-        workspace_root = os.path.dirname(self.base_dir)
-        key_path = os.path.join(workspace_root, 'psyched-loader-422713-u4-0fbb54ca49b0.json')
-
+        parent = os.path.dirname(project_root)
+        ws = os.path.dirname(parent)
+        key_path = os.path.join(ws, 'psyched-loader-422713-u4-0fbb54ca49b0.json')
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
         self.start_rosbag_recording()
-
         signal.signal(signal.SIGINT, self.signal_handler)
        
 
@@ -180,11 +181,13 @@ class RoboticArmControllerNode:
         Go to the home position and grab the object
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: Home")
-        self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
-        self.robot_arm_controller.send_trajectory_goal(HOME_POSITION, 'joint')
-        self.hand_controller.send_goal('open', self.hand_time)
+        input("send arm to intermediate")
+        self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
+        input("send arm to home")
+        self.robot_arm_controller.send_joint_trajectory_goal(HOME_POSITION)
+        self.hand_controller.send_goal('open')
         time.sleep(2)
-        self.hand_controller.send_goal('close', self.hand_time)
+        self.hand_controller.send_goal('close')
 
     def phase_1(self):
         """
@@ -224,8 +227,8 @@ class RoboticArmControllerNode:
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         position = self.convert_action_to_orientation(self.action)
-        self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
-        self.robot_arm_controller.send_trajectory_goal(position, 'joint')
+        self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
+        self.robot_arm_controller.send_joint_trajectory_goal(position)
         self.robot_arm_controller.move_towards_hand(update=True)
 
     def phase_3(self):
@@ -236,15 +239,15 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.move_towards_hand()
 
         if self.action == 5:
-            self.hand_controller.send_goal('open', self.hand_time)
+            self.hand_controller.send_goal('open')
         elif self.action == 6:
-            self.hand_controller.send_goal('partial', self.hand_time)
+            self.hand_controller.send_goal('partial')
         elif self.action == 7:
-            self.hand_controller.send_goal('close', self.hand_time)
+            self.hand_controller.send_goal('close')
 
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
-        self.rl_agent.experience_replay(self.alpha, self.gamma, self.Lamda)
+        self.rl_agent.experience_replay(self.alpha, self.gamma)
 
     def check_end_condition(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
@@ -252,13 +255,11 @@ class RoboticArmControllerNode:
             self.episode += 1
             self.reset()
         else:
-            _ = self.robot_arm_controller.send_trajectory_goal(INTERMEDIATE_POSITION, 'joint')
+            _ = self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
             self.run = False
 
             # Run the form workflow for the current personality type
             self.form_handler.run_workflow(personality_dir=self.personality_dir)
-
-
 
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")
@@ -383,6 +384,7 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.hand_pose = None
         self.rl_agent.print_q_table()
         self.start_rosbag_recording()
+        self.task_status = 0
 
         if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor * 0.9, 0.20)

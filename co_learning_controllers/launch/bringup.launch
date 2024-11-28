@@ -44,16 +44,23 @@
 
     <!-- Select the robot -->
     <arg name="robot_name" default="iiwa"/>
-    <arg name="model" default="7"/>
+    <arg name="model" default="14"/>
 
     <!-- Select the controller -->
     <arg name="controller" default="CartesianImpedanceController"/>
 
-    <!-- Define hardware interface based on the selected controller -->
-    <arg if="$(eval controller == 'PositionController' or controller == 'PositionTrajectoryController')"
-        name="hardware_interface" value="PositionJointInterface"/>
-    <arg unless="$(eval controller == 'PositionController' or controller == 'PositionTrajectoryController')"
-        name="hardware_interface" value="EffortJointInterface"/>
+    <arg if="$(eval controller == 'TorqueController')" name="hardware_interface" value="EffortJointInterface"/>
+    <arg if="$(eval controller == 'PositionTorqueController')" name="hardware_interface" value="EffortJointInterface"/>
+    <arg if="$(eval controller == 'PositionController')" name="hardware_interface" value="PositionJointInterface"/>
+    <arg if="$(eval controller == 'PositionTrajectoryController')" name="hardware_interface"
+         value="PositionJointInterface"/>
+    <arg if="$(eval controller == 'CartesianImpedanceController')" name="hardware_interface"
+         value="EffortJointInterface"/>
+    <arg if="$(eval controller == 'JointImpedanceController')" name="hardware_interface"
+         value="EffortJointInterface"/>
+    <!-- By default assume EffortJointInterface -->
+    <arg unless="$(eval (controller == 'PositionController') or (controller == 'PositionTorqueController') or (controller == 'TorqueController') or (controller == 'PositionTrajectoryController') or (controller == 'CartesianImpedanceController') or (controller == 'JointImpedanceController'))"
+         name="hardware_interface" value="EffortJointInterface"/>
 
     <!-- Upload iiwa URDF -->
     <include unless="$(arg dremel)" file="$(find iiwa_description)/launch/iiwa$(arg model)_upload.launch">

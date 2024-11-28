@@ -91,7 +91,7 @@ class QLearningAgent:
                     self.total_reward += reward
                     # To prevent the agent from getting stuck in a loop
                     self.update_q_table(
-                        self.state, action, reward, next_state, alpha, gamma, lamda
+                        self.state, action, reward, next_state, alpha, gamma
                     )
 
                 self.state = next_state
@@ -120,7 +120,7 @@ class QLearningAgent:
                     )
                     self.state = next_state
 
-                self.experience_replay(alpha, gamma, lamda)
+                self.experience_replay(alpha, gamma)
 
     def epsilon_greedy(self, epsilon):
         """Selects an action using epsilon-greedy policy."""
@@ -138,7 +138,7 @@ class QLearningAgent:
         self.experience["reward"].append(reward)
         self.experience["valid"].append(valid)
 
-    def experience_replay(self, alpha, gamma, lamda):
+    def experience_replay(self, alpha, gamma):
         """Updates the Q-table using experience replay."""
         if self.ros_running:
             rospy.loginfo("Updating Q-table with experience")
@@ -153,7 +153,7 @@ class QLearningAgent:
                 # Increase the reward for this transition by the final reward per phase
                 reward = last_reward / self.env.phase_size
                 self.total_reward  += reward
-                self.update_q_table(state, action, reward, next_state, alpha, gamma, lamda)
+                self.update_q_table(state, action, reward, next_state, alpha, gamma)
 
     def reset_experience(self):
         """Resets the experience buffer."""
@@ -171,14 +171,12 @@ class QLearningAgent:
         self.state, self.phase = self.env.reset()
         return self.state, self.phase
 
-def update_q_table(self, state, action, reward, next_state, alpha, gamma):
-    """Updates the Q-table using the standard Q-learning update rule"""
-    old_value = self.q_table[state, action]
-    next_max = np.max(self.q_table[next_state, :])
-    td_error = reward + gamma * next_max - old_value
-
-    # Update the Q-value directly
-    self.q_table[state, action] += alpha * td_error
+    def update_q_table(self, state, action, reward, next_state, alpha, gamma):
+        """Updates the Q-table using the standard Q-learning update rule"""
+        old_value = self.q_table[state, action]
+        next_max = np.max(self.q_table[next_state, :])
+        td_error = reward + gamma * next_max - old_value
+        self.q_table[state, action] += alpha * td_error
 
 
     def save_q_table(self, filepath=None):
