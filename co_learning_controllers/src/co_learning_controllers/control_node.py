@@ -48,7 +48,6 @@ class RoboticArmControllerNode:
         controller_path = rospack.get_path('co_learning_controllers')
         project_root = os.path.dirname(controller_path)
         self.base_dir = os.path.join(project_root, 'data_collection')
-        print(self.base_dir)
 
         self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
         self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
