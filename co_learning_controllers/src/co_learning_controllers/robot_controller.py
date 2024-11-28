@@ -27,6 +27,7 @@ class RobotArmController():
             self.type = 'fast'
         elif type == 'patient':
             self.type = 'slow'
+        else: self.type = 'baseline'
 
         self.init_ros()
         self.reconfigure_parameters()

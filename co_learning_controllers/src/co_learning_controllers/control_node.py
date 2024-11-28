@@ -32,29 +32,77 @@ INTERMEDIATE_POSITION = [np.pi/2, 0, 0, 0, 0, 0, 0]
 
 
 class RoboticArmControllerNode:
-    def __init__(self,):
+    def __init__(self):
         rospy.init_node('robotic_arm_controller_node', anonymous=True)
         self.fake = rospy.get_param('/fake', False)
-        rospy.loginfo(f"Running in fake mode:{self.fake}")
-        self.num_test_runs = rospy.get_param('/num_test_runs', 10)
+        rospy.loginfo(f"Running in fake mode: {self.fake}")
 
-        allowed_personality_types = {'baseline', 'leader', 'follower', 'impatient', 'patient'}
-        self.type = rospy.get_param('/personality_type', 'baseline')
-        if not self.fake and self.type not in allowed_personality_types:
-            raise ValueError(f"Invalid personality type '{self.type}'. Allowed values are: {', '.join(allowed_personality_types)}")
+        # Personality types (excluding baseline for Latin square)
+        allowed_personality_types = ['leader', 'follower', 'impatient', 'patient']
+
+        latin_square = [
+            ['leader', 'follower', 'impatient', 'patient'],
+            ['follower', 'impatient', 'patient', 'leader'],
+            ['impatient', 'patient', 'leader', 'follower'],
+            ['patient', 'leader', 'follower', 'impatient']
+        ]
 
         self.participant_number = rospy.get_param('/participant_number', 1)
+        
+        # ROS package and directory setup
         rospack = rospkg.RosPack()
         controller_path = rospack.get_path('co_learning_controllers')
         project_root = os.path.dirname(controller_path)
         self.base_dir = os.path.join(project_root, 'data_collection')
-
         self.participant_dir = os.path.join(self.base_dir, f'participant_{self.participant_number}')
+
+        # Check if participant directory exists
+        if not self.fake and not os.path.exists(self.participant_dir):
+            # First time participant - do baseline runs
+            self.type = 'baseline'
+            self.num_test_runs = 3 
+            rospy.loginfo("First 3 test runs will use the baseline personality.")
+        else:
+            # Participant exists - need to determine which personality type to run
+            self.num_test_runs = rospy.get_param('/num_test_runs', 10)
+            
+            # Get index in Latin square based on participant number
+            num_personality_types = len(allowed_personality_types)
+            participant_index = (self.participant_number - 1) % num_personality_types
+            personality_sequence = latin_square[participant_index]
+            
+            # Check which personality directories already exist
+            existing_personalities = []
+            for personality in ['baseline'] + personality_sequence:
+                if os.path.exists(os.path.join(self.participant_dir, f'personality_type_{personality}')):
+                    existing_personalities.append(personality)
+            
+            if not existing_personalities:
+                # If no personalities exist (shouldn't happen as baseline should exist)
+                self.type = 'baseline'
+                self.num_test_runs = 3
+                rospy.loginfo("No personality directories found. Running baseline.")
+            elif len(existing_personalities) > len(personality_sequence):
+                # All personalities have been run
+                rospy.loginfo("All personality types have been completed for this participant.")
+                rospy.signal_shutdown("Experiment complete")
+                sys.exit(0)
+            else:
+                # Find the next personality type to run
+                completed_sequence = [p for p in personality_sequence if p in existing_personalities]
+                if len(completed_sequence) < len(personality_sequence):
+                    next_index = len(completed_sequence)
+                    self.type = personality_sequence[next_index]
+                    rospy.loginfo(f"Running next personality type: {self.type}")
+                else:
+                    rospy.loginfo("All personality types have been completed for this participant.")
+                    rospy.signal_shutdown("Experiment complete")
+                    sys.exit(0)
+
+        if not self.fake and self.type not in ['baseline'] + allowed_personality_types:
+            raise ValueError(f"Invalid personality type '{self.type}'. Allowed values are: baseline, {', '.join(allowed_personality_types)}")
+
         self.personality_dir = os.path.join(self.participant_dir, f'personality_type_{self.type}')
-
-        if not self.fake and os.path.exists(self.personality_dir):
-            raise ValueError(f"Directory already exists: {self.personality_dir}")
-
         os.makedirs(self.personality_dir, exist_ok=True)
 
         # Set the exploration factor based on the personality type
@@ -65,7 +113,7 @@ class RoboticArmControllerNode:
         else:
             self.exploration_factor = 0.25
 
-
+        # Rest of initialization code remains the same...
         self.phase = 0
         self.terminated = False
         self.episode = 0
@@ -78,7 +126,6 @@ class RoboticArmControllerNode:
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
         self.rosbag_process = None
-
 
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
@@ -111,6 +158,7 @@ class RoboticArmControllerNode:
         self.start_rosbag_recording()
 
         signal.signal(signal.SIGINT, self.signal_handler)
+       
 
     def signal_handler(self, sig, frame):
         rospy.signal_shutdown("Shutdown signal received.")
