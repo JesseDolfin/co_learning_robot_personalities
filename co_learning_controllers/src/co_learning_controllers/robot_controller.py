@@ -23,7 +23,9 @@ class RobotArmController():
         self.pose_ref = None
         self.fixed_orientation = None
         self.trajectory_state = False
-        self.hand_pose = [0,0,0]
+        self.hand_detected = False
+        self.hand_pose = None
+        self.handover_status = 0
         type = rospy.get_param('/personality_type', 'baseline')
 
         if type == 'impatient':
@@ -151,8 +153,14 @@ class RobotArmController():
         self.handover_status = msg.handover_successful
         
     def hand_pose_callback(self, msg):
-        hand_pose = [msg.x, msg.y, msg.z]
-        self.hand_pose = self.frame_transform(hand_pose)
+        hand_pose = np.array([msg.x, msg.y, msg.z])
+        if np.all(hand_pose) == 0:
+            self.hand_detected = False
+            self.hand_pose = hand_pose
+        else:
+            self.hand_detected = True
+            self.hand_pose = self.frame_transform(hand_pose)
+        
 
     def cartesian_joint_callback(self,data):
         effort = data.effort
@@ -199,14 +207,14 @@ class RobotArmController():
             pass
 
         if velocity is None:
-            velocity = [0.1,0.3]
+            velocity = [0.2,0.6]
         else:
             pass
 
         if self.type == 'fast':
-            velocity = [0.2,0.3]
+            velocity = [0.4,0.6]
         elif self.type == 'slow':
-            velocity = [0.05,0.3]
+            velocity = [0.1,0.6]
 
         goal = CartesianTrajectoryExecutionGoal()
         goal_pose_msg = PoseStamped()
@@ -332,7 +340,9 @@ class RobotArmController():
         #TODO: change hand pose to also use a PoseStamed msg? 
 
         # Wait for hand to be detected if not already
-        while np.all(self.hand_pose) == 0:
+        print(self.hand_detected)
+        print(self.hand_pose)
+        while not self.hand_detected:
             rospy.loginfo("Waiting for hand to be detected...")
             rate.sleep()
 
@@ -403,25 +413,23 @@ if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
 
     controller = RobotArmController()
-    target = [0.0] * 7
-
-    target_joint = np.deg2rad([0.0, 30.0, -50.0, -50.0, 20.0, 0.0, 0.0]).tolist()
-    target_joint_2 = [0.0] * 7
+    target = [np.pi/2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    target_joint = np.deg2rad([107, -47, -11, 100, -82, -82, -35]).tolist()
     velocity = [0.3] * 7
 
-    controller.send_joint_trajectory_goal(target,velocity)
-
+    #controller.send_joint_trajectory_goal(target,velocity)
     controller.send_joint_trajectory_goal(target_joint,velocity)
+    controller.move_towards_hand(update=True)
 
-    target_cart = [0.0,0.0,1.255]
+    # target_cart = [0.0,0.0,1.255]
 
-    orientation = Quaternion()
-    orientation.w = 1.0  # Default/neutral orientation
-    orientation.x = 0.0
-    orientation.y = 0.0
-    orientation.z = 0.0
+    # orientation = Quaternion()
+    # orientation.w = 1.0  # Default/neutral orientation
+    # orientation.x = 0.0
+    # orientation.y = 0.0
+    # orientation.z = 0.0
 
-    controller.send_cartesian_trajectory_goal(target_cart,orientation)
+    # controller.send_cartesian_trajectory_goal(target_cart,orientation)
 
     
     # # input("send to joint 2")

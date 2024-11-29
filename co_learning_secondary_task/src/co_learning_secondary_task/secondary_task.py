@@ -59,6 +59,12 @@ class secondary_task():
         self.handover_successful = msg.handover_successful
         self.reset = msg.reset
 
+        if self.reset == True:
+            self.lock = False
+
+        if self.handover_successful in [-1,1] and not self.reset:
+            self.lock = True
+
     def text_callback(self,msg):
         self.display_text = msg.data
         self.display_text_flag = True
@@ -359,7 +365,7 @@ class secondary_task():
                 message.draining_starts = start
             if end is not None:
                 message.draining_successful = end
-            if success is not None:
+            if success is not None and not self.lock:
                 message.handover_successful = success
             if time is not None:
                 message.time_left = time

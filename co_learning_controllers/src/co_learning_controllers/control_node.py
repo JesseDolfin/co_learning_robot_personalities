@@ -400,15 +400,12 @@ class RoboticArmControllerNode:
         """
         Signals the secondary task that it may also get ready for another attempt.
         """
-        self.msg = secondary_task_message()
-        self.msg.draining_starts = 0
-        self.msg.draining_successful = 0
-        self.msg.reset = False
-        self.msg.phase = 0
+        self.draining_done = 0
         self.draining_start = 0
         self.orientation = 'None'
         self.original_orientation = None
         self.task_status = 0
+
 
 
 if __name__ == '__main__':
