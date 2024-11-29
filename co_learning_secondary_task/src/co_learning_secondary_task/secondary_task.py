@@ -59,6 +59,12 @@ class secondary_task():
         rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s reset: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful,msg.reset)
         self.handover_successful = msg.handover_successful
         self.reset = msg.reset
+
+        if self.handover_successful in [-1,1]:
+            self.lock = True
+        else:
+            self.lock = False
+
         
     def check_print_text(self):
         if self.display_text_flag and self.display_text is not None:
@@ -180,6 +186,7 @@ class secondary_task():
         self.get_the_time = True
         self.window_scale = 3
         self.time_init = 0
+        self.lock = False
 
         self.previous_cursor = None
         self.smoothing_factor = 0.1
@@ -356,7 +363,7 @@ class secondary_task():
                 message.draining_starts = start
             if end is not None:
                 message.draining_successful = end
-            if success is not None:
+            if success is not None and not self.lock:
                 message.handover_successful = success
             if time is not None:
                 message.time_left = time
