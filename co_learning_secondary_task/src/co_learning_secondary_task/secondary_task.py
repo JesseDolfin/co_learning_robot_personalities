@@ -11,7 +11,9 @@ import time
 import rospy
 import rosgraph
 from math import exp
+
 from std_msgs.msg import String
+
 from co_learning_messages.msg import secondary_task_message
 from co_learning_secondary_task.pantograph import Pantograph
 from co_learning_secondary_task.pyhapi import Mechanisms
@@ -53,11 +55,30 @@ class secondary_task():
             rospy.init_node("secondary_task")
 
     def status_callback(self,msg):
-        print(f"inside the callback time")
         self.msg = msg
+        rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s reset: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful,msg.reset)
         self.handover_successful = msg.handover_successful
         self.reset = msg.reset
-        print(f"value of reset:{self.reset}")
+        
+    def check_print_text(self):
+        if self.display_text_flag and self.display_text is not None:
+            lines = self.split_text("Robot: " + "\"" + self.display_text + "\"", self.font, max_width = 500)
+            y_offset = 450
+            
+            for line in lines:
+                text_surface = self.font.render(line, True, (0, 0, 0), (255, 255, 255))
+                self.screenVR.blit(text_surface, (10, y_offset))
+                y_offset += self.font.get_linesize()  # Move to the next line height
+
+            if self.get_the_time:
+                self.time_init = pygame.time.get_ticks()
+                self.get_the_time = False
+
+            time_current = pygame.time.get_ticks() - self.time_init
+
+            if time_current > 1000:
+                self.get_the_time = True
+                self.display_text_flag = False
 
     def initialise_pygame(self):
         ##initialize pygame window
@@ -875,6 +896,7 @@ class secondary_task():
             self.screenVR.blit(text_surface, (0, y_offset))
             y_offset += 20
 
+        #self.check_print_text() Disabled one-way communication
         display_timer()
             
         # Fuse it back together
@@ -942,9 +964,7 @@ class secondary_task():
 
         tries = self.fail_count + self.success_count
 
-        rate = rospy.Rate(20)
         while self.run:
-            rate.sleep()
             self.window.blit(self.screenHaptics, (0, 0))
             self.window.blit(self.screenBlank, (800, 0))
             self.window.blit(self.screenVR, (900, 0))
@@ -1017,6 +1037,7 @@ class secondary_task():
                 self.screenHaptics.blit(texts[6][2].render(texts[6][0], True, texts[6][1]), (20, 140))
 
             pygame.display.update()
+            self.clock.tick(60) # slow down the loop
 
 
 if __name__ == '__main__':
