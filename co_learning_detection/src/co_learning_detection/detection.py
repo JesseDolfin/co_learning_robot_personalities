@@ -34,24 +34,17 @@ class MPDetector:
         self.width = width
         self.height = height
         self.fps = fps
-        self.msg = None
 
         rospy.loginfo("setting up realsense")
 
-        if not fake:
-            self.setup_realsense()
-            self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
-            self.secondary_pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
-            rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
+        self.setup_realsense()
+        self.pose_pub = rospy.Publisher('/hand_pose', hand_pose, queue_size=4)
 
         rospy.loginfo("realsense setup finished")
 
         rospy.loginfo("initializing mediapipe")
 
         self.setup_mediapipe()
-
-    def status_callback(self, msg):
-        self.msg = msg
 
     def setup_mediapipe(self):
         # Setup the hand landmarker model

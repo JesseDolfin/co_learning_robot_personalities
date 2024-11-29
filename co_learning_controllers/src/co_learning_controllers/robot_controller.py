@@ -419,7 +419,7 @@ if __name__ == '__main__':
 
     #controller.send_joint_trajectory_goal(target,velocity)
     controller.send_joint_trajectory_goal(target_joint,velocity)
-    controller.move_towards_hand(update=True)
+    #controller.move_towards_hand(update=True)
 
     # target_cart = [0.0,0.0,1.255]
 

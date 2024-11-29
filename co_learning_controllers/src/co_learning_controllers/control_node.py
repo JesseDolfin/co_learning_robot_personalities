@@ -130,7 +130,7 @@ class RoboticArmControllerNode:
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
 
-        self.pub = rospy.Publisher('Task_status', secondary_task_message, queue_size=1)
+        self.pub = rospy.Publisher('/Task_status', secondary_task_message, queue_size=1)
 
         self.env = CoLearn()
         if self.type == 'leader':
@@ -157,7 +157,7 @@ class RoboticArmControllerNode:
         key_path = os.path.join(ws, 'psyched-loader-422713-u4-0fbb54ca49b0.json')
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
-        self.start_rosbag_recording()
+        #self.start_rosbag_recording()
         signal.signal(signal.SIGINT, self.signal_handler)
        
 
@@ -183,6 +183,7 @@ class RoboticArmControllerNode:
             msg = secondary_task_message()
         if phase is not None:
             msg.phase = phase
+        rospy.loginfo(msg)
         self.pub.publish(msg)
 
     def phase_0(self):
@@ -204,17 +205,22 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         rate = rospy.Rate(10)
 
+        msg_send = True
         if self.action == 1:
             while self.draining_start == 0:
                 self.msg.reset = True
-                self.send_message()
+                if msg_send:
+                    self.send_message()
+                    msg_send = False
                 rate.sleep()
                 if self.task_status == -1:
                     break
         if self.action == 2:
             while self.draining_start == 0:
                 self.msg.reset = True
-                self.send_message()
+                if msg_send:
+                    self.send_message()
+                    msg_send = False
                 rate.sleep()
                 if self.task_status == -1:
                     break
@@ -272,7 +278,7 @@ class RoboticArmControllerNode:
             self.run = False
 
             # Run the form workflow for the current personality type
-            self.form_handler.run_workflow(personality_dir=self.personality_dir)
+            self.form_handler.run_workflow(dir=self.personality_dir)
 
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")
@@ -332,7 +338,7 @@ class RoboticArmControllerNode:
                 )
 
             else:
-                self.stop_rosbag_recording()
+                #self.stop_rosbag_recording()
                 self.update_q_table()
                 self.save_information()
                 self.check_end_condition()
@@ -405,6 +411,7 @@ class RoboticArmControllerNode:
         self.orientation = 'None'
         self.original_orientation = None
         self.task_status = 0
+        self.msg = secondary_task_message()
 
 
 

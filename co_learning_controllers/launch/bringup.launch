@@ -122,7 +122,7 @@
         </group>
 
         <group if="$(arg detection)">
-            <node name="detection" pkg="co_learning_detection" type="detection.py" output="log"/>
+            <node name="detection" pkg="co_learning_detection" type="detection.py" output="log" launch-prefix="nice -n 10 ionice -c 2 -n2"/>
         </group>
     
         <group if="$(arg rviz)">
