@@ -13,3 +13,6 @@ logs/
 *.zip
 data_collection/
 camera_calibration.py
+.Rproj.user
+.RData
+.Rhistory

@@ -70,7 +70,7 @@ class GoogleFormHandler:
 
 if __name__== "__main__":
 
-    form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA"
+    form_url = "https://docs.google.com/forms/d/e/1FAIpQLSdR4K8vwLv8_G2z9AJJRAhb9mFYCPITse1FVCU3c2V5QZWzdg/viewform?usp=sf_link"
     sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
     key_path = "/home/worker-20/jesse/ws/psyched-loader-422713-u4-efcf9b902f7b.json"
     personality_dir = "/home/worker-20/jesse/ws/src/co_learning_robot_personalities/data_collection/participant_-1/personality_type_fake"

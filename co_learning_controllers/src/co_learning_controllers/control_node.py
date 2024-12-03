@@ -149,7 +149,7 @@ class RoboticArmControllerNode:
         self.gamma = 0.8
         self.Lamda = 0.3
 
-        form_url = "https://forms.gle/xGV3pWaNoPVrXjHXA"
+        form_url = "https://docs.google.com/forms/d/e/1FAIpQLSdR4K8vwLv8_G2z9AJJRAhb9mFYCPITse1FVCU3c2V5QZWzdg/viewform?usp=sf_link"
         sheet_url = "https://docs.google.com/spreadsheets/d/1iVvVxfakw5Un8Wk9xu2ObyB40vr6SW-ENc43ewN9g54/edit"
 
         parent = os.path.dirname(project_root)
