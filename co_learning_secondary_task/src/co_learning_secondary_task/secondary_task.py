@@ -59,6 +59,7 @@ class secondary_task():
         rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s reset: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful,msg.reset)
         self.handover_successful = msg.handover_successful
         self.reset = msg.reset
+        self.phase = msg.phase
 
         if self.handover_successful in [-1,1]:
             self.lock = True
@@ -960,6 +961,7 @@ class secondary_task():
                 ("Spacebar was released before all of the fluid was drained, please try again!", (240, 0, 0), pygame.font.Font(None, 38)),
                 ("Item obtained! The procedure is successful", (20, 150, 40), pygame.font.Font(None, 38)),
                 (f"Score: {round(self.time_left, 2)}", (0, 0, 0), pygame.font.Font(None, 30))
+                ("First run successfully completed! Congratulations",(20, 150, 40), pygame.font.Font(None, 38))
             ]
 
         
@@ -991,6 +993,13 @@ class secondary_task():
                     if button_rect.collidepoint(event.pos):
                         self.initialise_simulation_parameters()
                         self.run_simulation()
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and tries < self.max_tries and self.phase == 6:
+                    if button_rect.collidepoint(event.pos):
+                        self.initialise_simulation_parameters()
+                        self.initialise_others()
+                        self.start_screen()
+
 
             if tries < self.max_tries:
                 if self.reset:
@@ -1033,6 +1042,8 @@ class secondary_task():
                     for line in split_lines:
                         self.screenHaptics.blit(texts[10][2].render(line, True, texts[10][1]), (20, y_offset))
                         y_offset += 30
+                elif self.phase == 6:
+                    self.screenHaptics.blit(texts[12][2].render(texts[12][0], True, texts[12][1]), (20, 120))
                 else:
                     split_lines = self.split_text(texts[7][0], texts[7][2], self.screenHaptics.get_width())
                     y_offset = 120

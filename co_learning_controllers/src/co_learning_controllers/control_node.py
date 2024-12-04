@@ -159,7 +159,7 @@ class RoboticArmControllerNode:
         key_path = os.path.join(ws, 'psyched-loader-422713-u4-0fbb54ca49b0.json')
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
-        #self.start_rosbag_recording()
+        self.start_rosbag_recording()
         signal.signal(signal.SIGINT, self.signal_handler)
        
 
@@ -178,14 +178,11 @@ class RoboticArmControllerNode:
         self.hand_pose = [msg.x, msg.y, msg.z]
         self.orientation = msg.orientation
         
-    def send_message(self, phase=None):
+    def send_message(self):
         if self.msg is not None:
             msg = self.msg
         else:
             msg = secondary_task_message()
-        if phase is not None:
-            msg.phase = phase
-        rospy.loginfo(msg)
         self.pub.publish(msg)
 
     def phase_0(self):
@@ -207,30 +204,29 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         rate = rospy.Rate(10)
 
-        msg_send = True
+        rospy.logwarn(f"self.draining_start:{self.draining_start},self.task_status:{self.task_status}, self.draining_done:{self.draining_done}")
+        rospy.logwarn(f"self.action:{self.action}")
+
+
+        self.msg.reset = True
+        self.msg.phase = 1
+        self.send_message()
+ 
         if self.action == 1:
+            rospy.logwarn(f"inside action 1")
             while self.draining_start == 0:
-                self.msg.reset = True
-                if msg_send:
-                    self.send_message()
-                    msg_send = False
                 rate.sleep()
                 if self.task_status == -1:
                     break
+
         if self.action == 2:
+            rospy.logwarn(f"inside action 2")
             while self.draining_start == 0:
-                self.msg.reset = True
-                if msg_send:
-                    self.send_message()
-                    msg_send = False
                 rate.sleep()
                 if self.task_status == -1:
                     break
 
-            self.msg.reset = False
-            self.send_message()
             self.original_orientation = self.orientation
-
             while (
                 self.original_orientation == self.orientation
                 and self.draining_done == 0
@@ -248,7 +244,7 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
         self.robot_arm_controller.send_joint_trajectory_goal(position)
 
-        if not self.task_status == -1:
+        if not self.task_status in [-1,1]:
             self.robot_arm_controller.move_towards_hand(update=True)
 
     def phase_3(self):
@@ -256,7 +252,7 @@ class RoboticArmControllerNode:
         Decide to open or close the hand based on the action.
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
-        if not self.task_status == -1:
+        if not self.task_status in [-1,1]:
             self.robot_arm_controller.move_towards_hand()
 
         if self.action == 5:
@@ -264,6 +260,7 @@ class RoboticArmControllerNode:
         elif self.action == 6:
             self.hand_controller.send_goal('partial')
         elif self.action == 7:
+            self.hand_controller.send_goal('close_signal') # Gives an auditory indication that something is happening
             self.hand_controller.send_goal('close')
 
     def update_q_table(self):
@@ -281,6 +278,15 @@ class RoboticArmControllerNode:
 
             # Run the form workflow for the current personality type
             self.form_handler.run_workflow(dir=self.personality_dir)
+
+            self.msg = secondary_task_message()
+            self.msg.phase = 6
+            self.send_message()
+
+            rospy.loginfo(f"Successfully completed the experiment for personality type:{self.type}")
+            rospy.sleep(2) # Give some time to display the message
+            rospy.signal_shutdown("Experiment complete")
+            sys.exit(0)
 
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")
@@ -340,7 +346,7 @@ class RoboticArmControllerNode:
                 )
 
             else:
-                #self.stop_rosbag_recording()
+                self.stop_rosbag_recording()
                 self.update_q_table()
                 self.save_information()
                 self.check_end_condition()
@@ -395,14 +401,13 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.hand_pose = None
         self.rl_agent.print_q_table()
         self.start_rosbag_recording()
-        self.task_status = 0
 
         if self.type == 'leader':
-            self.exploration_factor = max(self.exploration_factor * 0.9, 0.20)
+            self.exploration_factor = max(self.exploration_factor * 0.9, 0.40)
         elif self.type == 'follower':
             self.exploration_factor = max(self.exploration_factor * 0.80, 0.05)
         else:
-            self.exploration_factor = max(self.exploration_factor * 0.95, 0.10)
+            self.exploration_factor = max(self.exploration_factor * 0.95, 0.20)
 
     def reset_msg(self):
         """
@@ -414,7 +419,6 @@ class RoboticArmControllerNode:
         self.original_orientation = None
         self.task_status = 0
         self.msg = secondary_task_message()
-
 
 
 if __name__ == '__main__':

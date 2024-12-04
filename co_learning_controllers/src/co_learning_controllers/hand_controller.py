@@ -53,12 +53,15 @@ class SoftHandController:
         mode (str): Mode of operation ('open', 'close', 'partial').
         duration (int): Duration in seconds for the movement. If None, uses personality-based duration.
         """
-        if mode not in ['open', 'close', 'partial']:
+        if mode not in ['open', 'close', 'partial', 'close_signal']:
             raise ValueError("Invalid mode. Expected 'open', 'close', or 'partial'.")
 
         # Use personality-based duration if none provided
         if duration is None:
             duration = self.hand_time
+
+        if mode == 'close_signal':
+            duration = 0.5
 
         if not self.fake:
             rospy.loginfo(f"{mode} for {duration} s")
@@ -81,7 +84,7 @@ class SoftHandController:
         Returns:
             JointTrajectory: The trajectory goal.
         """
-        if mode not in ['open', 'close', 'partial']:
+        if mode not in ['open', 'close', 'partial','close_signal']:
             raise ValueError("Invalid mode. Expected 'open', 'close', or 'partial'.")
 
         if not self.fake:
@@ -104,6 +107,8 @@ class SoftHandController:
             end_position = 1.0
         elif mode == 'partial':
             end_position = 0.5
+        elif mode == 'close_signal':
+            end_position = 0.85
 
         tp = np.linspace(start_position, end_position, n_interval)
         tt = np.linspace(0.1, duration, n_interval)
