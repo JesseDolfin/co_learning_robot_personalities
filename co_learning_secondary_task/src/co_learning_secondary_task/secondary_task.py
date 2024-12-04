@@ -408,25 +408,26 @@ class secondary_task():
                         self.run = False       
 
                 # Check for the mouse button down event
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.reset:
                     # Call the on_mouse_button_down() function
                     if button_rect.collidepoint(event.pos):
                         self.run_simulation()
 
             # Check if the mouse is over the button. This will create the button hover effect
-            if button_rect.collidepoint(pygame.mouse.get_pos()):
-                pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
-            else:
-                pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 150, 50))
-                pygame.draw.rect(button_surface, (255, 255, 255), (1, 1, 148, 48))
-                pygame.draw.rect(button_surface, (0, 0, 0), (1, 1, 148, 1), 2)
-                pygame.draw.rect(button_surface, (0, 100, 0), (1, 48, 148, 10), 2)
-                
-            # Shwo the button text
-            button_surface.blit(text, text_rect)
+            if self.reset:
+                if button_rect.collidepoint(pygame.mouse.get_pos()):
+                    pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
+                else:
+                    pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 150, 50))
+                    pygame.draw.rect(button_surface, (255, 255, 255), (1, 1, 148, 48))
+                    pygame.draw.rect(button_surface, (0, 0, 0), (1, 1, 148, 1), 2)
+                    pygame.draw.rect(button_surface, (0, 100, 0), (1, 48, 148, 10), 2)
+                    
+                # Shwo the button text
+                button_surface.blit(text, text_rect)
 
-            # Draw the button on the screen
-            self.screenHaptics.blit(button_surface, (button_rect.x, button_rect.y))
+                # Draw the button on the screen
+                self.screenHaptics.blit(button_surface, (button_rect.x, button_rect.y))
 
             # Update the game state
             pygame.display.update()
@@ -1002,7 +1003,7 @@ class secondary_task():
 
 
             if tries < self.max_tries:
-                if self.reset:
+                if self.reset or self.phase == 6:
                     if button_rect.collidepoint(pygame.mouse.get_pos()):
                         pygame.draw.rect(button_surface, (220, 220, 220), (1, 1, 148, 48))
                     else:
@@ -1020,23 +1021,23 @@ class secondary_task():
                 self.screenHaptics.blit(texts[4][2].render(texts[4][0], True, texts[4][1]), (450, 40))
                 self.screenHaptics.blit(texts[12][2].render(texts[12][0], True, texts[12][1]), (450, 70))
 
-                if self.spinal_coord_collision:
+                if self.spinal_coord_collision and not self.phase == 6:
                     self.screenHaptics.blit(texts[1][2].render(texts[1][0], True, texts[1][1]), (20, 120))
-                elif self.handover_successful == 1:
+                elif self.handover_successful == 1 and not self.phase == 6:
                     self.screenHaptics.blit(texts[11][2].render(texts[11][0], True, texts[11][1]), (20, 120))
-                elif self.needle_removed_too_soon:
+                elif self.needle_removed_too_soon and not self.phase == 6:
                     split_lines = self.split_text(texts[8][0], texts[8][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[8][2].render(line, True, texts[8][1]), (20, y_offset))
                         y_offset += 30
-                elif self.needle_removed_too_soon_2:
+                elif self.needle_removed_too_soon_2 and not self.phase == 6:
                     split_lines = self.split_text(texts[9][0], texts[9][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
                         self.screenHaptics.blit(texts[9][2].render(line, True, texts[9][1]), (20, y_offset))
                         y_offset += 30
-                elif self.bar_released_too_soon and not self.time_up:
+                elif self.bar_released_too_soon and not self.time_up and not self.phase == 6:
                     split_lines = self.split_text(texts[10][0], texts[10][2], self.screenHaptics.get_width())
                     y_offset = 120
                     for line in split_lines:
