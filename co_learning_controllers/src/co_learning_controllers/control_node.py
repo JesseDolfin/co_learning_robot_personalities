@@ -85,6 +85,7 @@ class RoboticArmControllerNode:
             elif len(existing_personalities) > len(personality_sequence):
                 # All personalities have been run
                 rospy.loginfo("All personality types have been completed for this participant.")
+                rospy.sleep(5) # Give some time to display the message
                 rospy.signal_shutdown("Experiment complete")
                 sys.exit(0)
             else:
@@ -96,6 +97,7 @@ class RoboticArmControllerNode:
                     rospy.loginfo(f"Running next personality type: {self.type}")
                 else:
                     rospy.loginfo("All personality types have been completed for this participant.")
+                    rospy.sleep(5) # Give some time to display the message
                     rospy.signal_shutdown("Experiment complete")
                     sys.exit(0)
 
