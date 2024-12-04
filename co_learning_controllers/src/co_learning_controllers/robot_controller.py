@@ -35,7 +35,7 @@ class RobotArmController():
         else: self.type = 'baseline'
 
         self.init_ros()
-        #self.reconfigure_parameters()
+        self.reconfigure_parameters()
         input("Press ENTER to start the robot controller")
 
     def init_ros(self):
@@ -90,17 +90,17 @@ class RobotArmController():
         self,
         stiffnes_matrix: List[float] = [100.0, 100.0, 100.0, 50.0, 50.0, 50.0],
         nullspace_reference: List[float] = [0.0] * 7,
-        nullspace_stiffness: List[float] = [100.0, 100.0, 50.0, 50.0, 50.0, 50.0, 10.0],
+        nullspace_stiffness: List[float] = [100.0, 100.0, 100.0, 50.0, 50.0, 50.0],
         nulspace_damping: List[float] = [0.7] * 7,
         seperate_axis: bool = False,
-        translational_stiffness: float = 300.0,
-        rotational_stiffness: float = 10.0
+        translational_stiffness: float = 650.0,
+        rotational_stiffness: float = 80.0
     ) -> None:
         """Reconfigure parameters for the Cartesian impedance controller."""
         try:
-            # Ensure lists have correct lengths
-            if len(stiffnes_matrix) != 6 or len(nullspace_reference) != 7 or len(nullspace_stiffness) != 7 or len(nulspace_damping) != 7:
-                raise ValueError("Stiffness matrices and nullspace parameters must have correct lengths.")
+            # # Ensure lists have correct lengths
+            # if len(stiffnes_matrix) != 6 or len(nullspace_reference) != 7 or len(nullspace_stiffness) != 7 or len(nulspace_damping) != 7:
+            #     raise ValueError("Stiffness matrices and nullspace parameters must have correct lengths.")
 
             # Update configuration
             self.dynamic_reconfigure_cartesian_impedance_controller_client.update_configuration(
@@ -125,21 +125,23 @@ class RobotArmController():
                     "q_nullspace_joint_6": nullspace_reference[5],
                     "q_nullspace_joint_7": nullspace_reference[6],
 
-                    "nullspace_stiffness_joint_1": nullspace_stiffness[0],
-                    "nullspace_stiffness_joint_2": nullspace_stiffness[1],
-                    "nullspace_stiffness_joint_3": nullspace_stiffness[2],
-                    "nullspace_stiffness_joint_4": nullspace_stiffness[3],
-                    "nullspace_stiffness_joint_5": nullspace_stiffness[4],
-                    "nullspace_stiffness_joint_6": nullspace_stiffness[5],
-                    "nullspace_stiffness_joint_7": nullspace_stiffness[6],
+                    # BUG: MAKING THE VALUES FOR NULLSPACE TO HIGH WILL cause the arm not to follow reference
 
-                    "nullspace_damping_ratio_joint_1": nulspace_damping[0],
-                    "nullspace_damping_ratio_joint_2": nulspace_damping[1],
-                    "nullspace_damping_ratio_joint_3": nulspace_damping[2],
-                    "nullspace_damping_ratio_joint_4": nulspace_damping[3],
-                    "nullspace_damping_ratio_joint_5": nulspace_damping[4],
-                    "nullspace_damping_ratio_joint_6": nulspace_damping[5],
-                    "nullspace_damping_ratio_joint_7": nulspace_damping[6]
+                    # "nullspace_stiffness_joint_1": nullspace_stiffness[0],
+                    # "nullspace_stiffness_joint_2": nullspace_stiffness[1],
+                    # "nullspace_stiffness_joint_3": nullspace_stiffness[2],
+                    # "nullspace_stiffness_joint_4": nullspace_stiffness[3],
+                    # "nullspace_stiffness_joint_5": nullspace_stiffness[4],
+                    # "nullspace_stiffness_joint_6": nullspace_stiffness[5],
+                    # "nullspace_stiffness_joint_7": nullspace_stiffness[6],
+
+                    # "nullspace_damping_ratio_joint_1": nulspace_damping[0],
+                    # "nullspace_damping_ratio_joint_2": nulspace_damping[1],
+                    # "nullspace_damping_ratio_joint_3": nulspace_damping[2],
+                    # "nullspace_damping_ratio_joint_4": nulspace_damping[3],
+                    # "nullspace_damping_ratio_joint_5": nulspace_damping[4],
+                    # "nullspace_damping_ratio_joint_6": nulspace_damping[5],
+                    # "nullspace_damping_ratio_joint_7": nulspace_damping[6]
                 }
             )
         except ValueError as e:
@@ -340,7 +342,7 @@ class RobotArmController():
         #TODO: change hand pose to also use a PoseStamed msg? 
 
         start_time = rospy.Time.now()
-        duration_ros = rospy.Duration(5) # Give x seconds to detect the hand, if not in this time assume that the hand is under the robot
+        duration_ros = rospy.Duration(4) # Give x seconds to detect the hand, if not in this time assume that the hand is under the robot
         
         while (rospy.Time.now() - start_time) < duration_ros or not self.hand_detected:
             rospy.loginfo("Waiting for hand to be detected...")
@@ -434,4 +436,4 @@ if __name__ == '__main__':
     
     # # input("send to joint 2")
     # controller.send_joint_trajectory_goal(target_joint_2,velocity)
-    #rospy.spin()
+    rospy.spin()

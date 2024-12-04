@@ -11,7 +11,7 @@
     <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${node}] [${time}]: ${message}"/>
     
     <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen" launch-prefix="gnome-terminal --"/> 
-    <node name="detection" pkg="co_learning_detection" type="detection.py" output="log" launch-prefix="nice -n 10 ionice -c 2 -n2"/>
+    <node name="detection" pkg="co_learning_detection" type="detection.py" output="log"/>
     <include file="$(find qb_hand_control)/launch/control_qbhand.launch">
         <arg name="activate_on_initialization" value="true"/>
         <arg name="standalone" value="true"/>
