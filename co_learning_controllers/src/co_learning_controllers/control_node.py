@@ -128,6 +128,7 @@ class RoboticArmControllerNode:
         self.hand_pose = [0, 0, 0]
         self.orientation = 'None'
         self.rosbag_process = None
+        self.draining_done = 0
 
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
@@ -233,6 +234,10 @@ class RoboticArmControllerNode:
                 and self.task_status != -1
             ):
                 rate.sleep()
+
+        self.msg = secondary_task_message()
+        self.msg.reset = False
+        self.send_message()
 
     def phase_2(self):
         """
