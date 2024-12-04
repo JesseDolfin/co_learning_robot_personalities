@@ -339,10 +339,10 @@ class RobotArmController():
         current_position = np.array([pos.x,pos.y,pos.z])
         #TODO: change hand pose to also use a PoseStamed msg? 
 
-        # Wait for hand to be detected if not already
-        print(self.hand_detected)
-        print(self.hand_pose)
-        while not self.hand_detected:
+        start_time = rospy.Time.now()
+        duration_ros = rospy.Duration(5) # Give x seconds to detect the hand, if not in this time assume that the hand is under the robot
+        
+        while (rospy.Time.now() - start_time) < duration_ros or not self.hand_detected:
             rospy.loginfo("Waiting for hand to be detected...")
             rate.sleep()
 

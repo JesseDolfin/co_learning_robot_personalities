@@ -60,8 +60,8 @@ class RoboticArmControllerNode:
         if not self.fake and not os.path.exists(self.participant_dir):
             # First time participant - do baseline runs
             self.type = 'baseline'
-            self.num_test_runs = 3 
-            rospy.loginfo("First 3 test runs will use the baseline personality.")
+            self.num_test_runs = 3
+            rospy.loginfo("First 4 test runs will use the baseline personality.")
         else:
             # Participant exists - need to determine which personality type to run
             self.num_test_runs = rospy.get_param('/num_test_runs', 10)
@@ -174,6 +174,7 @@ class RoboticArmControllerNode:
         self.task_status = msg.handover_successful
         self.draining_start = msg.draining_starts
         self.draining_done = msg.draining_successful
+        rospy.logwarn(f"task_status:{self.task_status}")
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
@@ -205,23 +206,17 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         rate = rospy.Rate(10)
 
-        rospy.logwarn(f"self.draining_start:{self.draining_start},self.task_status:{self.task_status}, self.draining_done:{self.draining_done}")
-        rospy.logwarn(f"self.action:{self.action}")
-
-
         self.msg.reset = True
         self.msg.phase = 1
         self.send_message()
  
         if self.action == 1:
-            rospy.logwarn(f"inside action 1")
             while self.draining_start == 0:
                 rate.sleep()
                 if self.task_status == -1:
                     break
 
         if self.action == 2:
-            rospy.logwarn(f"inside action 2")
             while self.draining_start == 0:
                 rate.sleep()
                 if self.task_status == -1:
@@ -235,7 +230,6 @@ class RoboticArmControllerNode:
             ):
                 rate.sleep()
 
-        self.msg = secondary_task_message()
         self.msg.reset = False
         self.send_message()
 
@@ -281,12 +275,12 @@ class RoboticArmControllerNode:
             _ = self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
             self.run = False
 
-            # Run the form workflow for the current personality type
-            self.form_handler.run_workflow(dir=self.personality_dir)
-
             self.msg = secondary_task_message()
             self.msg.phase = 6
             self.send_message()
+
+            # Run the form workflow for the current personality type
+            self.form_handler.run_workflow(dir=self.personality_dir)
 
             rospy.loginfo(f"Successfully completed the experiment for personality type:{self.type}")
             rospy.sleep(2) # Give some time to display the message

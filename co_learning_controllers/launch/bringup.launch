@@ -34,7 +34,7 @@
     <arg name="personality_type" default="baseline"/>
     <arg name="fake" default="false"/>
     <arg name="participant_number" default="-1"/>
-    <arg name="num_test_runs" default="20"/>
+    <arg name="num_test_runs" default="10"/>
 
     <!-- Set these as parameters on the parameter server -->
     <param name="personality_type" value="$(arg personality_type)"/>
