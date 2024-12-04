@@ -195,6 +195,7 @@ class secondary_task():
         self.time_up = False
 
         self.run = True
+        self.count = 0
 
         self.max_time = 60 # seconds
         self.time_left = self.max_time
@@ -627,6 +628,8 @@ class secondary_task():
         self.endpoint_velocity = (self.xhold - self.xh) / self.FPS
         self.xhold = self.xh
 
+
+        # Non linear function to modify difficulty of the task
         if self.fail_count != 0:
             helper_modifier = - 0.1 * exp(0.2 * self.fail_count) + 1.1 
             hinder_modifier = (self.success_count/10) * exp(helper_modifier-1)
@@ -643,15 +646,17 @@ class secondary_task():
         self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) + faulty_force
 
         if self.collision_any:
+            self.count += 1
             # Compute the perpendicular distance to a line
             distance_from_line = (self.a * (self.xm[0] - cos_alpha * 250) - (self.xm[1] - sin_alpha * 250) + self.b) / np.sqrt(self.a ** 2 + 1)
             tissue_stiffness_matrix = np.diag([750, 750])
             needle_offset_force = tissue_stiffness_matrix @ np.array([sin_alpha, cos_alpha]) * distance_from_line
 
-            if self.alpha != 0:
-                self.fe += [-needle_offset_force[0], needle_offset_force[1]]
-            else:
-                self.fe += [needle_offset_force[0], needle_offset_force[1]]
+            if self.count > 3:
+                if self.alpha != 0:
+                    self.fe += [-needle_offset_force[0], needle_offset_force[1]]
+                else:
+                    self.fe += [needle_offset_force[0], needle_offset_force[1]]
 
             if self.dxh[0] > 0:
                 if self.alpha == 0:
