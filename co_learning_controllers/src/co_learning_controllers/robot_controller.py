@@ -14,6 +14,9 @@ from iiwa_impedance_control.msg import JointTrajectoryExecutionAction, JointTraj
 from co_learning_messages.msg import hand_pose
 from co_learning_messages.msg import secondary_task_message
 from geometry_msgs.msg import Quaternion
+import signal
+import sys
+import time
 
 
 class RobotArmController():
@@ -36,7 +39,14 @@ class RobotArmController():
 
         self.init_ros()
         self.reconfigure_parameters()
+        signal.signal(signal.SIGINT, self.signal_handler)
         input("Press ENTER to start the robot controller")
+       
+
+    def signal_handler(self, sig, frame):
+        rospy.signal_shutdown("Shutdown signal received.")
+        sys.exit(0)
+        
 
     def init_ros(self):
         self.task_status = rospy.Subscriber("/Task_status", secondary_task_message, self.task_status)
@@ -155,7 +165,7 @@ class RobotArmController():
         self.handover_status = msg.handover_successful
         
     def hand_pose_callback(self, msg):
-        hand_pose = np.array([msg.x, msg.y, msg.z])
+        hand_pose = np.array([msg.x, msg.y, msg.z],dtype="float64")
         if np.all(hand_pose) == 0:
             self.hand_detected = False
             self.hand_pose = hand_pose
@@ -280,7 +290,7 @@ class RobotArmController():
             while not self.trajectory_state:
                 rate.sleep()
 
-    def detect_human_interaction(self, duration=3.0):
+    def detect_human_interaction(self, duration=3.0,wait_for_hand=False):
         """
         Detect human interaction with the robot arm over a specified duration.
         Parameters:
@@ -290,31 +300,34 @@ class RobotArmController():
         """
         rospy.loginfo(f"Monitoring for human interaction for {duration} seconds...")
         
-        # Use ROS time instead of system time
-        start_time = rospy.Time.now()
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(30)
+        wait_time = rospy.Time.now()
+        wait_duration = rospy.Duration(2) # S
+
+        # Wait for the arm to settle
+        while rospy.Time.now() - wait_time < wait_duration:
+            rate.sleep()
+        
         interaction_detected = False
         delta_threshold = 1
         previous_effort_magnitude = None
-        
-        # Convert duration to rospy.Duration
+        start_time = rospy.Time.now()
         duration_ros = rospy.Duration(duration)
         
         while (rospy.Time.now() - start_time) < duration_ros:
             effort_magnitude = self._effort_mag_save
+            if wait_for_hand:
+                rospy.loginfo(f"hand_status:{self.hand_detected}")
+
+            if wait_for_hand and self.hand_detected:
+                break
             
             if previous_effort_magnitude is not None:
                 effort_delta = abs(effort_magnitude - previous_effort_magnitude)
-                rospy.loginfo(f"Effort delta: {effort_delta:.2f}")
-                
                 if effort_delta > delta_threshold:
-                    rospy.logdebug(f"Effort delta: {effort_delta}")
-                    rospy.logdebug(f"Delta threshold: {delta_threshold}")
                     interaction_detected = True
                     rospy.loginfo("Human interaction detected based on effort delta.")
                     break
-            else:
-                rospy.loginfo(f"Effort magnitude: {effort_magnitude:.2f}")
                 
             previous_effort_magnitude = effort_magnitude
             rate.sleep()
@@ -331,52 +344,64 @@ class RobotArmController():
         rospy.loginfo("Moving towards hand")
 
         rate = rospy.Rate(10)
-    
-        if self.fixed_orientation is None or update:
-            self.fixed_orientation = self.pose.orientation # ROS MSG
+
+        # We save the position and orientation the first time this function is called as a reference
+        if self.fixed_orientation is None or update: 
+            self.fixed_orientation = self.pose.orientation 
+            p = self.pose.position
+            self.ref_pos = np.array([p.x,p.y,p.z],dtype="float64")
         else:
             pass
 
+        # Unpack current position
         pos = self.pose.position
-        current_position = np.array([pos.x,pos.y,pos.z])
-        #TODO: change hand pose to also use a PoseStamed msg? 
-
-        start_time = rospy.Time.now()
-        duration_ros = rospy.Duration(4) # Give x seconds to detect the hand, if not in this time assume that the hand is under the robot
+        current_position = np.array([pos.x,pos.y,pos.z],dtype="float64")
         
-        while (rospy.Time.now() - start_time) < duration_ros or not self.hand_detected:
-            rospy.loginfo("Waiting for hand to be detected...")
-            rate.sleep()
+        # We wait until either a hand is detected OR interaction with the arm is detected
+        rospy.loginfo("Waiting to detect hand")
+        self.detect_human_interaction(duration=100,wait_for_hand=True)
 
-        target_position_arm = self.hand_pose
-        target_position_arm[2] = max(target_position_arm[2], 0.1) # Z- value cannot be too low
+        # If self.hand_pose.x is close to 0 we know that this value is out of bounds (happens when no hand is detected)
+        # To make sure the arm does not crash into itself we give it the reference position as target
+        if abs(self.hand_pose[0]) > 0.1:
+            target_position_arm = self.hand_pose
+        else: target_position_arm = self.ref_pos
+
+        # Z- value cannot be too low, making sure arm does not smash into table
+        target_position_arm[2] = max(target_position_arm[2], 0.1) 
         error = np.linalg.norm(target_position_arm - current_position)
 
         position_threshold = 0.2
         while error > position_threshold:
+            # When we have a update on the handover we dont need to move to hand anymore because either the handover 
+            # Is already done or the person already failed the secondary task
             if self.handover_status in [-1,1]:
                 break
-            target_position_arm = self.hand_pose
+
+            if abs(self.hand_pose[0]) > 0.1:
+                target_position_arm = self.hand_pose
+            else: target_position_arm = self.ref_pos
+
             target_position_arm[2] = max(target_position_arm[2], 0.1) 
             self.send_cartesian_trajectory_goal(target_position_arm,self.fixed_orientation)
+
+            # Update our current position and error values
             pos = self.pose.position
-            current_position = np.array([pos.x,pos.y,pos.z])
+            current_position = np.array([pos.x,pos.y,pos.z],dtype="float64")
             error = np.linalg.norm(target_position_arm - current_position)
-            rospy.loginfo(f"Error norm: {error:.3f}, threshold: {position_threshold}")
             rate.sleep()
         rospy.loginfo("Reached the hand position")
 
-        # Wait for arm to settle
-        rospy.sleep(1)
         duration = 4
         if self.type == 'fast':
             duration = 5
         elif self.type == 'slow':
             duration = 3
 
+        # When the hand is reached we will wait a little while to detect human interaction, differs per personality
         interaction_detected = self.detect_human_interaction(duration)
         msg = Bool()
-        msg.data = interaction_detected
+        msg.data = interaction_detected # For the RL algorithm
         rospy.loginfo("Human interaction detected." if interaction_detected else "No human interaction detected.")
         self.publish_human_input.publish(msg)
 
@@ -391,20 +416,20 @@ class RobotArmController():
             array: Transformed position in robot frame.
         """
         # Calibration parameters
-        offset = np.array([0.356, 0.256, 2.643])  # Experimental values
+        offset = np.array([0.356, 0.256, 2.643],dtype="float64")  # Experimental values
         rot_x_180 = np.array([[1,  0,  0],
                               [0, -1,  0],
-                              [0,  0, -1]])
+                              [0,  0, -1]],dtype="float64")
 
         rot_z_90 = np.array([[0, -1,  0],
                              [1,  0,  0],
-                             [0,  0,  1]])
+                             [0,  0,  1]],dtype="float64")
         rot_tot = np.dot(rot_x_180, rot_z_90)
 
         r = R.from_matrix(rot_tot)
 
         transform = np.column_stack((rot_tot, offset))
-        transform = np.vstack((transform, np.array([0, 0, 0, 1])))
+        transform = np.vstack((transform, np.array([0, 0, 0, 1],dtype="float64")))
 
         target_hom = np.append(target[:3], 1)
         transformed_target = np.dot(transform, target_hom)[:3]
@@ -414,14 +439,21 @@ class RobotArmController():
 if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
 
-    controller = RobotArmController()
+    drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
+    serve = np.deg2rad([107, -47, -11, 100, -82, -82, -35]).tolist()
     target = [np.pi/2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    target_joint = np.deg2rad([107, -47, -11, 100, -82, -82, -35]).tolist()
     velocity = [0.3] * 7
 
-    #controller.send_joint_trajectory_goal(target,velocity)
-    controller.send_joint_trajectory_goal(target_joint,velocity)
-    #controller.move_towards_hand(update=True)
+    controller = RobotArmController()
+    controller.send_joint_trajectory_goal(drop,velocity)
+    controller.move_towards_hand(update=True)
+    controller.move_towards_hand(update=False)
+    controller.move_towards_hand(update=False)
+    controller.move_towards_hand(update=False)
+    controller.move_towards_hand(update=False)
+    controller.move_towards_hand(update=False)
+    controller.move_towards_hand(update=False)
+    controller.move_towards_hand(update=False)
 
     # target_cart = [0.0,0.0,1.255]
 
@@ -436,4 +468,3 @@ if __name__ == '__main__':
     
     # # input("send to joint 2")
     # controller.send_joint_trajectory_goal(target_joint_2,velocity)
-    rospy.spin()

@@ -241,8 +241,13 @@ class MPDetector:
                 color_image = np.asanyarray(color_frame.get_data())
 
                 x, y, _ = color_image.shape
-                self.x_offset = 200
-                self.y_offset = 500
+                self.x_offset = 300
+                self.y_offset = 600
+                self.neg_x_offset = 40
+                self.neg_y_offset = 250
+                x -= self.neg_x_offset
+                y -= self.neg_y_offset
+
                 color_image_crop = color_image[self.x_offset:x, self.y_offset:y, :]
 
                 hand_image = self.find_hands(color_image_crop, draw)
