@@ -524,7 +524,7 @@ class secondary_task():
                     self.time_left = 0
 
             if self.success:
-                self.send_task_status(success=1, time=self.time_left)
+                self.send_task_status(success=1, time=self.time_left,start=0,end=0)
                 self.success = False
 
             if self.check_termination_conditions():
@@ -584,7 +584,7 @@ class secondary_task():
             self.render_screen_border(True)
             self.success_chime.play()  # Play success sound
             pygame.time.delay(1000)  # Add delay to make the border visible
-            self.send_task_status(success=1, time=self.time_left)
+            self.send_task_status(success=1, time=self.time_left,start=0,end=0)
             self.success_count +=1
             return True
 
@@ -650,7 +650,7 @@ class secondary_task():
             # Compute the perpendicular distance to a line
             distance_from_line = (self.a * (self.xm[0] - cos_alpha * 250) - (self.xm[1] - sin_alpha * 250) + self.b) / np.sqrt(self.a ** 2 + 1)
             tissue_stiffness_matrix = np.diag([750, 750])
-            needle_offset_force = tissue_stiffness_matrix @ np.array([sin_alpha, cos_alpha]) * distance_from_line
+            needle_offset_force = tissue_stiffness_matrix @ np.array([sin_alpha, cos_alpha]) * distance_from_line 
 
             if self.count > 3:
                 if self.alpha != 0:
@@ -666,8 +666,8 @@ class secondary_task():
                 else:
                     tissue_normal_force = tissue_stiffness_matrix @ np.array([sin_alpha, cos_alpha]) * distance_from_line
                     frictional_force = tissue_normal_force * self.kinetic_friction_coefficient * self.tissue_index
-                    self.fe[0] += frictional_force[1]
-                    self.fe[1] += frictional_force[0]
+                    # self.fe[0] += frictional_force[1]
+                    # self.fe[1] += frictional_force[0]
         else:
             self.fe += np.array([0, 0])
 
