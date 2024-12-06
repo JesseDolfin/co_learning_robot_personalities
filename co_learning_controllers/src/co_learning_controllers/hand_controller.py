@@ -9,15 +9,14 @@ import time
 
 
 class SoftHandController:
-    def __init__(self, fake=False):
+    def __init__(self, type,fake=False):
         self.fake = fake
         self.position = None
-        self.type = 'baseline'
         
         # Set duration based on personality type
-        if self.type == 'impatient':
+        if type == 'impatient':
             self.hand_time = 1
-        elif self.type == 'patient':
+        elif type == 'patient':
             self.hand_time = 3
         else:
             self.hand_time = 2

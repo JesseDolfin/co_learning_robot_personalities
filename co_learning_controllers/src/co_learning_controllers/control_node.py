@@ -135,20 +135,10 @@ class RoboticArmControllerNode:
 
         self.pub = rospy.Publisher('/Task_status', secondary_task_message, queue_size=1)
 
-        self.env = CoLearn()
-        if self.type == 'leader':
-            self.env.type = 'leader'
-
-        self.rl_agent = QLearningAgent(env=self.env)
-        if self.type == 'follower':
-            self.rl_agent.type = 'follower'
-
-
-
-        self.hand_controller = SoftHandController(self.fake)
-        self.hand_controller.type = self.type
-        self.robot_arm_controller = RobotArmController()
-        self.robot_arm_controller.type = self.type
+        self.env = CoLearn(self.type)
+        self.rl_agent = QLearningAgent(self.env,self.type)
+        self.hand_controller = SoftHandController(self.type,self.fake)
+        self.robot_arm_controller = RobotArmController(self.type)
 
         self.alpha = 0.15
         self.gamma = 0.8

@@ -10,7 +10,7 @@ from q_learning.CoLearnEnvironment import CoLearn
 
 
 class QLearningAgent:
-    def __init__(self, env):
+    def __init__(self, env,type):
         self.env = env
 
         # Random initialization of Q-table
@@ -21,7 +21,7 @@ class QLearningAgent:
         self.total_reward = 0
 
         self.initialize = True
-        self.type = 'none'
+        self.type = type
 
         self.initialize_ros()
 

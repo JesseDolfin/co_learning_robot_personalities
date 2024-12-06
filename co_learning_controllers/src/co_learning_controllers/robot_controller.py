@@ -20,7 +20,7 @@ import time
 
 
 class RobotArmController():
-    def __init__(self):
+    def __init__(self,type):
         self._effort_mag_save = None
         self.pose = None
         self.pose_ref = None
@@ -29,7 +29,6 @@ class RobotArmController():
         self.hand_detected = False
         self.hand_pose = None
         self.handover_status = 0
-        type = 'baseline'
 
         if type == 'impatient':
             self.type = 'fast'

@@ -42,7 +42,7 @@ class CoLearn(Env):
         - (No human input, hand close): 16
     """
 
-    def __init__(self):
+    def __init__(self,type):
         self.action_size = 8
         self.action_space = Discrete(self.action_size)
 
@@ -68,7 +68,7 @@ class CoLearn(Env):
 
         self.terminated = False
 
-        self.type = 'none'
+        self.type = type
 
         self.initialize_ros()
 
