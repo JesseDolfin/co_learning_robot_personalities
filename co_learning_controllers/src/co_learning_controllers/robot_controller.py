@@ -29,7 +29,7 @@ class RobotArmController():
         self.hand_detected = False
         self.hand_pose = None
         self.handover_status = 0
-        type = rospy.get_param('/personality_type', 'baseline')
+        type = 'baseline'
 
         if type == 'impatient':
             self.type = 'fast'

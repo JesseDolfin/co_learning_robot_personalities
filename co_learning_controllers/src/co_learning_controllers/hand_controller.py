@@ -12,12 +12,12 @@ class SoftHandController:
     def __init__(self, fake=False):
         self.fake = fake
         self.position = None
-        type = rospy.get_param('/personality_type', 'baseline')  # Store type as instance variable
+        self.type = 'baseline'
         
         # Set duration based on personality type
-        if type == 'impatient':
+        if self.type == 'impatient':
             self.hand_time = 1
-        elif type == 'patient':
+        elif self.type == 'patient':
             self.hand_time = 3
         else:
             self.hand_time = 2

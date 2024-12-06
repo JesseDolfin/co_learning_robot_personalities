@@ -146,7 +146,9 @@ class RoboticArmControllerNode:
 
 
         self.hand_controller = SoftHandController(self.fake)
+        self.hand_controller.type = self.type
         self.robot_arm_controller = RobotArmController()
+        self.robot_arm_controller.type = self.type
 
         self.alpha = 0.15
         self.gamma = 0.8
