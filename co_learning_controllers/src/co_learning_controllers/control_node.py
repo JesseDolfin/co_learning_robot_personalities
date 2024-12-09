@@ -57,7 +57,7 @@ class RoboticArmControllerNode:
             ['patient', 'follower', 'impatient', 'leader'],    
             ['patient', 'impatient', 'follower', 'leader'],    
             ['patient', 'leader', 'follower', 'impatient'],    
-            ['patient', 'leader', 'impatient', 'follower']     
+            ['patient', 'leader', 'impatient', 'follower'],
             ['follower', 'leader', 'patient', 'impatient'],    
             ['follower', 'patient', 'impatient', 'leader'],    
             ['impatient', 'follower', 'patient', 'leader'],    
