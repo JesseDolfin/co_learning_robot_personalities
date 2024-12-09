@@ -345,7 +345,7 @@ class RoboticArmControllerNode:
     def convert_action_to_orientation(self, action: int):
         positions = {
             3: np.deg2rad([107, -47, -11, 100, -82, -82, -35]).tolist(),  # Serve
-            4: np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist(),  # Drop
+            4: np.deg2rad([90, -20, -8, 110, 5, 40, 0]).tolist(),  # Drop
         }
         return positions.get(action, INTERMEDIATE_POSITION)
     

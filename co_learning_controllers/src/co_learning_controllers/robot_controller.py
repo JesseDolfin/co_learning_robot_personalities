@@ -20,15 +20,16 @@ import time
 
 
 class RobotArmController():
-    def __init__(self,type):
+    def __init__(self,type='baseline'):
         self._effort_mag_save = None
         self.pose = None
         self.pose_ref = None
         self.fixed_orientation = None
-        self.trajectory_state = False
+        self.trajectory_done = False
         self.hand_detected = False
         self.hand_pose = None
         self.handover_status = 0
+
 
         if type == 'impatient':
             self.type = 'fast'
@@ -48,7 +49,7 @@ class RobotArmController():
         
 
     def init_ros(self):
-        self.task_status = rospy.Subscriber("/Task_status", secondary_task_message, self.task_status)
+        self.task_status_sub = rospy.Subscriber("/Task_status", secondary_task_message, self.task_status)
         self.publish_human_input = rospy.Publisher('/human_input', Bool, queue_size=1)
         self.hand_pose_sub = rospy.Subscriber('/hand_pose', hand_pose, self.hand_pose_callback)
         self.joint_state = rospy.Subscriber("/CartesianImpedanceController/joint_states", 
@@ -160,6 +161,7 @@ class RobotArmController():
             rospy.logerr(f"Unexpected error: {e}")
             raise RuntimeError(f"An unexpected error occurred: {e}")
         
+        
     def task_status(self,msg):
         self.handover_status = msg.handover_successful
         
@@ -192,7 +194,7 @@ class RobotArmController():
 
     def cartesian_trajectory_done_callback(self, status, result):
         rospy.loginfo('Cartesian Trajectory Done callback. Result: ' + str(result))
-        self.trajectory_state = True 
+        self.trajectory_done = True 
      
     def joint_trajectory_active_callback(self):
         rospy.loginfo("Joint Trajectory Active callback")
@@ -201,7 +203,7 @@ class RobotArmController():
         pass
 
     def joint_trajectory_done_callback(self, status, result):
-        self.trajectory_state = True
+        self.trajectory_done = True
         response = self.controller_manager(start_controllers=['/CartesianImpedanceController'],
                                            stop_controllers=['/JointImpedanceController'], strictness=1,
                                            start_asap=True, timeout=0.0)
@@ -251,13 +253,13 @@ class RobotArmController():
         goal.pose_start = start_pose_msg
         goal.translational_velocity_goal = velocity[0]
         goal.rotational_velocity_goal = velocity[1]
-        self.trajectory_state = False
+        self.trajectory_done = False
         self.cartesian_action_client.send_goal(goal, self.cartesian_trajectory_done_callback,
                                                 self.cartesian_trajectory_active_callback,
                                                 self.cartesian_trajectory_feedback_callback)
         
         rate = rospy.Rate(20)
-        while not self.trajectory_state:
+        while not rospy.is_shutdown() and not not self.trajectory_done:
             rate.sleep()
 
     def send_joint_trajectory_goal(self, joint_positions_goal, joint_velocities_goal=None):
@@ -281,13 +283,16 @@ class RobotArmController():
             goal = JointTrajectoryExecutionGoal()
             goal.joint_positions_goal.data = joint_positions_goal
             goal.joint_velocities_goal.data = joint_velocities_goal
-            self.trajectory_state = False
+            self.trajectory_done = False
             self.joint_action_client.send_goal(goal, self.joint_trajectory_done_callback,
                                                 self.joint_trajectory_active_callback,
                                                 self.joint_trajectory_feedback_callback)
             rate = rospy.Rate(20)
-            while not self.trajectory_state:
+            while not rospy.is_shutdown() and not self.trajectory_done:
                 rate.sleep()
+
+            rospy.sleep(1)
+            
 
     def detect_human_interaction(self, duration=3.0,wait_for_hand=False):
         """
@@ -304,7 +309,7 @@ class RobotArmController():
         wait_duration = rospy.Duration(2) # S
 
         # Wait for the arm to settle
-        while rospy.Time.now() - wait_time < wait_duration:
+        while not rospy.is_shutdown() and not rospy.Time.now() - wait_time < wait_duration:
             rate.sleep()
         
         interaction_detected = False
@@ -313,13 +318,14 @@ class RobotArmController():
         start_time = rospy.Time.now()
         duration_ros = rospy.Duration(duration)
         
-        while (rospy.Time.now() - start_time) < duration_ros:
+        while not rospy.is_shutdown() and not (rospy.Time.now() - start_time) < duration_ros:
             effort_magnitude = self._effort_mag_save
             if wait_for_hand:
                 rospy.loginfo(f"hand_status:{self.hand_detected}")
 
             if wait_for_hand and self.hand_detected:
                 break
+
             
             if previous_effort_magnitude is not None:
                 effort_delta = abs(effort_magnitude - previous_effort_magnitude)
@@ -366,12 +372,14 @@ class RobotArmController():
             target_position_arm = self.hand_pose
         else: target_position_arm = self.ref_pos
 
+      
+
         # Z- value cannot be too low, making sure arm does not smash into table
         target_position_arm[2] = max(target_position_arm[2], 0.1) 
         error = np.linalg.norm(target_position_arm - current_position)
 
         position_threshold = 0.2
-        while error > position_threshold:
+        while not rospy.is_shutdown() and not error > position_threshold:
             # When we have a update on the handover we dont need to move to hand anymore because either the handover 
             # Is already done or the person already failed the secondary task
             if self.handover_status in [-1,1]:
@@ -380,6 +388,7 @@ class RobotArmController():
             if abs(self.hand_pose[0]) > 0.1:
                 target_position_arm = self.hand_pose
             else: target_position_arm = self.ref_pos
+
 
             target_position_arm[2] = max(target_position_arm[2], 0.1) 
             self.send_cartesian_trajectory_goal(target_position_arm,self.fixed_orientation)
@@ -438,21 +447,22 @@ class RobotArmController():
 if __name__ == '__main__':
     rospy.init_node("RoboticArmController")
 
-    drop = np.deg2rad([55, -40, -8, 82, 5, 50, 0]).tolist()
+ 
+    drop = np.deg2rad([90, -20, -8, 110, 5, 40, 0]).tolist()
     serve = np.deg2rad([107, -47, -11, 100, -82, -82, -35]).tolist()
     target = [np.pi/2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    velocity = [0.3] * 7
+    velocity = [1.1] * 7
 
     controller = RobotArmController()
     controller.send_joint_trajectory_goal(drop,velocity)
-    controller.move_towards_hand(update=True)
-    controller.move_towards_hand(update=False)
-    controller.move_towards_hand(update=False)
-    controller.move_towards_hand(update=False)
-    controller.move_towards_hand(update=False)
-    controller.move_towards_hand(update=False)
-    controller.move_towards_hand(update=False)
-    controller.move_towards_hand(update=False)
+    controller.send_joint_trajectory_goal(serve,velocity)
+    controller.send_joint_trajectory_goal(drop,velocity)
+    controller.send_joint_trajectory_goal(serve,velocity)
+    controller.send_joint_trajectory_goal(drop,velocity)
+    controller.send_joint_trajectory_goal(serve,velocity)
+    controller.send_joint_trajectory_goal(drop,velocity)
+    controller.send_joint_trajectory_goal(serve,velocity)
+    
 
     # target_cart = [0.0,0.0,1.255]
 
