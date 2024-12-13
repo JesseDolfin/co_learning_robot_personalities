@@ -4,8 +4,8 @@ jupyter/
 test.py
 build/
 devel/
-.catkin_workspace
-.catkin_tools/
+*.catkin_workspace
+*.catkin_tools/
 logs/
 .vscode/
 *.pt
@@ -13,7 +13,7 @@ logs/
 *.zip
 data_collection/
 camera_calibration.py
-.Rproj.user
-.RData
-.Rhistory
-.Rproj
+*.Rproj.user
+*.RData
+*.Rhistory
+*.Rproj

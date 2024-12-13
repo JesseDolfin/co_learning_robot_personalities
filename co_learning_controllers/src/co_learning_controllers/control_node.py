@@ -40,7 +40,7 @@ class RoboticArmControllerNode:
         # Personality types
         allowed_personality_types = ['leader', 'follower', 'impatient', 'patient']
 
-        # Balanced latin square
+        # Manualy balanced latin square balanced for 16 particpants (+ 8 more if possible for fully balanced square)
         latin_square = [
             ['follower', 'impatient', 'leader', 'patient'],    
             ['follower', 'impatient', 'patient', 'leader'],    
@@ -86,7 +86,7 @@ class RoboticArmControllerNode:
             # Participant exists - need to determine which personality type to run
             self.num_test_runs = rospy.get_param('/num_test_runs', 10)
 
-            # Get index in the expanded Latin square
+            # Get index in the Latin square
             participant_index = (self.participant_number - 1) % 24
             personality_sequence = latin_square[participant_index]
 
