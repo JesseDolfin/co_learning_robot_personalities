@@ -17,3 +17,4 @@ camera_calibration.py
 *.RData
 *.Rhistory
 *.Rproj
+.Rproj.user
