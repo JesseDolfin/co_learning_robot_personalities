@@ -184,7 +184,7 @@ class CoLearn(Env):
         valid_transition = self.check_phase_transition(action)
 
         self.episode_length -= 1
-        self.terminated = self.episode_length <= 0 or (action == 5 and self.phase == 3)
+        self.terminated = self.episode_length <= 0 or (action == 5 and self.phase == 3) or self.handover_successful in [-1,1]
 
         self.previous_state = self.state
         self.state = self.update_state(action)

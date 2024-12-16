@@ -19,12 +19,14 @@ import rospy
 from std_msgs.msg import String
 import rospkg
 
+from std_msgs.msg import Bool
 from co_learning_controllers.robot_controller import RobotArmController
 from co_learning_controllers.hand_controller import SoftHandController
 from co_learning_controllers.questionaire_controller import GoogleFormHandler
 from co_learning_messages.msg import secondary_task_message, hand_pose
 from q_learning.QLearnAgent import QLearningAgent
 from q_learning.CoLearnEnvironment import CoLearn
+
 
 
 HOME_POSITION = [np.pi / 2, np.pi / 4, 0.0, -np.pi / 4, 0.0, np.pi / 4, 0.0]
@@ -149,9 +151,14 @@ class RoboticArmControllerNode:
         self.orientation = 'None'
         self.rosbag_process = None
         self.draining_done = 0
+        self.strategy_phase_1 = None
+        self.strategy_phase_2 = None
+        self.strategy_phase_3 = None
+        self.human_input_detected = False
 
         rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
+        rospy.Subscriber('human_input', Bool, self.human_input_callback)
 
         self.pub = rospy.Publisher('/Task_status', secondary_task_message, queue_size=1)
 
@@ -172,13 +179,13 @@ class RoboticArmControllerNode:
         key_path = os.path.join(ws, 'psyched-loader-422713-u4-0fbb54ca49b0.json')
         self.form_handler = GoogleFormHandler(form_url, sheet_url, key_path)
 
-        self.start_rosbag_recording()
+        #self.start_rosbag_recording()
         signal.signal(signal.SIGINT, self.signal_handler)
        
 
     def signal_handler(self, sig, frame):
         rospy.signal_shutdown("Shutdown signal received.")
-        self.stop_rosbag_recording()
+        #self.stop_rosbag_recording()
         sys.exit(0)
 
     def status_callback(self, msg):
@@ -187,6 +194,10 @@ class RoboticArmControllerNode:
         self.draining_start = msg.draining_starts
         self.draining_done = msg.draining_successful
         rospy.logwarn(f"task_status:{self.task_status}")
+    
+    def human_input_callback(self, msg):
+        if msg.data:
+            self.human_input_detected = True
 
     def hand_pose_callback(self, msg):
         self.hand_pose = [msg.x, msg.y, msg.z]
@@ -215,6 +226,7 @@ class RoboticArmControllerNode:
         Wait until the human starts draining then; start handover directly (action 1),
         wait for the human to ask for item (action 2); break if human fails draining process.
         """
+        human_action = 3 # 3 represents not asking for the item 
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         rate = rospy.Rate(10)
 
@@ -235,13 +247,16 @@ class RoboticArmControllerNode:
                     break
 
             self.original_orientation = self.orientation
-            while (
-                self.original_orientation == self.orientation
-                and self.draining_done == 0
-                and self.task_status != -1
-            ):
+            while True:
+                if self.draining_done != 0 or self.task_status == -1:
+                    human_action = 2 # 2 represent asking for the item as soon as the draining is done
+                    break
+                if self.original_orientation != self.orientation:
+                    human_action = 1 # 1 represents asking for the item before draining is done
+                    break
                 rate.sleep()
 
+        self.strategy_phase_1 = self.action * 10 + human_action # 11 12 13 21 22 23
         self.msg.reset = False
         self.send_message()
 
@@ -250,6 +265,9 @@ class RoboticArmControllerNode:
         Go to intermediate position and then to either serve orientation (action 3)
         or drop orientation (action 4). Then move the item towards the hand of the human.
         """
+        human_action = 4 if self.orientation == "serve" else 5
+        self.strategy_phase_2 = self.action * 10 + human_action #34, 35, 44, 45
+
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         position = self.convert_action_to_orientation(self.action)
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
@@ -265,6 +283,15 @@ class RoboticArmControllerNode:
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         if not self.task_status in [-1,1]:
             self.robot_arm_controller.move_towards_hand()
+
+        if self.human_input_detected:
+            human_action = 6
+        else:
+            human_action = 7
+
+        self.strategy_phase_3 = self.action * 10 + human_action # 56 57 66 67 76 77
+        self.human_input_detected = False
+
 
         if self.action == 5:
             self.hand_controller.send_goal('open')
@@ -302,7 +329,7 @@ class RoboticArmControllerNode:
     def start_rosbag_recording(self):
         rospy.loginfo("Starting rosbag ...")
 
-        topics_to_record = ['/Task_status', '/hand_pose','/CartesianImpedanceController/joint_states','/JointImpedanceController/joint_states']
+        topics_to_record = ['/Task_status', '/hand_pose','/human_input','/CartesianImpedanceController/cartesian_pose']
 
         bag_files_dir = os.path.join(self.personality_dir, 'bag_files')
         os.makedirs(bag_files_dir, exist_ok=True)
@@ -357,7 +384,7 @@ class RoboticArmControllerNode:
                 )
 
             else:
-                self.stop_rosbag_recording()
+                #self.stop_rosbag_recording()
                 self.update_q_table()
                 self.save_information()
                 self.check_end_condition()
@@ -369,49 +396,64 @@ class RoboticArmControllerNode:
         }
         return positions.get(action, INTERMEDIATE_POSITION)
     
-    def save_information(self):
-        """Saves the Q-table and logs total_reward and task_status to a CSV file."""
 
+
+    def save_information(self):
+        """Saves the Q-table, total reward, task status, and phase strategies to CSV files for R analysis."""
         total_reward = self.rl_agent.total_reward
         task_status = self.task_status
 
-        # Q_tables
+        # Convert Q-table to DataFrame for saving
+        q_table = pd.DataFrame(self.rl_agent.q_table)  
         q_tables_dir = os.path.join(self.personality_dir, 'Q_tables')
         os.makedirs(q_tables_dir, exist_ok=True)
-
-        q_table_filename = f'Q_table_{self.episode}.npy'
+        q_table_filename = f'Q_table_{self.episode}.csv'
         q_table_filepath = os.path.join(q_tables_dir, q_table_filename)
-        
-        self.rl_agent.save_q_table(filepath=q_table_filepath)
-        
-        # Log files
+        q_table.to_csv(q_table_filepath, index=False)
+        rospy.loginfo(f"Q-table saved to {q_table_filepath}")
+
+        # Logs
         logs_dir = os.path.join(self.personality_dir, 'logs')
         os.makedirs(logs_dir, exist_ok=True)
-        
         log_filename = 'episode_logs.csv'
         log_filepath = os.path.join(logs_dir, log_filename)
-        
+
+       
+        # Prepare data for logging
+        log_data = {
+            'episode': self.episode,
+            'total_reward': total_reward,
+            'task_status': task_status,
+            'termination_phase': self.phase,
+            'strategy_phase_1': self.strategy_phase_1,
+            'strategy_phase_2': self.strategy_phase_2,
+            'strategy_phase_3': self.strategy_phase_3
+        }
+
+        # Write to CSV
         file_exists = os.path.isfile(log_filepath)
-        
-        # Open the file in append mode
         with open(log_filepath, 'a', newline='') as csvfile:
-            fieldnames = ['episode', 'total_reward', 'task_status']
+            fieldnames = ['episode', 'total_reward', 'task_status', 'termination_phase',
+                        'strategy_phase_1', 'strategy_phase_2', 'strategy_phase_3']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            
             if not file_exists:
                 writer.writeheader()
-            
-            writer.writerow({'episode': self.episode, 
-                            'total_reward': total_reward, 
-                            'task_status': task_status})
+            writer.writerow(log_data)
+
+        rospy.loginfo(f"Saved information for episode {self.episode}: {log_data}")
+
 
     def reset(self):
+        self.strategy_phase_1 = None
+        self.strategy_phase_2 = None
+        self.strategy_phase_3 = None
+        self.human_input_detected = False
         _, self.phase = self.rl_agent.reset()
         self.terminated = False
         self.reset_msg()
         self.robot_arm_controller.hand_pose = None
         self.rl_agent.print_q_table()
-        self.start_rosbag_recording()
+        #self.start_rosbag_recording()
 
         if self.type == 'leader':
             self.exploration_factor = max(self.exploration_factor * 0.9, 0.40)
@@ -424,6 +466,10 @@ class RoboticArmControllerNode:
         """
         Signals the secondary task that it may also get ready for another attempt.
         """
+        # self.msg.handover_successful = 0 TODO: Test this implementation
+        # self.msg.draining_starts = 0
+        # self.msg.draining_successful = 0
+        # self.send_message()
         self.draining_done = 0
         self.draining_start = 0
         self.orientation = 'None'
