@@ -1,10 +1,11 @@
 # Load necessary libraries
 library(dplyr)
 library(stringr)
-library(tibble)
 
-# Set the main data collection directory
 data_collection_dir <- "/home/jesse/thesis/src/co_learning_robot_personalities/data_collection"
+
+# Set the threshold 'a' for streak length
+a <- 3
 
 # -------------------------------------------------------------------
 # Helper function: Determine the phase based on the state number
@@ -24,269 +25,280 @@ get_phase <- function(state) {
   } else if (state %in% 11:16) {
     return(3)
   } else {
-    # If the state is outside expected ranges, warn and return NA
     warning("No valid phase found for state: ", state)
     return(NA_integer_)
   }
 }
 
 # -------------------------------------------------------------------
-# Compute the dominant (preferred) action per phase from a Q-table
+# Given a Q-table, pick for each phase the action corresponding to the single highest Q-value.
 # -------------------------------------------------------------------
-calculate_phase_dominant_actions <- function(q_table_file, participant_name, personality_name) {
-  message("Processing Q-table: ", q_table_file)
-  
-  # Try reading the Q-table
-  q_table <- tryCatch(
-    {
-      read.csv(q_table_file, header = FALSE)
-    },
-    error = function(e) {
-      warning("Error reading Q-table (", q_table_file, "): ", e$message)
-      return(NULL)
-    }
-  )
-  
-  # If Q-table not read, return empty tibble
-  if (is.null(q_table)) {
-    return(tibble(
-      Participant = character(),
-      Personality = character(),
-      Q_Table_File = character(),
-      Phase = integer(),
-      Dominant_Action = integer()
-    ))
-  }
-  
-  # Compute preferred actions (argmax in each state)
-  preferred_actions <- tryCatch(
-    {
-      apply(q_table, 1, which.max)
-    },
-    error = function(e) {
-      warning("Error computing argmax for Q-table (", q_table_file, "): ", e$message)
-      return(NULL)
-    }
-  )
-  
-  # If preferred actions couldn't be computed, return empty
-  if (is.null(preferred_actions)) {
-    return(tibble(
-      Participant = character(),
-      Personality = character(),
-      Q_Table_File = character(),
-      Phase = integer(),
-      Dominant_Action = integer()
-    ))
-  }
-  
-  # States assumed to start at 0
-  states <- seq_len(nrow(q_table)) - 1
+compute_actions_per_phase <- function(q_table) {
+  states <- 0:(nrow(q_table)-1)
   phases <- sapply(states, get_phase)
   
-  # For each phase (0 to 3), find the dominant action
-  result_list <- list()
+  actions_per_phase <- integer(4) # store chosen action for phases 0 to 3
   
   for (p in 0:3) {
-    phase_indices <- which(phases == p)
-    if (length(phase_indices) == 0) {
-      # No states in this phase, skip
+    phase_states <- which(phases == p)
+    if (length(phase_states) == 0) {
+      # No states for this phase, store NA
+      actions_per_phase[p+1] <- NA
       next
     }
     
-    # Actions chosen in this phase
-    phase_actions <- preferred_actions[phase_indices]
-    action_counts <- table(phase_actions)
+    # Extract Q-values for these phase states
+    q_sub <- q_table[phase_states, , drop = FALSE]
     
-    # Dominant action: action with highest frequency
-    dominant_action <- as.integer(names(which.max(action_counts)))
-    
-    # Create a row for this phase
-    df_row <- tibble(
-      Participant = participant_name,
-      Personality = personality_name,
-      Q_Table_File = basename(q_table_file),
-      Phase = p,
-      Dominant_Action = dominant_action
-    )
-    result_list[[length(result_list) + 1]] <- df_row
+    # Find the global maximum Q-value in this submatrix
+    max_val <- max(q_sub)
+    # Get the indices (row and column) of this max value
+    max_pos <- which(q_sub == max_val, arr.ind = TRUE)
+    # chosen_action is the column (action) index of the max Q-value
+    chosen_action <- max_pos[1, "col"]  # If multiple maxima, take the first
+    actions_per_phase[p+1] <- chosen_action
   }
   
-  # Combine all phases for this Q-table
-  if (length(result_list) > 0) {
-    return(bind_rows(result_list))
-  } else {
-    # If no phases had states or no data was processed
-    return(tibble(
-      Participant = participant_name,
-      Personality = personality_name,
-      Q_Table_File = basename(q_table_file),
-      Phase = integer(),
-      Dominant_Action = integer()
-    ))
-  }
+  return(actions_per_phase)
 }
 
 # -------------------------------------------------------------------
-# Analyze all Q-tables for a single personality of a participant
+# Analyze all Q_tables in a given Q_table directory (for a single personality).
+# Returns a matrix of dimensions (#episodes x 4), where rows = episodes, cols = phases.
 # -------------------------------------------------------------------
-analyze_personality_phase_preferences <- function(personality_folder, participant_name) {
-  q_table_path <- file.path(personality_folder, "Q_tables")
-  
-  # List Q_table files following the pattern "Q_table_<number>.csv"
-  q_table_files <- list.files(
-    path = q_table_path,
-    pattern = "Q_table_\\d+\\.csv",
-    full.names = TRUE
-  )
+analyze_personality <- function(q_table_path) {
+  q_table_files <- list.files(q_table_path, pattern="Q_table_\\d+\\.csv", full.names=TRUE)
   
   if (length(q_table_files) == 0) {
-    warning("No Q-tables found in: ", personality_folder)
-    return(tibble(
-      Participant = character(),
-      Personality = character(),
-      Q_Table_File = character(),
-      Phase = integer(),
-      Dominant_Action = integer()
-    ))
+    warning("No Q-tables found in: ", q_table_path)
+    return(matrix(NA, nrow=0, ncol=4))
   }
   
-  personality_name <- basename(personality_folder)
+  # Extract episode from filename and sort by episode number to ensure proper ordering
+  episode_numbers <- as.integer(str_extract(basename(q_table_files), "(?<=Q_table_)\\d+"))
+  order_idx <- order(episode_numbers)
+  q_table_files <- q_table_files[order_idx]
   
-  # Process each Q-table file
-  all_q_results <- lapply(
-    q_table_files, 
-    calculate_phase_dominant_actions, 
-    participant_name = participant_name, 
-    personality_name = personality_name
-  )
-  
-  personality_results <- bind_rows(all_q_results)
-  return(personality_results)
-}
-
-# -------------------------------------------------------------------
-# Analyze all personalities for a single participant
-# -------------------------------------------------------------------
-analyze_participant_phase_preferences <- function(participant_dir) {
-  personality_folders <- list.dirs(participant_dir, recursive = FALSE)
-  participant_name <- basename(participant_dir)
-  
-  if (length(personality_folders) == 0) {
-    warning("No personality folders found for participant: ", participant_name)
-    return(tibble(
-      Participant = character(),
-      Personality = character(),
-      Q_Table_File = character(),
-      Phase = integer(),
-      Dominant_Action = integer()
-    ))
-  }
-  
-  all_personality_results <- lapply(
-    personality_folders, 
-    analyze_personality_phase_preferences, 
-    participant_name = participant_name
-  )
-  
-  participant_results <- bind_rows(all_personality_results)
-  return(participant_results)
-}
-
-# -------------------------------------------------------------------
-# Analyze all participants in the data collection folder
-# -------------------------------------------------------------------
-analyze_all_participant_phase_preferences <- function(data_collection_dir) {
-  participant_folders <- list.dirs(data_collection_dir, recursive = FALSE)
-  
-  if (length(participant_folders) == 0) {
-    warning("No participant folders found in data collection directory.")
-    return(tibble(
-      Participant = character(),
-      Personality = character(),
-      Q_Table_File = character(),
-      Phase = integer(),
-      Dominant_Action = integer()
-    ))
-  }
-  
-  all_results <- lapply(participant_folders, analyze_participant_phase_preferences)
-  final_results <- bind_rows(all_results)
-  
-  return(final_results)
-}
-
-# -------------------------------------------------------------------
-# Main Execution
-# -------------------------------------------------------------------
-final_action_phase_preferences <- analyze_all_participant_phase_preferences(data_collection_dir)
-
-# Extract episode number from Q_Table_File (assuming format Q_table_<number>.csv)
-# and add as a column "Episode"
-final_action_phase_preferences <- final_action_phase_preferences %>%
-  mutate(Episode = as.integer(str_extract(Q_Table_File, "(?<=Q_table_)\\d+")))
-
-# Define the length of episodes needed for convergence
-required_run_length <- 6
-
-# -------------------------------------------------------------------
-# Count convergence events per (Participant, Personality, Phase)
-# A convergence event is a stable run of the same action for >= required_run_length episodes
-# -------------------------------------------------------------------
-count_convergences <- function(d) {
-  # Ensure sorted by Episode
-  d <- d %>% arrange(Episode)
-  
-  convergence_count <- 0
-  current_action <- NA
-  consecutive_count <- 0
-  
-  for (i in seq_len(nrow(d))) {
-    action <- d$Dominant_Action[i]
-    if (is.na(current_action) || action != current_action) {
-      # Action changed or first action in series
-      current_action <- action
-      consecutive_count <- 1
-    } else {
-      # Same action as previous
-      consecutive_count <- consecutive_count + 1
+  all_phase_actions <- lapply(q_table_files, function(f) {
+    q_table <- tryCatch({
+      read.csv(f, header=FALSE)
+    }, error = function(e) {
+      warning("Error reading Q-table: ", f, " - ", e$message)
+      return(NULL)
+    })
+    
+    if (is.null(q_table)) {
+      return(rep(NA, 4))
     }
     
-    # Check if we hit the required stable run length
-    if (consecutive_count == required_run_length) {
-      convergence_count <- convergence_count + 1
-      # We do not reset after this event; subsequent episodes with the same action don't create
-      # a new event until the action changes and reconverges.
+    # Compute chosen action per phase
+    compute_actions_per_phase(q_table)
+  })
+  
+  phase_action_matrix <- do.call(rbind, all_phase_actions)
+  return(phase_action_matrix)
+}
+
+# -------------------------------------------------------------------
+# Original stability count function (consecutive identical pairs)
+# -------------------------------------------------------------------
+count_stability <- function(actions_per_phase_matrix) {
+  # actions_per_phase_matrix: rows = episodes, cols = phases
+  if (nrow(actions_per_phase_matrix) <= 1) {
+    return(rep(0, ncol(actions_per_phase_matrix)))
+  }
+  
+  apply(actions_per_phase_matrix, 2, function(actions) {
+    sum(actions[-1] == actions[-length(actions)])
+  })
+}
+
+# -------------------------------------------------------------------
+# New function to count streaks and longest streak based on a threshold 'a'
+# -------------------------------------------------------------------
+count_streaks <- function(actions, a) {
+  if (length(actions) == 0 || all(is.na(actions))) {
+    return(list(streak_count = 0, longest_streak = 0))
+  }
+  
+  actions <- na.omit(actions) # remove NA if any
+  if (length(actions) == 0) {
+    return(list(streak_count = 0, longest_streak = 0))
+  }
+  
+  streak_count <- 0
+  longest_streak <- 1
+  
+  current_action <- actions[1]
+  current_length <- 1
+  
+  for (i in 2:length(actions)) {
+    if (actions[i] == current_action) {
+      # Continue the streak
+      current_length <- current_length + 1
+    } else {
+      # Streak ended
+      if (current_length >= a) {
+        streak_count <- streak_count + 1
+      }
+      if (current_length > longest_streak) {
+        longest_streak <- current_length
+      }
+      # Reset for the new action
+      current_action <- actions[i]
+      current_length <- 1
     }
   }
   
-  return(convergence_count)
+  # Check the final streak
+  if (current_length >= a) {
+    streak_count <- streak_count + 1
+  }
+  if (current_length > longest_streak) {
+    longest_streak <- current_length
+  }
+  
+  return(list(streak_count = streak_count, longest_streak = longest_streak))
 }
 
-convergence_results <- final_action_phase_preferences %>%
-  group_by(Participant, Personality, Phase) %>%
-  summarize(
-    Convergence_Count = count_convergences(cur_data()),
-    .groups = "drop"
-  )
+# -------------------------------------------------------------------
+# Function to apply streak counting per phase
+# -------------------------------------------------------------------
+compute_streak_metrics <- function(actions_per_phase_matrix, a) {
+  # actions_per_phase_matrix: rows = episodes, cols = phases
+  # Returns two matrices: streak_count_per_phase and longest_streak_per_phase
+  # each with one row (since it's for a single participant/personality) and 4 columns (one per phase)
+  
+  if (nrow(actions_per_phase_matrix) == 0) {
+    # No data
+    return(list(
+      StreakCount = c(NA, NA, NA, NA),
+      LongestStreak = c(NA, NA, NA, NA)
+    ))
+  }
+  
+  phases <- 1:ncol(actions_per_phase_matrix)
+  
+  streak_counts <- numeric(length(phases))
+  longest_streaks <- numeric(length(phases))
+  
+  for (p in phases) {
+    phase_actions <- actions_per_phase_matrix[, p]
+    res <- count_streaks(phase_actions, a)
+    streak_counts[p] <- res$streak_count
+    longest_streaks[p] <- res$longest_streak
+  }
+  
+  return(list(StreakCount = streak_counts, LongestStreak = longest_streaks))
+}
 
-# Aggregate results by personality
-personality_summary <- convergence_results %>%
+# -------------------------------------------------------------------
+# Main code: 
+# 1) Iterate over all participants and personalities, 
+# 2) Compute stability counts,
+# 3) Compute streak metrics,
+# 4) Aggregate results by personality type,
+# 5) Write out personality_average_stability.csv
+# -------------------------------------------------------------------
+
+participants <- list.dirs(data_collection_dir, recursive=FALSE, full.names=TRUE)
+participants <- participants[grepl("participant_", basename(participants))]
+
+# Initialize an empty data frame to store all results
+all_results <- data.frame(
+  Participant = character(),
+  Personality = character(),
+  Stability_Phase0 = integer(),
+  Stability_Phase1 = integer(),
+  Stability_Phase2 = integer(),
+  Stability_Phase3 = integer(),
+  StreakCount_Phase0 = integer(),
+  StreakCount_Phase1 = integer(),
+  StreakCount_Phase2 = integer(),
+  StreakCount_Phase3 = integer(),
+  LongestStreak_Phase0 = integer(),
+  LongestStreak_Phase1 = integer(),
+  LongestStreak_Phase2 = integer(),
+  LongestStreak_Phase3 = integer(),
+  stringsAsFactors = FALSE
+)
+
+for (participant_dir in participants) {
+  participant_name <- basename(participant_dir)
+  
+  # List personality directories for this participant
+  personality_dirs <- list.dirs(participant_dir, recursive=FALSE, full.names=TRUE)
+  personality_dirs <- personality_dirs[grepl("personality_type_", basename(personality_dirs))]
+  
+  for (personality_dir in personality_dirs) {
+    personality_name <- basename(personality_dir)
+    
+    # Q_table path
+    q_table_path <- file.path(personality_dir, "Q_tables")
+    if (!dir.exists(q_table_path)) {
+      warning("No Q_tables directory for: ", personality_dir)
+      next
+    }
+    
+    # Analyze personality
+    phase_action_matrix <- analyze_personality(q_table_path)
+    
+    if (nrow(phase_action_matrix) == 0) {
+      # No data, skip
+      next
+    }
+    
+    # Compute old stability metric (consecutive identical pairs)
+    final_stability <- count_stability(phase_action_matrix)
+    
+    # Compute new streak metrics
+    streak_res <- compute_streak_metrics(phase_action_matrix, a)
+    
+    # Add a row to all_results
+    new_row <- data.frame(
+      Participant = participant_name,
+      Personality = personality_name,
+      Stability_Phase0 = final_stability[1],
+      Stability_Phase1 = final_stability[2],
+      Stability_Phase2 = final_stability[3],
+      Stability_Phase3 = final_stability[4],
+      StreakCount_Phase0 = streak_res$StreakCount[1],
+      StreakCount_Phase1 = streak_res$StreakCount[2],
+      StreakCount_Phase2 = streak_res$StreakCount[3],
+      StreakCount_Phase3 = streak_res$StreakCount[4],
+      LongestStreak_Phase0 = streak_res$LongestStreak[1],
+      LongestStreak_Phase1 = streak_res$LongestStreak[2],
+      LongestStreak_Phase2 = streak_res$LongestStreak[3],
+      LongestStreak_Phase3 = streak_res$LongestStreak[4],
+      stringsAsFactors = FALSE
+    )
+    
+    all_results <- rbind(all_results, new_row)
+  }
+}
+
+# Now compute the average stability and streak metrics per personality type
+average_stability <- all_results %>%
   group_by(Personality) %>%
   summarize(
-    Avg_Convergence = mean(Convergence_Count, na.rm = TRUE),
-    Median_Convergence = median(Convergence_Count, na.rm = TRUE),
+    Avg_Stability_Phase0 = mean(Stability_Phase0, na.rm = TRUE),
+    Avg_Stability_Phase1 = mean(Stability_Phase1, na.rm = TRUE),
+    Avg_Stability_Phase2 = mean(Stability_Phase2, na.rm = TRUE),
+    Avg_Stability_Phase3 = mean(Stability_Phase3, na.rm = TRUE),
+    Avg_StreakCount_Phase0 = mean(StreakCount_Phase0, na.rm = TRUE),
+    Avg_StreakCount_Phase1 = mean(StreakCount_Phase1, na.rm = TRUE),
+    Avg_StreakCount_Phase2 = mean(StreakCount_Phase2, na.rm = TRUE),
+    Avg_StreakCount_Phase3 = mean(StreakCount_Phase3, na.rm = TRUE),
+    Avg_LongestStreak_Phase0 = mean(LongestStreak_Phase0, na.rm = TRUE),
+    Avg_LongestStreak_Phase1 = mean(LongestStreak_Phase1, na.rm = TRUE),
+    Avg_LongestStreak_Phase2 = mean(LongestStreak_Phase2, na.rm = TRUE),
+    Avg_LongestStreak_Phase3 = mean(LongestStreak_Phase3, na.rm = TRUE),
     .groups = "drop"
-  )
+  ) %>%
+  mutate(across(where(is.numeric), round, digits = 3))
 
-# Save results to CSV files
-output_file_convergence <- file.path(data_collection_dir, "convergence_events_summary.csv")
-write.csv(convergence_results, file = output_file_convergence, row.names = FALSE)
+# Write out the final aggregated results
+output_file <- file.path(data_collection_dir, "personality_average_stability.csv")
+write.csv(average_stability, file = output_file, row.names = FALSE)
 
-output_file_personality <- file.path(data_collection_dir, "personality_convergence_aggregate.csv")
-write.csv(personality_summary, file = output_file_personality, row.names = FALSE)
-
-# Debug prints
-print(convergence_results)
-print(personality_summary)
-message("Convergence analysis completed and results written to CSV.")
+message("Averaged stability and streak metrics per personality type written to: ", output_file)
