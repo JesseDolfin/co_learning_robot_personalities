@@ -57,6 +57,9 @@ class secondary_task():
         self.reset = msg.reset
         self.phase = msg.phase
 
+        if self.phase == 5:
+            self.send_task_status(self, start=0, end=0, draining_status=0, time=0)
+
     def check_print_text(self):
         if self.display_text_flag and self.display_text is not None:
             lines = self.split_text("Robot: " + "\"" + self.display_text + "\"", self.font, max_width = 500)
@@ -532,8 +535,6 @@ class secondary_task():
             self.previous_cursor = self.cursor
             self.clock.tick(self.FPS)
 
-            if self.phase == 5:
-                self.send_task_status(self, start=0, end=0, draining_status=0, time=0)
 
     
 
@@ -637,7 +638,7 @@ class secondary_task():
         faulty_force = needle_direction * 45000 * np.sin(difficulty_modifier * self.t / 6) * difficulty_modifier
 
         # Calculate force feedback from impedance controller 
-        self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) + faulty_force
+        self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) #+ faulty_force
 
         if self.collision_any:
             self.count += 1
@@ -976,7 +977,6 @@ class secondary_task():
         flag = True
         while self.run:
             if self.phase == 5 and flag:
-                self.send_task_status(self, start=0, end=0, draining_status=0, time=0)
                 self.flag = False
             self.window.blit(self.screenHaptics, (0, 0))
             self.window.blit(self.screenBlank, (800, 0))
