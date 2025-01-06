@@ -262,10 +262,13 @@ class RobotArmController():
         self.cartesian_action_client.send_goal(goal, self.cartesian_trajectory_done_callback,
                                                 self.cartesian_trajectory_active_callback,
                                                 self.cartesian_trajectory_feedback_callback)
-        
         rate = rospy.Rate(20)
-        while not rospy.is_shutdown() and not not self.trajectory_done:
+        while not rospy.is_shutdown() and not self.trajectory_done:
+            rospy.loginfo("waiting for confirmation of good trajectory")
             rate.sleep()
+        duration = rospy.Duration(1)
+        rospy.sleep(duration)
+        
 
     def send_joint_trajectory_goal(self, joint_positions_goal, joint_velocities_goal=None):
         rospy.loginfo("Sending joint positions goal: " + str(joint_positions_goal) + " and joint velocities goal:" + str(
@@ -294,9 +297,10 @@ class RobotArmController():
                                                 self.joint_trajectory_feedback_callback)
             rate = rospy.Rate(20)
             while not rospy.is_shutdown() and not self.trajectory_done:
+                rospy.loginfo("waiting for confirmation of good trajectory")
                 rate.sleep()
-
-            rospy.sleep(1)
+            duration = rospy.Duration(2)
+            rospy.sleep(duration)
             
 
     def detect_human_interaction(self, duration=3.0,wait_for_hand=False):
@@ -314,7 +318,7 @@ class RobotArmController():
         wait_duration = rospy.Duration(2) # S
 
         # Wait for the arm to settle
-        while not rospy.is_shutdown() and not rospy.Time.now() - wait_time < wait_duration:
+        while not rospy.is_shutdown() and rospy.Time.now() - wait_time < wait_duration:
             rate.sleep()
         
         interaction_detected = False
@@ -323,7 +327,7 @@ class RobotArmController():
         start_time = rospy.Time.now()
         duration_ros = rospy.Duration(duration)
         
-        while not rospy.is_shutdown() and not (rospy.Time.now() - start_time) < duration_ros:
+        while not rospy.is_shutdown() and (rospy.Time.now() - start_time) < duration_ros:
             effort_magnitude = self._effort_mag_save
             if wait_for_hand:
                 rospy.loginfo(f"hand_status:{self.hand_detected}")
@@ -372,9 +376,8 @@ class RobotArmController():
         rospy.loginfo("Waiting to detect hand")
         self.detect_human_interaction(duration=100,wait_for_hand=True)
 
-        # If self.hand_pose.x is close to 0 we know that this value is out of bounds (happens when no hand is detected)
-        # To make sure the arm does not crash into itself we give it the reference position as target
-        if abs(self.hand_pose[0]) > 0.1:
+        # To make sure the arm does not crash into itself we give it the reference position as target if no hand is detected
+        if self.hand_detected:
             target_position_arm = self.hand_pose
         else: target_position_arm = self.ref_pos
 
@@ -394,8 +397,12 @@ class RobotArmController():
                 rospy.logwarn("handover already completed, skipping loop")
                 break
 
-            target_position_arm = self.hand_pose
+            if self.hand_detected:
+                target_position_arm = self.hand_pose
+            else: target_position_arm = self.ref_pos
+
             target_position_arm[2] = max(target_position_arm[2], 0.5) 
+            self.trajectory_done = False
             self.send_cartesian_trajectory_goal(target_position_arm,self.fixed_orientation)
 
             # Update our current position and error values
