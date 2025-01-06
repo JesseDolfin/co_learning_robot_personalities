@@ -508,7 +508,7 @@ class secondary_task():
                     self.rotate_down = True
 
     def run_simulation(self):
-        self.send_task_status(start=0, end=0, success=0, time=self.max_time)  # reset message
+        self.send_task_status(start=0, end=0, draining_status=0, time=self.max_time)  # reset message
         while self.run:
             self.process_events()  # Keyboard events
 
@@ -518,7 +518,7 @@ class secondary_task():
                     self.time_left = 0
 
             if self.success:
-                self.send_task_status(success=1, time=self.time_left,start=0,end=0)
+                self.send_task_status(draining_status=1, time=self.time_left,start=0,end=0)
                 self.success = False
 
             if self.check_termination_conditions():
@@ -558,7 +558,7 @@ class secondary_task():
             self.failure_claxon.play()  # Play failure sound
             pygame.time.delay(1000)  # Add delay to make the border visible
             self.time_left = 0
-            self.send_task_status(success=-1, time=0)
+            self.send_task_status(draining_status=-1, time=0)
             self.reset = False
             self.fail_count += 1
             return True
@@ -569,7 +569,7 @@ class secondary_task():
             pygame.time.delay(1000)  # Add delay to make the border visible
             self.time_up = True
             self.time_left = 0
-            self.send_task_status(success=-1, time=0)
+            self.send_task_status(draining_status=-1, time=0)
             self.reset = False
             self.fail_count += 1
             return True
@@ -578,7 +578,7 @@ class secondary_task():
             self.render_screen_border(True)
             self.success_chime.play()  # Play success sound
             pygame.time.delay(1000)  # Add delay to make the border visible
-            self.send_task_status(success=1, time=self.time_left,start=0,end=0)
+            self.send_task_status(draining_status=1, time=self.time_left,start=0,end=0)
             self.success_count +=1
             return True
 
@@ -808,7 +808,7 @@ class secondary_task():
 
             if not self.collision_dict['Cerebrospinal fluid one']:
                 self.needle_removed_too_soon_2 = True
-                self.send_task_status(success=-1, time=self.time_left)
+                self.send_task_status(draining_status=-1, time=self.time_left)
                 self.reset = False
                 self.task_failed = True
 
@@ -867,14 +867,14 @@ class secondary_task():
                 self.needle_removed_too_soon = True
 
         if self.needle_removed_too_soon and self.needle_removed_too_soon_update:
-            self.send_task_status(success = -1,start=0,end=0)
+            self.send_task_status(draining_status = -1,start=0,end=0)
             self.reset = False
             self.needle_removed_too_soon_update = False
 
         if self.bar_pressed and not self.render_bar and not self.start_handover:
             self.task_failed = True
             self.bar_released_too_soon = True
-            self.send_task_status(success=-1,start=0,end=0)
+            self.send_task_status(draining_status=-1,start=0,end=0)
             self.reset = False
         elif self.start_handover:
             self.bar_released_too_soon = False
