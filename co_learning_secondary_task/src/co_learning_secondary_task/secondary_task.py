@@ -56,12 +56,14 @@ class secondary_task():
     def status_callback(self,msg):
         self.reset = msg.reset
         self.phase = msg.phase
-        
+
         if msg.task_status == -1:
             self.task_failed = True
+            self.lock= True
 
         if msg.task_status == 1:
             self.handover_successful = True
+            self.lock= True
 
         if self.phase == 5:
             self.send_task_status(start=0, end=0, draining_status=0, time=0)
@@ -355,25 +357,26 @@ class secondary_task():
 
 
     def send_task_status(self, start=None, end=None, draining_status=None, time=None):
-        if self.ros_running:
-            if self.msg is None:
-                message = secondary_task_message()
-            else:
-                message = self.msg
-            if start is not None:
-                message.draining_starts = start
-            if end is not None:
-                message.draining_successful = end
-            if draining_status is not None:
-                message.draining_status = draining_status
-            if time is not None:
-                message.time_left = time
-            
-            self.pub.publish(message)
-            self.msg = message  # Save the message for future updates
-
-        else:
+        if not self.ros_running:
             return
+
+        # Always create a fresh message
+        message = secondary_task_message()
+
+        # Fill out only those fields you want to fill; everything else will be zero/default
+        if start is not None:
+            message.draining_starts = start
+        if end is not None:
+            message.draining_successful = end
+        if draining_status is not None:
+            message.draining_status = draining_status
+        if time is not None:
+            message.time_left = time
+
+        self.pub.publish(message)
+        # Optionally remove self.msg entirely, so it's never reused
+        self.msg = None
+
 
 
     def start_screen(self):
@@ -498,8 +501,6 @@ class secondary_task():
                     self.visual_feedback = not self.visual_feedback
                 elif event.key == ord(' '):
                     self.render_bar = False
-                elif event.key == ord('p'):
-                    self.handover_successful = True
             elif event.type == pygame.KEYDOWN:
                 if event.key == ord(' '):
                     self.render_bar = True
@@ -561,7 +562,8 @@ class secondary_task():
             self.failure_claxon.play()  # Play failure sound
             pygame.time.delay(1000)  # Add delay to make the border visible
             self.time_left = 0
-            self.send_task_status(draining_status=-1, time=0)
+            if not self.lock:
+                self.send_task_status(draining_status=-1, time=0)
             self.reset = False
             self.fail_count += 1
             return True
@@ -581,7 +583,8 @@ class secondary_task():
             self.render_screen_border(True)
             self.success_chime.play()  # Play success sound
             pygame.time.delay(1000)  # Add delay to make the border visible
-            self.send_task_status(draining_status=1, time=self.time_left,start=0,end=0)
+            if not self.lock:
+                self.send_task_status(draining_status=1, time=self.time_left,start=0,end=0)
             self.success_count +=1
             return True
 
