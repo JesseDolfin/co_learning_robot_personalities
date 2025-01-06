@@ -864,14 +864,13 @@ class secondary_task():
                 self.needle_removed_too_soon = True
 
         if self.needle_removed_too_soon and self.needle_removed_too_soon_update:
-            self.send_task_status(draining_status = -1,start=0,end=0)
+            self.task_failed = True
             self.reset = False
             self.needle_removed_too_soon_update = False
 
         if self.bar_pressed and not self.render_bar and not self.start_handover:
             self.task_failed = True
             self.bar_released_too_soon = True
-            self.send_task_status(draining_status=-1,start=0,end=0)
             self.reset = False
         elif self.start_handover:
             self.bar_released_too_soon = False
