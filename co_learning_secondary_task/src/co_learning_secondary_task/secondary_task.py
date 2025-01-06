@@ -57,8 +57,8 @@ class secondary_task():
         self.reset = msg.reset
         self.phase = msg.phase
 
-        # if self.phase == 5:
-        #     self.send_task_status(start=0, end=0, draining_status=0, time=0)
+        if self.phase == 5:
+            self.send_task_status(start=0, end=0, draining_status=0, time=0)
 
     def check_print_text(self):
         if self.display_text_flag and self.display_text is not None:
@@ -484,14 +484,10 @@ class secondary_task():
                     self.rotate_up = False
                 elif event.key == ord('e'):
                     self.rotate_down = False
-                elif event.key == ord('s'):
-                    self.success = True
                 elif event.key == ord('v'):
                     self.toggle_visual = not self.toggle_visual
                 elif event.key == ord('h'):
                     self.haptic_feedback = not self.haptic_feedback
-                elif event.key == ord('d'):
-                    self.debugToggle = not self.debugToggle
                 elif event.key == ord('o'):
                     self.visual_feedback = not self.visual_feedback
                 elif event.key == ord(' '):

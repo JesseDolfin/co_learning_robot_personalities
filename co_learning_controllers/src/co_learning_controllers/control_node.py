@@ -189,6 +189,7 @@ class RoboticArmControllerNode:
         sys.exit(0)
 
     def secondary_task_callback(self,msg):
+        self.msg = msg
         self.draining_done = msg.draining_successful
         self.draining_start = msg.draining_starts
         self.draining_status = msg.draining_status
@@ -482,6 +483,8 @@ class RoboticArmControllerNode:
         self.original_orientation = None
         self.draining_status = 0
         self.send_message(reset = False, phase=5)
+        duration=rospy.Duration(1)
+        rospy.sleep(duration)
 
 
 if __name__ == '__main__':
