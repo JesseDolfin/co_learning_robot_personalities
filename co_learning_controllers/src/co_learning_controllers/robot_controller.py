@@ -171,7 +171,8 @@ class RobotArmController():
         
     def hand_pose_callback(self, msg):
         hand_pose = np.array([msg.x, msg.y, msg.z],dtype="float64")
-        if np.all(hand_pose) == 0:
+        detected = msg.detected
+        if not detected:
             self.hand_detected = False
             self.hand_pose = hand_pose
         else:
@@ -328,6 +329,7 @@ class RobotArmController():
                 rospy.loginfo(f"hand_status:{self.hand_detected}")
 
             if wait_for_hand and self.hand_detected:
+                rospy.loginfo(f"hand detected:{self.hand_detected}")
                 break
 
             

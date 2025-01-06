@@ -57,9 +57,6 @@ class secondary_task():
         self.reset = msg.reset
         self.phase = msg.phase
 
-        if self.phase == 5:
-            self.send_task_status(self, start=0, end=0, draining_status=0, time=0)
-
     def check_print_text(self):
         if self.display_text_flag and self.display_text is not None:
             lines = self.split_text("Robot: " + "\"" + self.display_text + "\"", self.font, max_width = 500)
@@ -509,6 +506,7 @@ class secondary_task():
     def run_simulation(self):
         self.send_task_status(start=0, end=0, draining_status=0, time=self.max_time)  # reset message
         while self.run:
+
             self.process_events()  # Keyboard events
 
             if self.time_start is not None:
@@ -533,6 +531,9 @@ class secondary_task():
             
             self.previous_cursor = self.cursor
             self.clock.tick(self.FPS)
+
+            if self.phase == 5:
+                self.send_task_status(self, start=0, end=0, draining_status=0, time=0)
 
     
 
@@ -972,7 +973,11 @@ class secondary_task():
 
         tries = self.fail_count + self.success_count
 
+        flag = True
         while self.run:
+            if self.phase == 5 and flag:
+                self.send_task_status(self, start=0, end=0, draining_status=0, time=0)
+                self.flag = False
             self.window.blit(self.screenHaptics, (0, 0))
             self.window.blit(self.screenBlank, (800, 0))
             self.window.blit(self.screenVR, (900, 0))

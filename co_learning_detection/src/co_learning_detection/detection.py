@@ -225,6 +225,10 @@ class MPDetector:
         hand_pose_msg.y = point_3d[1]
         hand_pose_msg.z = point_3d[2]
         hand_pose_msg.orientation = pose
+        if pose != 'none':
+            hand_pose_msg.detected = True
+        else:
+            hand_pose_msg.detected = False
         self.pose_pub.publish(hand_pose_msg)
 
     def process_frames(self, draw=True):

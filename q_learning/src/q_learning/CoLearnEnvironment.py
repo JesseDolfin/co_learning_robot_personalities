@@ -73,7 +73,7 @@ class CoLearn(Env):
         self.initialize_ros()
 
     def secondary_task_status_callback(self, msg):
-        self.handover_successful = msg.handover_successful
+        self.handover_successful = msg.draining_status
         self.time_left = msg.time_left
 
     def control_status_callback(self,msg):
