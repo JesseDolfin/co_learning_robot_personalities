@@ -155,7 +155,7 @@ class MPDetector:
             print(f"RuntimeError occurred: {e}")
             return None
 
-    def find_hands(self, img, draw=False):
+    def find_hands(self, img, draw=True):
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.results = self.hands.process(img_rgb)
 
@@ -227,7 +227,7 @@ class MPDetector:
         hand_pose_msg.orientation = pose
         self.pose_pub.publish(hand_pose_msg)
 
-    def process_frames(self, draw=False):
+    def process_frames(self, draw=True):
         try:
             frame_counter = 0
             detection_interval = 30  

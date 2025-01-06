@@ -14,7 +14,7 @@ from math import exp
 
 from std_msgs.msg import String
 
-from co_learning_messages.msg import secondary_task_message
+from co_learning_messages.msg import secondary_task_message,control_status_message
 from co_learning_secondary_task.pantograph import Pantograph
 from co_learning_secondary_task.pyhapi import Mechanisms
 from co_learning_secondary_task.pshape import PShape      
@@ -50,23 +50,17 @@ class secondary_task():
         self.display_text = None
         
         if self.ros_running:
-            self.pub = rospy.Publisher('Task_status',secondary_task_message,queue_size=1)
-            rospy.Subscriber('Task_status',secondary_task_message,self.status_callback)
+            self.pub = rospy.Publisher('task_status',secondary_task_message,queue_size=1)
+            rospy.Subscriber('control_status',control_status_message,self.status_callback)
             rospy.init_node("secondary_task")
 
     def status_callback(self,msg):
-        self.msg = msg
-        rospy.loginfo("Draining starts: %s, Draining success: %s, Handover success: %s reset: %s", msg.draining_starts, msg.draining_successful, msg.handover_successful,msg.reset)
-        self.handover_successful = msg.handover_successful
         self.reset = msg.reset
         self.phase = msg.phase
 
-        if self.handover_successful in [-1,1]:
-            self.lock = True
-        else:
-            self.lock = False
+        if self.phase == 5:
+            self.send_task_status(self, start=0, end=0, draining_status=0, time=0)
 
-        
     def check_print_text(self):
         if self.display_text_flag and self.display_text is not None:
             lines = self.split_text("Robot: " + "\"" + self.display_text + "\"", self.font, max_width = 500)
@@ -355,7 +349,7 @@ class secondary_task():
 
 
 
-    def send_task_status(self, start=None, end=None, success=None, time=None):
+    def send_task_status(self, start=None, end=None, draining_status=None, time=None):
         if self.ros_running:
             if self.msg is None:
                 message = secondary_task_message()
@@ -365,8 +359,8 @@ class secondary_task():
                 message.draining_starts = start
             if end is not None:
                 message.draining_successful = end
-            if success is not None and not self.lock:
-                message.handover_successful = success
+            if draining_status is not None:
+                message.draining_status = draining_status
             if time is not None:
                 message.time_left = time
             

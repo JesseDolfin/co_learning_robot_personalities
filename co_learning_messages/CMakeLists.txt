@@ -10,8 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## Declare ROS messages
 add_message_files(
   FILES
-    Database.msg
-    Detection.msg
+    control_status_message.msg
     hand_pose.msg
     secondary_task_message.msg
 )

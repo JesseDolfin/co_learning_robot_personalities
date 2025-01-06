@@ -272,7 +272,7 @@ class RobotArmController():
         if self.type == 'fast':
             joint_velocities_goal = [0.7] * 7  
         elif self.type == 'slow':
-            joint_velocities_goal = [0.2] * 7  
+            joint_velocities_goal = [0.3] * 7  
         
         response = self.controller_manager(start_controllers=['/JointImpedanceController'],
                                             stop_controllers=['/CartesianImpedanceController'], strictness=1,
@@ -372,25 +372,24 @@ class RobotArmController():
             target_position_arm = self.hand_pose
         else: target_position_arm = self.ref_pos
 
-      
-
         # Z- value cannot be too low, making sure arm does not smash into table
         target_position_arm[2] = max(target_position_arm[2], 0.1) 
         error = np.linalg.norm(target_position_arm - current_position)
 
+        rospy.loginfo(f"hand_error:{error}")
+
         position_threshold = 0.2
-        while not rospy.is_shutdown() and not error > position_threshold:
+        rate = rospy.Rate(0.5)
+        while not rospy.is_shutdown() and error > position_threshold:
+            rospy.loginfo(f"error:{error}")
             # When we have a update on the handover we dont need to move to hand anymore because either the handover 
             # Is already done or the person already failed the secondary task
             if self.handover_status in [-1,1]:
+                rospy.logwarn("handover already completed, skipping loop")
                 break
 
-            if abs(self.hand_pose[0]) > 0.1:
-                target_position_arm = self.hand_pose
-            else: target_position_arm = self.ref_pos
-
-
-            target_position_arm[2] = max(target_position_arm[2], 0.1) 
+            target_position_arm = self.hand_pose
+            target_position_arm[2] = max(target_position_arm[2], 0.5) 
             self.send_cartesian_trajectory_goal(target_position_arm,self.fixed_orientation)
 
             # Update our current position and error values

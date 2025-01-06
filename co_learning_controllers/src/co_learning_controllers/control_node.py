@@ -23,7 +23,7 @@ from std_msgs.msg import Bool
 from co_learning_controllers.robot_controller import RobotArmController
 from co_learning_controllers.hand_controller import SoftHandController
 from co_learning_controllers.questionaire_controller import GoogleFormHandler
-from co_learning_messages.msg import secondary_task_message, hand_pose
+from co_learning_messages.msg import secondary_task_message, hand_pose, control_status_message
 from q_learning.QLearnAgent import QLearningAgent
 from q_learning.CoLearnEnvironment import CoLearn
 
@@ -141,7 +141,7 @@ class RoboticArmControllerNode:
         self.phase = 0
         self.terminated = False
         self.episode = 0
-        self.task_status = 0
+        self.draining_status = 0
         self.run = True
         self.action = 0
         self.msg = secondary_task_message()
@@ -156,11 +156,10 @@ class RoboticArmControllerNode:
         self.strategy_phase_3 = None
         self.human_input_detected = False
 
-        rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
+        rospy.Subscriber('task_status', secondary_task_message, self.secondary_task_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
         rospy.Subscriber('human_input', Bool, self.human_input_callback)
-
-        self.pub = rospy.Publisher('/Task_status', secondary_task_message, queue_size=1)
+        self.pub = rospy.Publisher('control_status',control_status_message,queue_size=1)
 
         self.env = CoLearn(self.type)
         self.rl_agent = QLearningAgent(self.env,self.type)
@@ -188,11 +187,10 @@ class RoboticArmControllerNode:
         #self.stop_rosbag_recording()
         sys.exit(0)
 
-    def status_callback(self, msg):
-        self.msg = msg
-        self.task_status = msg.handover_successful
-        self.draining_start = msg.draining_starts
+    def secondary_task_callback(self,msg):
         self.draining_done = msg.draining_successful
+        self.draining_start = msg.draining_start
+        self.draining_status = msg.draining_status
     
     def human_input_callback(self, msg):
         if msg.data:
@@ -202,11 +200,10 @@ class RoboticArmControllerNode:
         self.hand_pose = [msg.x, msg.y, msg.z]
         self.orientation = msg.orientation
         
-    def send_message(self):
-        if self.msg is not None:
-            msg = self.msg
-        else:
-            msg = secondary_task_message()
+    def send_message(self,reset,phase):
+        msg = control_status_message()
+        msg.reset = reset
+        msg.phase = phase
         self.pub.publish(msg)
 
     def phase_0(self):
@@ -214,44 +211,41 @@ class RoboticArmControllerNode:
         Go to the home position and grab the object
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: Home")
-        rospy.logwarn(f"draining start:{self.draining_start}")
-
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
         self.robot_arm_controller.send_joint_trajectory_goal(HOME_POSITION)
         self.hand_controller.send_goal('open')
-        time.sleep(2)
+        duration = rospy.Duration(2)
+        rospy.sleep(duration)
         self.hand_controller.send_goal('close')
-
+        rospy.logwarn(f"phase{self.phase},terminated{self.terminated}, episode:{self.episode},  task_status:{self.draining_status},  run:{self.run}, action:{self.action}, msg:{self.msg}, draining_start:{self.draining_start}")
+        
     def phase_1(self):
         """
         Wait until the human starts draining then; start handover directly (action 1),
         wait for the human to ask for item (action 2); break if human fails draining process.
         """
+        self.send_message(reset = True, phase=1)
+
+
         human_action = 3 # 3 represents not asking for the item 
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         rate = rospy.Rate(10)
 
-        self.msg.reset = True
-        self.msg.phase = 1
-        self.send_message()
- 
         if self.action == 1:
             while self.draining_start == 0:
-                rospy.logerr(f"task_status:{self.task_status}")
                 rate.sleep()
-                if self.task_status == -1:
+                if self.draining_status == -1:
                     break
 
         if self.action == 2:
             while self.draining_start == 0:
-                rospy.logerr(f"task_status:{self.task_status}")
                 rate.sleep()
-                if self.task_status == -1:
+                if self.draining_status == -1:
                     break
 
             self.original_orientation = self.orientation
             while True:
-                if self.draining_done != 0 or self.task_status == -1:
+                if self.draining_done != 0 or self.draining_status == -1:
                     human_action = 2 # 2 represent asking for the item as soon as the draining is done
                     break
                 if self.original_orientation != self.orientation:
@@ -260,14 +254,15 @@ class RoboticArmControllerNode:
                 rate.sleep()
 
         self.strategy_phase_1 = self.action * 10 + human_action # 11 12 13 21 22 23
-        self.msg.reset = False
-        self.send_message()
+        self.send_message(reset = False, phase=1)
 
     def phase_2(self):
         """
         Go to intermediate position and then to either serve orientation (action 3)
         or drop orientation (action 4). Then move the item towards the hand of the human.
         """
+        self.send_message(reset = False, phase=2)
+
         human_action = 4 if self.orientation == "serve" else 5
         self.strategy_phase_2 = self.action * 10 + human_action #34, 35, 44, 45
 
@@ -276,15 +271,17 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
         self.robot_arm_controller.send_joint_trajectory_goal(position)
 
-        if not self.task_status in [-1,1]:
+        if not self.draining_status in [-1,1]:
             self.robot_arm_controller.move_towards_hand(update=True)
 
     def phase_3(self):
         """
         Decide to open or close the hand based on the action.
         """
+        self.send_message(reset = False, phase=3)
+
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
-        if not self.task_status in [-1,1]:
+        if not self.draining_status in [-1,1]:
             self.robot_arm_controller.move_towards_hand()
 
         if self.human_input_detected:
@@ -304,6 +301,11 @@ class RoboticArmControllerNode:
             self.hand_controller.send_goal('close_signal') # Gives an auditory indication that something is happening
             self.hand_controller.send_goal('close')
 
+        if self.draining_status == -1:
+            rospy.loginfo("Handover failed. Terminating episode.")
+            self.terminated = True
+
+
     def update_q_table(self):
         rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Experience replay")
         self.rl_agent.experience_replay(self.alpha, self.gamma)
@@ -318,8 +320,7 @@ class RoboticArmControllerNode:
             self.run = False
 
             self.msg = secondary_task_message()
-            self.msg.phase = 6
-            self.send_message()
+            self.send_message(reset = False, phase=6)
 
             # Run the form workflow for the current personality type
             self.form_handler.run_workflow(dir=self.personality_dir)
@@ -371,7 +372,6 @@ class RoboticArmControllerNode:
                 if self.phase == 0:
                     self.phase_0()
                 if self.phase == 1:
-                    self.action = 2
                     self.phase_1()
                 if self.phase == 2:
                     self.phase_2()
@@ -404,7 +404,7 @@ class RoboticArmControllerNode:
     def save_information(self):
         """Saves the Q-table, total reward, task status, and phase strategies to CSV files for R analysis."""
         total_reward = self.rl_agent.total_reward
-        task_status = self.task_status
+        task_status = self.draining_status
 
         # Convert Q-table to DataFrame for saving
         q_table = pd.DataFrame(self.rl_agent.q_table)  
@@ -465,22 +465,17 @@ class RoboticArmControllerNode:
         else:
             self.exploration_factor = max(self.exploration_factor * 0.95, 0.20)
 
+
     def reset_msg(self):
         """
         Signals the secondary task that it may also get ready for another attempt.
         """
-        
         self.draining_done = 0
         self.draining_start = 0
         self.orientation = 'None'
         self.original_orientation = None
-        self.task_status = 0
-        self.msg = secondary_task_message()
-        self.msg.handover_successful = 0 
-        # self.msg.draining_starts = 0
-        # self.msg.draining_successful = 0
-        self.send_message()
-
+        self.draining_status = 0
+        self.send_message(reset = False, phase=5)
 
 
 if __name__ == '__main__':
