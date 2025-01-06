@@ -225,7 +225,7 @@ class RobotArmController():
             pass
 
         if self.type == 'fast':
-            velocity = [0.4,0.6]
+            velocity = [0.3,0.6]
         elif self.type == 'slow':
             velocity = [0.1,0.6]
 
@@ -270,7 +270,7 @@ class RobotArmController():
             joint_velocities_goal = [0.5] * 7  
         
         if self.type == 'fast':
-            joint_velocities_goal = [0.8] * 7  
+            joint_velocities_goal = [0.7] * 7  
         elif self.type == 'slow':
             joint_velocities_goal = [0.2] * 7  
         
@@ -402,9 +402,9 @@ class RobotArmController():
 
         duration = 4
         if self.type == 'fast':
-            duration = 5
-        elif self.type == 'slow':
             duration = 3
+        elif self.type == 'slow':
+            duration = 5
 
         # When the hand is reached we will wait a little while to detect human interaction, differs per personality
         interaction_detected = self.detect_human_interaction(duration)

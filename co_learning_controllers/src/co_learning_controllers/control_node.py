@@ -193,7 +193,6 @@ class RoboticArmControllerNode:
         self.task_status = msg.handover_successful
         self.draining_start = msg.draining_starts
         self.draining_done = msg.draining_successful
-        rospy.logwarn(f"task_status:{self.task_status}")
     
     def human_input_callback(self, msg):
         if msg.data:
@@ -215,6 +214,8 @@ class RoboticArmControllerNode:
         Go to the home position and grab the object
         """
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: Home")
+        rospy.logwarn(f"draining start:{self.draining_start}")
+
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
         self.robot_arm_controller.send_joint_trajectory_goal(HOME_POSITION)
         self.hand_controller.send_goal('open')
@@ -236,12 +237,14 @@ class RoboticArmControllerNode:
  
         if self.action == 1:
             while self.draining_start == 0:
+                rospy.logerr(f"task_status:{self.task_status}")
                 rate.sleep()
                 if self.task_status == -1:
                     break
 
         if self.action == 2:
             while self.draining_start == 0:
+                rospy.logerr(f"task_status:{self.task_status}")
                 rate.sleep()
                 if self.task_status == -1:
                     break
@@ -466,16 +469,18 @@ class RoboticArmControllerNode:
         """
         Signals the secondary task that it may also get ready for another attempt.
         """
-        # self.msg.handover_successful = 0 TODO: Test this implementation
-        # self.msg.draining_starts = 0
-        # self.msg.draining_successful = 0
-        # self.send_message()
+        
         self.draining_done = 0
         self.draining_start = 0
         self.orientation = 'None'
         self.original_orientation = None
         self.task_status = 0
         self.msg = secondary_task_message()
+        self.msg.handover_successful = 0 
+        # self.msg.draining_starts = 0
+        # self.msg.draining_successful = 0
+        self.send_message()
+
 
 
 if __name__ == '__main__':
