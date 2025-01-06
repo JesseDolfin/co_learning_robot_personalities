@@ -112,7 +112,6 @@ class RobotArmController():
             # # Ensure lists have correct lengths
             # if len(stiffnes_matrix) != 6 or len(nullspace_reference) != 7 or len(nullspace_stiffness) != 7 or len(nulspace_damping) != 7:
             #     raise ValueError("Stiffness matrices and nullspace parameters must have correct lengths.")
-
             # Update configuration
             self.dynamic_reconfigure_cartesian_impedance_controller_client.update_configuration(
                 {
@@ -179,7 +178,6 @@ class RobotArmController():
             self.hand_detected = True
             self.hand_pose = self.frame_transform(hand_pose)
         
-
     def cartesian_joint_callback(self,data):
         effort = data.effort
         effort_magnitude = np.linalg.norm(effort)
@@ -209,16 +207,10 @@ class RobotArmController():
 
     def joint_trajectory_done_callback(self, status, result):
         self.trajectory_done = True
-        response = self.controller_manager(start_controllers=['/CartesianImpedanceController'],
-                                           stop_controllers=['/JointImpedanceController'], strictness=1,
-                                           start_asap=True, timeout=0.0)
-        if not response.ok:
-            rospy.logerr("Failed to switch controllers")
-        else:
-            rospy.loginfo("Controllers switched")
+        
 
     def send_cartesian_trajectory_goal(self, position, orientation, velocity=None, trajectory_start=None):
-        rospy.loginfo("Sending cartesian trajectory goal: " + str(position) + " and adjusted start: " + str(trajectory_start))
+        rospy.loginfo("Sending cartesian trajectory goal: " + str(position) + "and orientation: " + str(orientation) + "and adjusted start: " + str(trajectory_start))
         if trajectory_start is None:
             start_pose = [99] * 7
         else:
@@ -264,7 +256,6 @@ class RobotArmController():
                                                 self.cartesian_trajectory_feedback_callback)
         rate = rospy.Rate(20)
         while not rospy.is_shutdown() and not self.trajectory_done:
-            rospy.loginfo("waiting for confirmation of good trajectory")
             rate.sleep()
         duration = rospy.Duration(1)
         rospy.sleep(duration)
@@ -272,13 +263,13 @@ class RobotArmController():
 
     def send_joint_trajectory_goal(self, joint_positions_goal, joint_velocities_goal=None):
         rospy.loginfo("Sending joint positions goal: " + str(joint_positions_goal) + " and joint velocities goal:" + str(
-            joint_velocities_goal))
+            joint_velocities_goal)) 
         
         if joint_velocities_goal is None:
-            joint_velocities_goal = [0.5] * 7  
+            joint_velocities_goal = [0.4] * 7  
         
         if self.type == 'fast':
-            joint_velocities_goal = [0.7] * 7  
+            joint_velocities_goal = [0.5] * 7  
         elif self.type == 'slow':
             joint_velocities_goal = [0.3] * 7  
         
@@ -297,10 +288,22 @@ class RobotArmController():
                                                 self.joint_trajectory_feedback_callback)
             rate = rospy.Rate(20)
             while not rospy.is_shutdown() and not self.trajectory_done:
-                rospy.loginfo("waiting for confirmation of good trajectory")
                 rate.sleep()
-            duration = rospy.Duration(2)
+
+            duration = rospy.Duration(0.5)
             rospy.sleep(duration)
+
+            response = self.controller_manager(start_controllers=['/CartesianImpedanceController'],
+                                            stop_controllers=['/JointImpedanceController'], strictness=1,
+                                            start_asap=True, timeout=0.0)
+            if not response.ok:
+                rospy.logerr("Failed to switch controllers")
+            else:
+                rospy.loginfo("Controllers switched")
+        duration = rospy.Duration(2)
+        rospy.sleep(duration)
+        rospy.loginfo(f"position:\n{self.pose.position} \n orientation:\n{self.pose.orientation}")
+ 
             
 
     def detect_human_interaction(self, duration=3.0,wait_for_hand=False):
@@ -330,26 +333,28 @@ class RobotArmController():
         while not rospy.is_shutdown() and (rospy.Time.now() - start_time) < duration_ros:
             effort_magnitude = self._effort_mag_save
             if wait_for_hand:
-                rospy.loginfo(f"hand_status:{self.hand_detected}")
+                pass
 
             if wait_for_hand and self.hand_detected:
                 rospy.loginfo(f"hand detected:{self.hand_detected}")
                 break
 
-            
             if previous_effort_magnitude is not None:
                 effort_delta = abs(effort_magnitude - previous_effort_magnitude)
                 if effort_delta > delta_threshold:
                     interaction_detected = True
                     rospy.loginfo("Human interaction detected based on effort delta.")
                     break
+
+            if self.handover_status in [-1,1]:
+                break
                 
             previous_effort_magnitude = effort_magnitude
             rate.sleep()
             
         return interaction_detected
 
-    def move_towards_hand(self, update=False):
+    def move_towards_hand(self, orientation, update=False):
         """
         Move the robot's end-effector towards the detected hand position.
 
@@ -360,9 +365,26 @@ class RobotArmController():
 
         rate = rospy.Rate(10)
 
+        if orientation == 'drop':
+            x= 0.4832296320259098
+            y= -0.5795903950803025
+            z= 0.4198908834203189
+            w= 0.5042377838711286
+        if orientation == 'serve':
+            x= 0.7313789170730303
+            y= 0.07958882630477747
+            z= -0.6770536018359327
+            w= 0.01867936373379982
+
+        quat = Quaternion()
+        quat.x = x
+        quat.y = y
+        quat.z = z
+        quat.w = w
+
         # We save the position and orientation the first time this function is called as a reference
         if self.fixed_orientation is None or update: 
-            self.fixed_orientation = self.pose.orientation 
+            self.fixed_orientation = quat
             p = self.pose.position
             self.ref_pos = np.array([p.x,p.y,p.z],dtype="float64")
         else:
@@ -467,12 +489,19 @@ if __name__ == '__main__':
 
     controller = RobotArmController()
     controller.send_joint_trajectory_goal(drop,velocity)
+    input("enter")
     controller.send_joint_trajectory_goal(serve,velocity)
+    input("enter")
     controller.send_joint_trajectory_goal(drop,velocity)
+    input("enter")
     controller.send_joint_trajectory_goal(serve,velocity)
+    input("enter")
     controller.send_joint_trajectory_goal(drop,velocity)
+    input("enter")
     controller.send_joint_trajectory_goal(serve,velocity)
+    input("enter")
     controller.send_joint_trajectory_goal(drop,velocity)
+    input("enter")
     controller.send_joint_trajectory_goal(serve,velocity)
     
 

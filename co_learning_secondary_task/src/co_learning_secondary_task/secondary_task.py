@@ -57,8 +57,8 @@ class secondary_task():
         self.reset = msg.reset
         self.phase = msg.phase
 
-        if self.phase == 5:
-            self.send_task_status(start=0, end=0, draining_status=0, time=0)
+        # if self.phase == 5:
+        #     self.send_task_status(start=0, end=0, draining_status=0, time=0)
 
     def check_print_text(self):
         if self.display_text_flag and self.display_text is not None:

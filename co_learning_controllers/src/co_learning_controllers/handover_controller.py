@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 import pygame
 import rospy
-from co_learning_messages.msg import secondary_task_message
+from co_learning_messages.msg import control_status_message
 from std_msgs.msg import Header
 
 class HandoverStatusGUI:
     def __init__(self):
         # Initialize ROS node
         rospy.init_node('handover_status_gui', anonymous=True)
-        self.pub = rospy.Publisher('/Task_status', secondary_task_message, queue_size=10)
-        self.sub = rospy.Subscriber('/Task_status', secondary_task_message, self.message_callback)
-        
-        # Store the latest message
-        self.current_msg = secondary_task_message()
-        
+        rospy.Subscriber('control_status',control_status_message,self.callback)
+        self.pub = rospy.Publisher('control_status',control_status_message,queue_size=1)
+
         # Initialize PyGame
         pygame.init()
         self.screen = pygame.display.set_mode((400, 300))
@@ -31,22 +28,18 @@ class HandoverStatusGUI:
         
         # Status variable
         self.handover_status = 0
-        
-    def message_callback(self, msg):
-        self.current_msg = msg
-        # Reset handover status if reset is True
+        self.reset = False
+
+    def callback(self,msg):
         if msg.reset:
             self.handover_status = 0
+        self.reset = msg.reset
         
-    def publish_message(self,reset=None):
+    def publish_message(self,status):
         # Create new message with same content as current message
-        msg = self.current_msg
-        
-        # Only update the handover_successful field
-        msg.handover_successful = self.handover_status
-
-        if reset is not None:
-            msg.reset = reset
+        msg = control_status_message()
+        msg.task_status = status
+        self.handover_status = status
         
         self.pub.publish(msg)
         
@@ -71,8 +64,8 @@ class HandoverStatusGUI:
         self.screen.blit(status_surface, (20, 160))
         
         # Draw reset status from current message
-        reset_text = f"Reset Status: {self.current_msg.reset}"
-        reset_color = self.BLUE if self.current_msg.reset else self.BLACK
+        reset_text = f"Reset Status: {self.reset}"
+        reset_color = self.BLUE if self.reset else self.BLACK
         reset_surface = self.font.render(reset_text, True, reset_color)
         self.screen.blit(reset_surface, (20, 200))
         
@@ -89,16 +82,11 @@ class HandoverStatusGUI:
                     
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_s:  # Success
-                        self.handover_status = 1
-                        self.publish_message()
+                        self.publish_message(status=1)
                         
                     elif event.key == pygame.K_f:  # Fail
-                        self.handover_status = -1
-                        self.publish_message()
+                        self.publish_message(status=-1)
 
-                    elif event.key == pygame.K_r:  # Fail
-                        self.publish_message(reset=True)
-                        
                     elif event.key == pygame.K_q:  # Quit
                         running = False
             

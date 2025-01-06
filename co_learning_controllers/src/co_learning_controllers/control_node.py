@@ -155,6 +155,7 @@ class RoboticArmControllerNode:
         self.strategy_phase_2 = None
         self.strategy_phase_3 = None
         self.human_input_detected = False
+        self.ori = 'none'
 
         rospy.Subscriber('task_status', secondary_task_message, self.secondary_task_callback)
         rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
@@ -271,8 +272,13 @@ class RoboticArmControllerNode:
         self.robot_arm_controller.send_joint_trajectory_goal(INTERMEDIATE_POSITION)
         self.robot_arm_controller.send_joint_trajectory_goal(position)
 
+        if self.action == 3:
+            self.ori = 'serve'
+        elif self.action ==4:
+            self.ori = 'drop'
+
         if not self.draining_status in [-1,1]:
-            self.robot_arm_controller.move_towards_hand(update=True)
+            self.robot_arm_controller.move_towards_hand(self.ori,update=True)
 
     def phase_3(self):
         """
@@ -282,7 +288,7 @@ class RoboticArmControllerNode:
 
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         if not self.draining_status in [-1,1]:
-            self.robot_arm_controller.move_towards_hand()
+            self.robot_arm_controller.move_towards_hand(self.ori)
 
         if self.human_input_detected:
             human_action = 6
