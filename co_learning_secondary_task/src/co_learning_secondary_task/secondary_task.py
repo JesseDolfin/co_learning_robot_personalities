@@ -374,7 +374,6 @@ class secondary_task():
             message.time_left = time
 
         self.pub.publish(message)
-        # Optionally remove self.msg entirely, so it's never reused
         self.msg = None
 
 
@@ -643,7 +642,7 @@ class secondary_task():
         faulty_force = needle_direction * 45000 * np.sin(difficulty_modifier * self.t / 6) * difficulty_modifier
 
         # Calculate force feedback from impedance controller 
-        self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) #+ faulty_force
+        self.fe = (self.K @ (self.xm - self.xh) - (2 * 0.7 * np.sqrt(np.abs(self.K)) @ self.dxh)) + faulty_force
 
         if self.collision_any:
             self.count += 1
