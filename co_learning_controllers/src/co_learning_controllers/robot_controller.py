@@ -300,7 +300,7 @@ class RobotArmController():
                 rospy.logerr("Failed to switch controllers")
             else:
                 rospy.loginfo("Controllers switched")
-        duration = rospy.Duration(2)
+        duration = rospy.Duration(0.5)
         rospy.sleep(duration)
         rospy.loginfo(f"position:\n{self.pose.position} \n orientation:\n{self.pose.orientation}")
  
@@ -318,7 +318,7 @@ class RobotArmController():
         
         rate = rospy.Rate(30)
         wait_time = rospy.Time.now()
-        wait_duration = rospy.Duration(2) # S
+        wait_duration = rospy.Duration(0.5) # S
 
         # Wait for the arm to settle
         while not rospy.is_shutdown() and rospy.Time.now() - wait_time < wait_duration:

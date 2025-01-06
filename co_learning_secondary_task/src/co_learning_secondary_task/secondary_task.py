@@ -56,6 +56,12 @@ class secondary_task():
     def status_callback(self,msg):
         self.reset = msg.reset
         self.phase = msg.phase
+        
+        if msg.task_status == -1:
+            self.task_failed = True
+
+        if msg.task_status == 1:
+            self.handover_successful = True
 
         if self.phase == 5:
             self.send_task_status(start=0, end=0, draining_status=0, time=0)
