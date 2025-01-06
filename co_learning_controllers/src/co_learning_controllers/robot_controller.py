@@ -12,7 +12,7 @@ from std_msgs.msg import Bool
 from iiwa_impedance_control.msg import CartesianTrajectoryExecutionAction, CartesianTrajectoryExecutionGoal
 from iiwa_impedance_control.msg import JointTrajectoryExecutionAction, JointTrajectoryExecutionGoal
 from co_learning_messages.msg import hand_pose
-from co_learning_messages.msg import secondary_task_message
+from co_learning_messages.msg import secondary_task_message, control_status_message
 from geometry_msgs.msg import Quaternion
 import signal
 import sys
@@ -49,9 +49,10 @@ class RobotArmController():
         
 
     def init_ros(self):
-        self.task_status_sub = rospy.Subscriber("/Task_status", secondary_task_message, self.task_status)
+        self.task_status_sub = rospy.Subscriber("/task_status", secondary_task_message, self.secondary_status)
         self.publish_human_input = rospy.Publisher('/human_input', Bool, queue_size=1)
         self.hand_pose_sub = rospy.Subscriber('/hand_pose', hand_pose, self.hand_pose_callback)
+        rospy.Subscriber('control_status',control_status_message,self.control_status)
         self.joint_state = rospy.Subscriber("/CartesianImpedanceController/joint_states", 
                                             JointState, self.cartesian_joint_callback, queue_size=10)
         # Subscribe to the pose topic
@@ -162,8 +163,11 @@ class RobotArmController():
             raise RuntimeError(f"An unexpected error occurred: {e}")
         
         
-    def task_status(self,msg):
-        self.handover_status = msg.handover_successful
+    def secondary_status(self,msg):
+        self.handover_status = msg.draining_status
+    
+    def control_status(self,msg):
+        self.handover_status = msg.task_status
         
     def hand_pose_callback(self, msg):
         hand_pose = np.array([msg.x, msg.y, msg.z],dtype="float64")

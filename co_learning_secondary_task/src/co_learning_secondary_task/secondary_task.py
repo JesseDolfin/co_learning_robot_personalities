@@ -25,7 +25,6 @@ class secondary_task():
         self.initialise_ros()
         self.initialise_pygame()
         self.initialise_others()
-
         self.start_screen()
  
     def signal_handler(self, sig, frame):

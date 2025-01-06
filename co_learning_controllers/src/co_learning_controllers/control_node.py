@@ -189,7 +189,7 @@ class RoboticArmControllerNode:
 
     def secondary_task_callback(self,msg):
         self.draining_done = msg.draining_successful
-        self.draining_start = msg.draining_start
+        self.draining_start = msg.draining_starts
         self.draining_status = msg.draining_status
     
     def human_input_callback(self, msg):

@@ -4,7 +4,7 @@ from gymnasium import Env
 from gymnasium.spaces import Discrete
 import rospy
 import rosgraph
-from co_learning_messages.msg import secondary_task_message, hand_pose
+from co_learning_messages.msg import secondary_task_message, hand_pose, control_status_message
 from std_msgs.msg import Bool
 
 
@@ -72,9 +72,12 @@ class CoLearn(Env):
 
         self.initialize_ros()
 
-    def status_callback(self, msg):
+    def secondary_task_status_callback(self, msg):
         self.handover_successful = msg.handover_successful
         self.time_left = msg.time_left
+
+    def control_status_callback(self,msg):
+        self.handover_successful = msg.task_status
 
     def hand_pose_callback(self, msg):
         self.orientation = msg.orientation
@@ -91,9 +94,10 @@ class CoLearn(Env):
                 rospy.logwarn(
                     "Cannot initialize node 'Environment' as it has already been initialized."
                 )
-            rospy.Subscriber('Task_status', secondary_task_message, self.status_callback)
+            rospy.Subscriber('task_status', secondary_task_message, self.secondary_task_status_callback)
             rospy.Subscriber('hand_pose', hand_pose, self.hand_pose_callback)
             rospy.Subscriber('human_input', Bool, self.human_input_callback)
+            rospy.Subscriber('control_status', control_status_message, self.control_status_callback)
         else:
             print("ROS is offline! Environment proceeds in offline mode")
 
