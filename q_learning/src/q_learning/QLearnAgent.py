@@ -71,12 +71,12 @@ class QLearningAgent:
                 self.total_reward = 0
                 self.state, self.phase = self.env.reset()
                 self.reset_experience()
-                terminated = False
                 self.initialize = False
-
+                
+            terminated = False
             phase = self.phase
             valid = False
-            while phase == self.phase and not valid:
+            while phase == self.phase and not valid and not terminated:
                 action = self.epsilon_greedy(epsilon)
                 next_state, reward, terminated, info = self.env.step(action)
 

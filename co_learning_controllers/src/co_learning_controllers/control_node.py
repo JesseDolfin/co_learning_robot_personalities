@@ -305,7 +305,7 @@ class RoboticArmControllerNode:
         elif self.action == 6:
             self.hand_controller.send_goal('partial')
         elif self.action == 7:
-            self.hand_controller.send_goal('close_signal') # Gives an auditory indication that something is happening
+            self.hand_controller.send_goal('partial') # Gives an auditory indication that something is happening
             self.hand_controller.send_goal('close')
 
     def phase_4(self):
@@ -319,7 +319,7 @@ class RoboticArmControllerNode:
         self.rl_agent.experience_replay(self.alpha, self.gamma)
 
     def check_end_condition(self):
-        rospy.loginfo(f"Episode: {self.episode}, Phase: 4, Action: Resume_experiment = {self.num_test_runs > self.episode}")
+        rospy.loginfo(f"Episode: {self.episode}, Phase: 5, Action: Resume_experiment = {self.num_test_runs > self.episode}")
         if self.num_test_runs > self.episode:
             self.episode += 1
             self.reset()
@@ -397,6 +397,7 @@ class RoboticArmControllerNode:
                 )
 
             else:
+                self.phase_4() # terminal phase
                 #self.stop_rosbag_recording()
                 self.update_q_table()
                 self.save_information()

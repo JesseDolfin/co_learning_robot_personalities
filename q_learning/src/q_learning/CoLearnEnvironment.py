@@ -186,7 +186,9 @@ class CoLearn(Env):
         return self.state
 
     def step(self, action=None):
+        
         action = self.action_space.sample() if action is None else action
+        #rospy.logwarn(f"action:{action}, phase:{self.phase}, state:{self.state},terminated:{self.terminated}")
         valid_transition = self.check_phase_transition(action)
 
         self.episode_length -= 1
@@ -202,6 +204,8 @@ class CoLearn(Env):
 
         self.info['valid'] = valid_transition
         self.info['phase'] = self.phase
+
+        
 
         return self.state, self.reward, self.terminated, self.info
 
