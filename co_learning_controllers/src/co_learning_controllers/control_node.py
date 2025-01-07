@@ -488,9 +488,10 @@ class RoboticArmControllerNode:
         self.orientation = 'None'
         self.original_orientation = None
         self.draining_status = 0
-        self.send_message(reset = False, phase=5)
         duration=rospy.Duration(1)
         rospy.sleep(duration)
+        self.send_message(reset = False, phase=5)
+        
 
 
 if __name__ == '__main__':

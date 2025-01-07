@@ -212,7 +212,7 @@ class CoLearn(Env):
     def obtain_reward(self, action):
         self.reward = 0
         if self.ros_running:
-            if self.previous_phase == 3 and action == 5:
+            if self.terminated:
                 # This means that the hand is now open
                 rate = rospy.Rate(5)
                 while self.handover_successful == 0:

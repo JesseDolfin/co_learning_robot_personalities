@@ -968,9 +968,9 @@ class secondary_task():
         tries = self.fail_count + self.success_count
 
         flag = True
-        start_time = pygame.time.get_ticks()
+        #start_time = pygame.time.get_ticks()
         while self.run:
-            if pygame.time.get_ticks() - start_time >= 4000:
+            if self.phase == 5:
                 self.send_task_status(start=0, end=0, draining_status=0, time=0)
 
             if self.phase == 5 and flag:
