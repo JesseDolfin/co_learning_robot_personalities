@@ -561,8 +561,7 @@ class secondary_task():
             self.failure_claxon.play()  # Play failure sound
             pygame.time.delay(1000)  # Add delay to make the border visible
             self.time_left = 0
-            if not self.lock:
-                self.send_task_status(draining_status=-1, time=0)
+            self.send_task_status(draining_status=-1, time=0)
             self.reset = False
             self.fail_count += 1
             return True

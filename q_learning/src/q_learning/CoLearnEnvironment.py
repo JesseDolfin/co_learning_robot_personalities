@@ -120,8 +120,10 @@ class CoLearn(Env):
             self.phase = 1
         elif self.state in [5, 6, 7, 8, 9, 10]:
             self.phase = 2
-        elif self.state in [11, 12, 13, 14, 15, 16]:
+        elif self.state in [12, 13, 15, 16]:
             self.phase = 3
+        elif self.state in [11,14]:
+            self.phase = 4
         else:
             rospy.logwarn(f"No valid phase found, phase is: {self.phase}")
 
@@ -164,7 +166,7 @@ class CoLearn(Env):
                 elif action == 7:
                     return 16
 
-        elif self.state in [11, 12, 13, 14, 15, 16]:
+        elif self.state in [11, 12, 13, 14, 15, 16] and self.phase != 4:
             if self.human_input:
                 if action == 5:
                     return 11
@@ -188,7 +190,7 @@ class CoLearn(Env):
         valid_transition = self.check_phase_transition(action)
 
         self.episode_length -= 1
-        self.terminated = self.episode_length <= 0 or (action == 5 and self.phase == 3) or self.handover_successful in [-1,1]
+        self.terminated = self.episode_length <= 0 or self.phase == 4 or self.handover_successful in [-1,1]
 
         self.previous_state = self.state
         self.state = self.update_state(action)

@@ -105,7 +105,7 @@ class RobotArmController():
         nulspace_damping: List[float] = [0.7] * 7,
         seperate_axis: bool = False,
         translational_stiffness: float = 650.0,
-        rotational_stiffness: float = 80.0
+        rotational_stiffness: float = 60.0
     ) -> None:
         """Reconfigure parameters for the Cartesian impedance controller."""
         try:
@@ -210,7 +210,7 @@ class RobotArmController():
         
 
     def send_cartesian_trajectory_goal(self, position, orientation, velocity=None, trajectory_start=None):
-        rospy.loginfo("Sending cartesian trajectory goal: " + str(position) + "and orientation: " + str(orientation) + "and adjusted start: " + str(trajectory_start))
+        rospy.loginfo("Sending cartesian trajectory goal position:\n" + str(position) + "and orientation:\n" + str(orientation) + "and adjusted start:\n" + str(trajectory_start))
         if trajectory_start is None:
             start_pose = [99] * 7
         else:
@@ -222,9 +222,9 @@ class RobotArmController():
             pass
 
         if self.type == 'fast':
-            velocity = [0.3,0.6]
+            velocity = [0.4,0.7]
         elif self.type == 'slow':
-            velocity = [0.1,0.6]
+            velocity = [0.1,0.5]
 
         goal = CartesianTrajectoryExecutionGoal()
         goal_pose_msg = PoseStamped()
@@ -257,12 +257,12 @@ class RobotArmController():
         rate = rospy.Rate(20)
         while not rospy.is_shutdown() and not self.trajectory_done:
             rate.sleep()
-        duration = rospy.Duration(1)
+        duration = rospy.Duration(0.5)
         rospy.sleep(duration)
         
 
     def send_joint_trajectory_goal(self, joint_positions_goal, joint_velocities_goal=None):
-        rospy.loginfo("Sending joint positions goal: " + str(joint_positions_goal) + " and joint velocities goal:" + str(
+        rospy.loginfo("Sending joint positions goal:\n" + str(joint_positions_goal) + " and joint velocities goal:\n" + str(
             joint_velocities_goal)) 
         
         if joint_velocities_goal is None:
@@ -300,10 +300,9 @@ class RobotArmController():
                 rospy.logerr("Failed to switch controllers")
             else:
                 rospy.loginfo("Controllers switched")
-        duration = rospy.Duration(0.5)
-        rospy.sleep(duration)
-        rospy.loginfo(f"position:\n{self.pose.position} \n orientation:\n{self.pose.orientation}")
- 
+
+            duration = rospy.Duration(0.5)
+            rospy.sleep(duration)
             
 
     def detect_human_interaction(self, duration=3.0,wait_for_hand=False):
@@ -317,12 +316,6 @@ class RobotArmController():
         rospy.loginfo(f"Monitoring for human interaction for {duration} seconds...")
         
         rate = rospy.Rate(30)
-        wait_time = rospy.Time.now()
-        wait_duration = rospy.Duration(0.5) # S
-
-        # Wait for the arm to settle
-        while not rospy.is_shutdown() and rospy.Time.now() - wait_time < wait_duration:
-            rate.sleep()
         
         interaction_detected = False
         delta_threshold = 1
@@ -359,7 +352,7 @@ class RobotArmController():
         Move the robot's end-effector towards the detected hand position.
 
         Parameters:
-            update (bool): Whether to update the target's orienation based on the current hand orientation.
+            update (bool): Whether to update the target's orientation based on the current hand orientation.
         """
         rospy.loginfo("Moving towards hand")
 
@@ -394,9 +387,10 @@ class RobotArmController():
         pos = self.pose.position
         current_position = np.array([pos.x,pos.y,pos.z],dtype="float64")
         
-        # We wait until either a hand is detected OR interaction with the arm is detected
-        rospy.loginfo("Waiting to detect hand")
-        self.detect_human_interaction(duration=100,wait_for_hand=True)
+        if update:
+            # We wait until either a hand is detected OR interaction with the arm is detected
+            rospy.loginfo("Waiting to detect hand")
+            self.detect_human_interaction(duration=10,wait_for_hand=True)
 
         # To make sure the arm does not crash into itself we give it the reference position as target if no hand is detected
         if self.hand_detected:
@@ -434,9 +428,9 @@ class RobotArmController():
             rate.sleep()
         rospy.loginfo("Reached the hand position")
 
-        duration = 4
+        duration = 3
         if self.type == 'fast':
-            duration = 3
+            duration = 1
         elif self.type == 'slow':
             duration = 5
 

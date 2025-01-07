@@ -219,7 +219,7 @@ class RoboticArmControllerNode:
         duration = rospy.Duration(2)
         rospy.sleep(duration)
         self.hand_controller.send_goal('close')
-        rospy.logwarn(f"phase{self.phase},terminated{self.terminated}, episode:{self.episode},  task_status:{self.draining_status},  run:{self.run}, action:{self.action}, msg:{self.msg}, draining_start:{self.draining_start}")
+        #rospy.logwarn(f"phase{self.phase},terminated{self.terminated}, episode:{self.episode},  task_status:{self.draining_status},  run:{self.run}, action:{self.action}, msg:{self.msg}, draining_start:{self.draining_start}")
         
     def phase_1(self):
         """
@@ -308,9 +308,10 @@ class RoboticArmControllerNode:
             self.hand_controller.send_goal('close_signal') # Gives an auditory indication that something is happening
             self.hand_controller.send_goal('close')
 
-        if self.draining_status == -1:
-            rospy.loginfo("Handover failed. Terminating episode.")
-            self.terminated = True
+    def phase_4(self):
+        self.send_message(reset = False, phase=4)
+        rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
+        self.hand_controller.send_goal('open')
 
 
     def update_q_table(self):
@@ -384,6 +385,8 @@ class RoboticArmControllerNode:
                     self.phase_2()
                 if self.phase == 3:
                     self.phase_3()
+                if self.phase == 4:
+                    self.phase_4()
 
                 self.action, self.phase, self.terminated = self.rl_agent.train(
                     learning_rate=self.alpha,
@@ -450,7 +453,7 @@ class RoboticArmControllerNode:
                 writer.writeheader()
             writer.writerow(log_data)
 
-        rospy.loginfo(f"Saved information for episode {self.episode}: {log_data}")
+        #rospy.loginfo(f"Saved information for episode {self.episode}: {log_data}")
 
 
     def reset(self):
