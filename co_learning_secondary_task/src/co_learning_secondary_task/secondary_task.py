@@ -950,6 +950,8 @@ class secondary_task():
             return lines
 
     def end_screen(self):
+        # Reset ROS message
+        self.send_task_status(start=0, end=0, draining_status=0, time=0)
         def render_end_texts():
             return [
                 ("Restart Simulation", (0, 0, 0), pygame.font.Font(None, 24)),

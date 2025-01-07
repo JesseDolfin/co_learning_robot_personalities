@@ -9,8 +9,13 @@
 
 <launch>
     <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${node}] [${time}]: ${message}"/>
-    
-    <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen" launch-prefix="gnome-terminal --"/> 
+
+     <arg name="control_node" default="true"/>
+
+    <group if="$(arg control_node)">
+        <node name="control_node" pkg="co_learning_controllers" type="control_node.py" output="screen" launch-prefix="gnome-terminal --"/>
+    </group>
+    <node name="handover_controller" pkg="co_learning_controllers" type="handover_controller.py" output="screen"/>
     <node name="detection" pkg="co_learning_detection" type="detection.py" output="log"/>
     <include file="$(find qb_hand_control)/launch/control_qbhand.launch">
         <arg name="activate_on_initialization" value="true"/>
