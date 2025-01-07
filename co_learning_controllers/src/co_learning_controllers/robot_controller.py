@@ -397,8 +397,9 @@ class RobotArmController():
             target_position_arm = self.hand_pose
         else: target_position_arm = self.ref_pos
 
+        min_height = 0.3
         # Z- value cannot be too low, making sure arm does not smash into table
-        target_position_arm[2] = max(target_position_arm[2], 0.1) 
+        target_position_arm[2] = max(target_position_arm[2], min_height) 
         error = np.linalg.norm(target_position_arm - current_position)
 
         rospy.loginfo(f"hand_error:{error}")
@@ -417,7 +418,7 @@ class RobotArmController():
                 target_position_arm = self.hand_pose
             else: target_position_arm = self.ref_pos
 
-            target_position_arm[2] = max(target_position_arm[2], 0.5) 
+            target_position_arm[2] = max(target_position_arm[2], min_height) 
             self.trajectory_done = False
             self.send_cartesian_trajectory_goal(target_position_arm,self.fixed_orientation)
 
