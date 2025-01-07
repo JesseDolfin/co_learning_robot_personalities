@@ -312,6 +312,8 @@ class RoboticArmControllerNode:
         self.send_message(reset = False, phase=4)
         rospy.loginfo(f"Episode: {self.episode}, Phase: {self.phase}, Action: {self.action}")
         self.hand_controller.send_goal('open')
+        duration =rospy.Duration(4)
+        rospy.sleep(duration) # Give the participant some time to take the object if hand is open
 
 
     def update_q_table(self):

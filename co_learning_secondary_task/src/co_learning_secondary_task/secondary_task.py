@@ -941,8 +941,6 @@ class secondary_task():
             return lines
 
     def end_screen(self):
-        # Reset ROS message
-        self.send_task_status(start=0, end=0, draining_status=0, time=0)
         def render_end_texts():
             return [
                 ("Restart Simulation", (0, 0, 0), pygame.font.Font(None, 24)),
@@ -963,7 +961,6 @@ class secondary_task():
 
         
         self.run = True
-
         button_surface = pygame.Surface((150, 50))
         button_rect = pygame.Rect(0, 0, 150, 50)
         texts = render_end_texts()
@@ -971,7 +968,11 @@ class secondary_task():
         tries = self.fail_count + self.success_count
 
         flag = True
+        start_time = pygame.time.get_ticks()
         while self.run:
+            if pygame.time.get_ticks() - start_time >= 4000:
+                self.send_task_status(start=0, end=0, draining_status=0, time=0)
+
             if self.phase == 5 and flag:
                 self.flag = False
             self.window.blit(self.screenHaptics, (0, 0))
