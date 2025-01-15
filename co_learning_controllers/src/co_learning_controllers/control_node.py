@@ -70,7 +70,7 @@ class RoboticArmControllerNode:
             ['patient', 'impatient', 'leader', 'follower']     
         ]
 
-        self.participant_number = rospy.get_param('/participant_number', 1)
+        self.participant_number = rospy.get_param('/participant_number', -1)
 
         # ROS package and directory setup
         rospack = rospkg.RosPack()
