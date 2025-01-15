@@ -35,11 +35,15 @@ class HandoverStatusGUI:
             self.handover_status = 0
         self.reset = msg.reset
         
-    def publish_message(self,status,reset):
+    def publish_message(self,status=None,reset=None):
         # Create new message with same content as current message
         msg = control_status_message()
-        msg.task_status = status
-        msg.reset = reset
+        if status is not None:
+            msg.task_status = status
+
+        if reset is not None:
+            msg.reset = reset
+            
         self.handover_status = status
         
         self.pub.publish(msg)
@@ -89,7 +93,7 @@ class HandoverStatusGUI:
                         self.publish_message(status=-1)
                     
                     elif event.key == pygame.K_r:
-                        self.publish_message(reset = True)
+                        self.publish_message(reset=True)
 
                     elif event.key == pygame.K_q:  # Quit
                         running = False
