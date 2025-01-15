@@ -297,8 +297,11 @@ average_stability <- all_results %>%
   ) %>%
   mutate(across(where(is.numeric), round, digits = 3))
 
+average_stability <- average_stability%>%
+  filter(Personality != "personality_type_baseline")
+
 # Write out the final aggregated results
 output_file <- file.path(data_collection_dir, "personality_average_stability.csv")
 write.csv(average_stability, file = output_file, row.names = FALSE)
-
+print(average_stability)
 message("Averaged stability and streak metrics per personality type written to: ", output_file)

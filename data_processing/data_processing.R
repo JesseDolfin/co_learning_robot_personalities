@@ -51,14 +51,13 @@ calculate_fluency <- function(form_file) {
   
   # Calculate row means (if multiple rows exist, we take the average)
   fluency_scores <- form_data %>%
-    select(all_of(fluency_columns)) %>%
+    dplyr::select(dplyr::all_of(fluency_columns)) %>%
     rowMeans(na.rm = TRUE)
   
   # If multiple rows, return the mean over all rows
   return(mean(fluency_scores, na.rm = TRUE))
 }
 
-# Compute axis scores from a given form CSV file.
 calculate_axis_scores <- function(form_file) {
   form_data <- read.csv(form_file)
   
@@ -88,7 +87,6 @@ calculate_axis_scores <- function(form_file) {
   # Check if required columns exist
   missing_columns <- setdiff(all_axis_questions, colnames(form_data))
   if (length(missing_columns) > 0) {
-    # Instead of stopping, just warn and return NA values
     warning("Missing axis-related columns: ", paste(missing_columns, collapse = ", "), 
             ". Filling axis scores with NA.")
     return(list(
@@ -105,7 +103,7 @@ calculate_axis_scores <- function(form_file) {
   }
   
   # Process scores for each axis. If no data rows exist, return NA.
-  process_scores <- function(columns) {
+  process_scores <- function(columns, reverse_scores = FALSE) {
     if (nrow(form_data) == 0) {
       return(NA_real_)
     }
@@ -113,27 +111,27 @@ calculate_axis_scores <- function(form_file) {
     scores <- mapply(function(column, reverse) {
       val <- form_data[[column]]
       if (length(val) == 0) {
-        # If no data, return NA
-        return(rep(NA_real_, times=nrow(form_data)))
+        return(rep(NA_real_, times = nrow(form_data)))
       }
       map_score(val, reverse)
     }, columns, is_reversed, SIMPLIFY = FALSE)
     
-    # Combine into a matrix
     scores_matrix <- do.call(cbind, scores)
     if (is.null(dim(scores_matrix))) {
-      # If it's not at least a matrix, return NA
       return(NA_real_)
     }
     
-    # Calculate row means first
     row_means_values <- rowMeans(scores_matrix, na.rm = TRUE)
-    # Then return the mean of the row means (a single score)
-    mean(row_means_values, na.rm = TRUE)
+    # Reverse the direction of scores for Patient-Impatient axis
+    final_score <- mean(row_means_values, na.rm = TRUE)
+    if (reverse_scores) {
+      final_score <- -final_score
+    }
+    return(final_score)
   }
   
   leader_follower_score <- process_scores(axis_columns$leader_follower)
-  patient_impatient_score <- process_scores(axis_columns$patient_impatient)
+  patient_impatient_score <- process_scores(axis_columns$patient_impatient, reverse_scores = TRUE)
   
   return(list(
     Leader_Follower = leader_follower_score,
@@ -141,9 +139,17 @@ calculate_axis_scores <- function(form_file) {
   ))
 }
 
+
 # Analyze logs and compute metrics from a given log file.
 analyze_logs <- function(log_file) {
   results <- read.csv(log_file)
+  
+  # Ensure `total_reward` is numeric; convert if necessary
+  if ("total_reward" %in% colnames(results)) {
+    results$total_reward <- suppressWarnings(as.numeric(results$total_reward))
+  } else {
+    stop("Column 'total_reward' not found in log file: ", log_file)
+  }
   
   # Required columns for strategy analysis
   required_columns <- c("strategy_phase_1", "strategy_phase_2", "strategy_phase_3")
@@ -168,7 +174,7 @@ analyze_logs <- function(log_file) {
   
   # Compute performance metrics
   total_episodes <- nrow(results)
-  successful_episodes <- sum(results$task_status == 1, na.rm = TRUE)
+  successful_episodes <- sum(results$task_status %in% c(0, 1), na.rm = TRUE)
   MPR <- (successful_episodes / total_episodes) * 100
   cumulative_reward <- sum(results$total_reward, na.rm = TRUE)
   
@@ -180,9 +186,12 @@ analyze_logs <- function(log_file) {
   )
 }
 
+
 # Analyze all personality folders for a single participant
 analyze_participant <- function(participant_dir) {
+  # List subfolders (each representing a personality), but exclude "baseline" or "Baseline"
   personality_folders <- list.dirs(participant_dir, recursive = FALSE)
+  personality_folders <- personality_folders[!tolower(basename(personality_folders)) %in% c("personality_type_baseline")]
   
   # For storing results
   results_list <- lapply(personality_folders, function(folder) {
@@ -211,7 +220,7 @@ analyze_participant <- function(participant_dir) {
     }
     
     # Reorder columns: Put Participant, Personality first
-    metrics <- metrics %>% relocate(Participant, Personality)
+    metrics <- metrics %>% dplyr::relocate(Participant, Personality)
     return(metrics)
   })
   
@@ -219,24 +228,41 @@ analyze_participant <- function(participant_dir) {
   do.call(dplyr::bind_rows, results_list)
 }
 
-# Analyze all participants in the data collection folder
+
+
+# Updated analyze_all_participants function
 analyze_all_participants <- function(data_collection_dir) {
-  participant_folders <- list.dirs(data_collection_dir, recursive = FALSE)
+  # Path to the co_learning_summary.csv file
+  summary_file <- file.path(data_collection_dir, "co_learning_summary.csv")
   
-  all_results_list <- lapply(participant_folders, analyze_participant)
+  # Read the co_learning_summary.csv file
+  co_learning_summary <- read.csv(summary_file)
+  
+  # Filter participants where Co_Learning_Occurred is TRUE
+  valid_participants <- co_learning_summary %>%
+    filter(Co_Learning_Occurred == TRUE) %>%
+    pull(Participant)
+  
+  # Get full paths for valid participant directories
+  participant_folders <- list.dirs(data_collection_dir, recursive = FALSE)
+  valid_folders <- participant_folders[basename(participant_folders) %in% valid_participants]
+  
+  # Analyze only the valid participant folders
+  all_results_list <- lapply(valid_folders, analyze_participant)
+  
+  # Combine results into a single data frame
   all_results <- bind_rows(all_results_list)
   
   return(all_results)
 }
 
-# ---------------------------
 # Main script execution
-# ---------------------------
 final_results <- analyze_all_participants(data_collection_dir)
 
 # Print and write final results
 print(final_results)
-output_file <- file.path(data_collection_dir, "summary_metrics_all_participants.csv")
+output_file <- file.path(data_collection_dir, "summary_metrics.csv")
 write_csv(final_results, output_file)
 
-message("Summary metrics have been written to: ", output_file)
+message("Filtered summary metrics have been written to: ", output_file)
+

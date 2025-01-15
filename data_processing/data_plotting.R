@@ -10,6 +10,7 @@ library(viridis)    # For a nicer color palette
 #'
 #' @param data_collection_dir Directory where the CSV summary file is located.
 #' @param summary_csv_filename Name of the summary CSV file.
+#' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle.
 #' 
 #' This function:
 #' 1. Reads a summary CSV file with participant results.
@@ -17,9 +18,11 @@ library(viridis)    # For a nicer color palette
 #' 3. Creates and saves:
 #'    - A bar chart with mean performance rates (MPR) by personality.
 #'    - A bar chart with average cumulative rewards by personality.
-#'    - A Cartesian scatter plot of personality traits (patient-impatient vs leader-follower)
-#'      normalized and displayed within a unit circle.
-plot_summary_metrics <- function(data_collection_dir, summary_csv_filename) {
+#'    - A Cartesian scatter plot (optionally restricted to a circle) of personality traits 
+#'      (patient-impatient vs leader-follower).
+plot_summary_metrics <- function(data_collection_dir, 
+                                 summary_csv_filename,
+                                 circle = TRUE) {
   
   # Construct the full path to the CSV file
   summary_csv_path <- file.path(data_collection_dir, summary_csv_filename)
@@ -86,7 +89,8 @@ plot_summary_metrics <- function(data_collection_dir, summary_csv_filename) {
         legend.position = "none"
       )
     if (!is.null(y_limits)) {
-      p <- p + scale_y_continuous(limits = y_limits, labels = if (percent_scale) scales::percent_format(scale = 1) else waiver())
+      p <- p + scale_y_continuous(limits = y_limits, 
+                                  labels = if (percent_scale) scales::percent_format(scale = 1) else waiver())
     } else if (percent_scale) {
       p <- p + scale_y_continuous(labels = scales::percent_format(scale = 1))
     }
@@ -146,19 +150,23 @@ plot_summary_metrics <- function(data_collection_dir, summary_csv_filename) {
       .groups = "drop"
     ) %>%
     mutate(
-      # Normalize to [-1, 1]
+      # Normalize to [-1, 1] if the data range is assumed to be ±3 originally
       Avg_Patient_Impatient = Avg_Patient_Impatient / 3,
       Avg_Leader_Follower = Avg_Leader_Follower / 3
-    ) %>%
-    rowwise() %>%
-    mutate(
-      # Ensure points lie within unit circle by normalizing if radius > 1
-      radius = sqrt(Avg_Patient_Impatient^2 + Avg_Leader_Follower^2),
-      Avg_Patient_Impatient = ifelse(radius > 1, Avg_Patient_Impatient / radius, Avg_Patient_Impatient),
-      Avg_Leader_Follower = ifelse(radius > 1, Avg_Leader_Follower / radius, Avg_Leader_Follower)
-    ) %>%
-    ungroup() %>%
-    select(-radius)
+    )
+  
+  # If circle == TRUE, restrict to unit circle if radius > 1
+  if (circle) {
+    polar_plot_data <- polar_plot_data %>%
+      rowwise() %>%
+      mutate(
+        radius = sqrt(Avg_Patient_Impatient^2 + Avg_Leader_Follower^2),
+        Avg_Patient_Impatient = ifelse(radius > 1, Avg_Patient_Impatient / radius, Avg_Patient_Impatient),
+        Avg_Leader_Follower = ifelse(radius > 1, Avg_Leader_Follower / radius, Avg_Leader_Follower)
+      ) %>%
+      ungroup() %>%
+      select(-radius)
+  }
   
   # Generate circle coordinates for reference lines
   circle_coords <- function(r=1, n=200) {
@@ -184,24 +192,31 @@ plot_summary_metrics <- function(data_collection_dir, summary_csv_filename) {
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
     # Plot points
-    geom_point(data = polar_plot_data, aes(x = Avg_Patient_Impatient, y = Avg_Leader_Follower, color = Personality), size = 4) +
-    # Personality legend
+    geom_point(
+      data = polar_plot_data, 
+      aes(x = Avg_Patient_Impatient, y = Avg_Leader_Follower, color = Personality), 
+      size = 4
+    ) +
     scale_color_viridis_d(option = "D", end = 0.9) +
-    # Axis limits and labels
     coord_fixed(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
     theme_minimal(base_size = 14) +
     labs(
-      title = "Perceived Personality Scores",
+      title = if (circle) "Perceived Personality Scores (Restricted to Circle)" else "Perceived Personality Scores",
       subtitle = "Patient (-1) to Impatient (1) vs. Follower (-1) to Leader (1)",
       x = "← Patient           Impatient → ",
       y = "← Follower           Leader → "
     ) +
-    theme(legend.position = "right",
-          axis.title.x = element_text(margin = margin(t = 10)),
-          axis.title.y = element_text(margin = margin(r = 10)))
+    theme(
+      legend.position = "right",
+      axis.title.x = element_text(margin = margin(t = 10)),
+      axis.title.y = element_text(margin = margin(r = 10))
+    )
   
-  # Save the polar plot
-  polar_plot_filename <- file.path(data_collection_dir, "Cartesian_Scatter_Plot_with_Circle.png")
+  # Save the polar (Cartesian) plot
+  polar_plot_filename <- file.path(
+    data_collection_dir, 
+    if(circle) "Cartesian_Scatter_Plot_with_Circle.png" else "Cartesian_Scatter_Plot_noCircle.png"
+  )
   ggsave(filename = polar_plot_filename, plot = polar_plot, width = 8, height = 8)
   message("Polar personality plot saved to: ", polar_plot_filename)
   
@@ -211,6 +226,7 @@ plot_summary_metrics <- function(data_collection_dir, summary_csv_filename) {
   print(polar_plot)
 }
 
+
 data_collection_dir <- "/home/jesse/thesis/src/co_learning_robot_personalities/data_collection"
-summary_csv_filename <- "summary_metrics_all_participants.csv"
-plot_summary_metrics(data_collection_dir, summary_csv_filename)
+summary_csv_filename <- "summary_metrics.csv"
+plot_summary_metrics(data_collection_dir, summary_csv_filename, circle = TRUE)
