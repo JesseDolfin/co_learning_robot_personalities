@@ -156,19 +156,36 @@ analyze_logs <- function(log_file) {
   missing_columns <- setdiff(required_columns, colnames(results))
   
   if (length(missing_columns) > 0) {
-    warning("Missing columns in log file: ", paste(missing_columns, collapse = ", "),
-            ". Strategy analysis will be skipped.")
+    warning(
+      "Missing columns in log file: ", 
+      paste(missing_columns, collapse = ", "),
+      ". Strategy analysis will be skipped."
+    )
     strategy_changes <- NA
     stability <- NA
   } else {
+    # Combine all phases into one "joint" strategy label per episode
     results$joint_strategy <- paste(
       results$strategy_phase_1,
       results$strategy_phase_2,
       results$strategy_phase_3,
       sep = "-"
     )
+    
+    # Count how many times strategy changes from one episode to the next
+    # (same as before)
     strategy_changes <- sum(diff(as.numeric(factor(results$joint_strategy))) != 0)
-    stable_episodes <- sum(results$joint_strategy == results$joint_strategy[1])
+    
+    # -- NEW stability definition --
+    # For each episode i (from the 2nd onward), check if it matches the previous one.
+    # We'll say an episode is "stable" if it has the same strategy as episode i-1.
+    
+    # The first episode has no previous episode, so let's just mark it stable by default (count = 1).
+    stable_episodes <- 1 + sum(
+      results$joint_strategy[-1] == results$joint_strategy[-nrow(results)]
+    )
+    
+    # Then define "stability" as fraction of episodes that are stable
     stability <- stable_episodes / nrow(results)
   }
   
@@ -185,6 +202,7 @@ analyze_logs <- function(log_file) {
     Stability = stability
   )
 }
+
 
 
 # Analyze all personality folders for a single participant
@@ -259,10 +277,26 @@ analyze_all_participants <- function(data_collection_dir) {
 # Main script execution
 final_results <- analyze_all_participants(data_collection_dir)
 
+# 1) Read the Q-table metrics
+q_table_metrics_path <- file.path(data_collection_dir, "q_table_metrics.csv")
+if (!file.exists(q_table_metrics_path)) {
+  warning("q_table_metrics.csv not found at: ", q_table_metrics_path)
+} else {
+  q_table_metrics <- read_csv(q_table_metrics_path)
+  
+  # 2) Merge with final_results by (Participant, Personality)
+  #    - left_join() will retain all rows from final_results 
+  #      and add matching columns from q_table_metrics
+  final_results <- final_results %>%
+    left_join(q_table_metrics, by = c("Participant", "Personality"))
+}
+
 # Print and write final results
 print(final_results)
+
 output_file <- file.path(data_collection_dir, "summary_metrics.csv")
 write_csv(final_results, output_file)
 
-message("Filtered summary metrics have been written to: ", output_file)
+message("Filtered summary metrics (including Q-table metrics) have been written to: ", output_file)
+
 

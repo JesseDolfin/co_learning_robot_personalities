@@ -5,9 +5,7 @@ library(tidyr)
 library(stringr)
 library(assertthat) # For column existence checks
 library(viridis)    # For a nicer color palette
-# For correlation matrix plot
-# install.packages("GGally")
-library(GGally)
+library(GGally) # For correlation matrix plot
 
 #' Plot summary metrics and personality identification on a polar plot.
 #'
@@ -16,21 +14,12 @@ library(GGally)
 #' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle for the polar plot.
 #' 
 #' This function:
-#' 1. Reads a summary CSV file with participant results.
+#' 1. Reads a summary CSV file with participant results (including Q-table metrics).
 #' 2. Filters out baseline personality data.
 #' 3. Creates and saves:
-#'    - A bar chart with mean performance rates (MPR) by personality
-#'    - A bar chart with average cumulative rewards by personality
-#'    - A bar chart with average fluency score by personality
-#'    - A polar (Cartesian) scatter plot of perceived personality traits
-#'    - A bar chart: total strategy changes by personality
-#'    - A scatter plot: stability vs. total strategy changes
-#'    - A scatter plot: MPR vs. cumulative reward
-#'    - A box plot: stability by personality
-#'    - A scatter plot: fluency score vs. MPR
-#'    - A scatter plot: total strategy changes vs. fluency score (new)
-#'    - A scatter plot: stability vs. fluency score (new)
-#'    - An optional correlation matrix of key numeric columns
+#'    - Existing bar charts/scatter plots for Mean Performance Rate, Cumulative Reward, etc.
+#'    - Bar charts (optional) for new Q-table metrics like Average Entropy, QGap, Convergence, ActionConsistency
+#'    - Updates the correlation matrix to include these new columns if present
 #'
 plot_summary_metrics <- function(data_collection_dir, 
                                  summary_csv_filename,
@@ -58,6 +47,8 @@ plot_summary_metrics <- function(data_collection_dir,
     "Fluency_Score",
     "Total_Strategy_Changes",
     "Stability"
+    # If you want your new Q-table columns to be considered "required",
+    # add them here. For now, we won't treat them as strictly required.
   )
   
   missing_cols <- setdiff(required_cols, colnames(final_results))
@@ -148,24 +139,58 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
-  # 2) Cumulative Reward Plot
+  # 2) Cumulative Reward Plot (Separated by Negative vs. Positive)
   # ------------------------------------------------------------------------
   if (all(c("Cumulative_Reward", "Personality") %in% colnames(final_results))) {
-    summary_reward <- summarize_with_ci(final_results, "Cumulative_Reward", "Personality")
-    cumulative_reward_plot <- create_bar_plot(
-      df = summary_reward,
-      x_col = "Personality",
-      y_col = "Mean",
-      fill_col = "Personality",
-      y_label = "Cumulative Reward",
-      title = "Average Cumulative Reward by Personality",
-      subtitle = "Error bars represent ±1 SD"
-    )
     
-    cumulative_reward_plot_filename <- file.path(data_collection_dir, "Average_Cumulative_Reward.png")
+    # 1) Add a column to distinguish negative vs. positive reward
+    final_results <- final_results %>%
+      mutate(
+        Reward_Type = ifelse(Cumulative_Reward < 0, "Negative", "Positive")
+      )
+    
+    # 2) Summarize by Personality *and* Reward_Type
+    summary_reward <- final_results %>%
+      group_by(Personality, Reward_Type) %>%
+      summarise(
+        Mean = mean(Cumulative_Reward, na.rm = TRUE),
+        SD   = sd(Cumulative_Reward, na.rm = TRUE),
+        N    = sum(!is.na(Cumulative_Reward)),
+        CI   = ifelse(N > 1, qt(0.975, df = N - 1) * (SD / sqrt(N)), NA_real_),
+        .groups = "drop"
+      )
+    
+    # 3) Create a grouped bar chart with specific colors
+    cumulative_reward_plot <- ggplot(summary_reward, 
+                                     aes(x = Personality, 
+                                         y = Mean, 
+                                         fill = Reward_Type)) +
+      geom_bar(stat = "identity", 
+               position = position_dodge(width = 0.8), 
+               width = 0.7) +
+      geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD),
+                    position = position_dodge(width = 0.8),
+                    width = 0.2) +
+      scale_fill_manual(values = c("Negative" = "red", "Positive" = "green")) +
+      theme_minimal(base_size = 14) +
+      labs(
+        title = "Average Cumulative Reward by Personality",
+        subtitle = "Grouped by Negative vs. Positive Rewards",
+        x = "Personality",
+        y = "Cumulative Reward"
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right"
+      )
+    
+    # 4) Save the plot
+    cumulative_reward_plot_filename <- file.path(data_collection_dir, "Average_Cumulative_Reward_PosNeg.png")
     ggsave(filename = cumulative_reward_plot_filename, plot = cumulative_reward_plot, width = 8, height = 6)
-    message("Cumulative Reward plot saved to: ", cumulative_reward_plot_filename)
+    message("Cumulative Reward (Neg vs. Pos) plot saved to: ", cumulative_reward_plot_filename)
   }
+  
+  
   
   # ------------------------------------------------------------------------
   # 3) Fluency Plot
@@ -263,10 +288,6 @@ plot_summary_metrics <- function(data_collection_dir,
     ggsave(filename = polar_plot_filename, plot = polar_plot, width = 8, height = 8)
     message("Polar personality plot saved to: ", polar_plot_filename)
   }
-  
-  # ------------------------------------------------------------------------
-  # Additional Plots
-  # ------------------------------------------------------------------------
   
   # ------------------------------------------------------------------------
   # 5) Bar Chart: Total Strategy Changes by Personality
@@ -387,7 +408,7 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
-  # 10) Scatter Plot: Total Strategy Changes vs. Fluency Score (NEW)
+  # 10) Scatter Plot: Total Strategy Changes vs. Fluency Score 
   # ------------------------------------------------------------------------
   scatter_changes_vs_fluency <- NULL
   if (all(c("Total_Strategy_Changes", "Fluency_Score") %in% colnames(final_results))) {
@@ -411,7 +432,7 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
-  # 11) Scatter Plot: Stability vs. Fluency Score (NEW)
+  # 11) Scatter Plot: Stability vs. Fluency Score 
   # ------------------------------------------------------------------------
   scatter_stability_vs_fluency <- NULL
   if (all(c("Stability", "Fluency_Score") %in% colnames(final_results))) {
@@ -435,28 +456,65 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
-  # 12) Correlation Matrix for Key Numeric Columns (Optional)
+  # 12) Bar Charts for Q-table Metrics (Avg_Entropy, Avg_QGap, etc.)
   # ------------------------------------------------------------------------
-  correlation_matrix_plot <- NULL
+  # Example: create bar charts for each metric if the column exists
+  qtable_metrics <- c("Avg_Entropy", "Avg_QGap", "Avg_Convergence", "Avg_ActionConsistency")
+  
+  for (metric_col in qtable_metrics) {
+    if (all(c(metric_col, "Personality") %in% colnames(final_results))) {
+      
+      # Summarize data by metric_col
+      summary_metric <- summarize_with_ci(final_results, metric_col, "Personality")
+      
+      # Create bar plot
+      metric_plot <- create_bar_plot(
+        df = summary_metric,
+        x_col = "Personality",
+        y_col = "Mean",
+        fill_col = "Personality",
+        y_label = metric_col,
+        title = paste("Average", metric_col, "by Personality"),
+        subtitle = "Error bars represent ±1 SD"
+      )
+      
+      # Save the plot
+      plot_filename <- file.path(data_collection_dir, paste0("Average_", metric_col, ".png"))
+      ggsave(filename = plot_filename, plot = metric_plot, width = 8, height = 6)
+      message(metric_col, " plot saved to: ", plot_filename)
+    }
+  }
+  
+  # ------------------------------------------------------------------------
+  # 13) Correlation Matrix for Key Numeric Columns
+  # ------------------------------------------------------------------------
+  
+  # Here, we add Q-table metrics to numeric_cols if they exist:
+  potential_qtable_cols <- c("Avg_Entropy", "Avg_QGap", "Avg_Convergence", "Avg_ActionConsistency")
   numeric_cols <- c(
     "Mean_Performance_Rate", "Cumulative_Reward", "Total_Strategy_Changes", 
-    "Stability", "Fluency_Score", "Patient_Impatient_Score", "Leader_Follower_Score"
+    "Stability", "Fluency_Score", "Patient_Impatient_Score", "Leader_Follower_Score",
+    potential_qtable_cols
   )
+  
   # Check if these columns are present
   numeric_cols_present <- intersect(numeric_cols, colnames(final_results))
   
+  correlation_matrix_plot <- NULL
   if (length(numeric_cols_present) > 1) {
     # Build a numeric-only dataframe
     numeric_data <- final_results %>%
       select(all_of(numeric_cols_present))
     
     # Create a correlation matrix plot using GGally
-    correlation_matrix_plot <- ggpairs(numeric_data,
-                                       title = "Correlation Matrix of Key Metrics")
+    correlation_matrix_plot <- ggpairs(
+      numeric_data,
+      title = "Correlation Matrix of Key Metrics"
+    )
     
     corr_matrix_filename <- file.path(data_collection_dir, "Correlation_Matrix.png")
     # ggsave can handle ggpairs objects, but might need a slight tweak in size
-    ggsave(filename = corr_matrix_filename, plot = correlation_matrix_plot, width = 10, height = 10)
+    ggsave(filename = corr_matrix_filename, plot = correlation_matrix_plot, width = 20, height = 20)
     message("Correlation matrix plot saved to: ", corr_matrix_filename)
   }
   
@@ -475,6 +533,8 @@ plot_summary_metrics <- function(data_collection_dir,
   if (!is.null(scatter_fluency_vs_mpr))       print(scatter_fluency_vs_mpr)
   if (!is.null(scatter_changes_vs_fluency))   print(scatter_changes_vs_fluency)
   if (!is.null(scatter_stability_vs_fluency)) print(scatter_stability_vs_fluency)
+  # new bar charts were created in the loop, not stored as separate variables
+  
   if (!is.null(correlation_matrix_plot))      print(correlation_matrix_plot)
 }
 

@@ -1,43 +1,52 @@
+################################################################################
 # Load necessary libraries
+################################################################################
 library(dplyr)
 library(stringr)
 
+################################################################################
+# Global Configuration
+################################################################################
 data_collection_dir <- "/home/jesse/thesis/src/co_learning_robot_personalities/data_collection"
 
-# Set the threshold 'a' for streak length
+# Threshold 'a' for streak length
 a <- 3
 
+################################################################################
+# Helper Functions
+################################################################################
+
 # -------------------------------------------------------------------
-# Helper function: Determine the phase based on the state number
+# Determine the phase based on the state number
 # -------------------------------------------------------------------
 get_phase <- function(state) {
-  # Mapping state ranges to phases:
-  # state == 0 -> phase 0
-  # 1:4 -> phase 1
-  # 5:10 -> phase 2
-  # 11:16 -> phase 3
+  # Match the Python phase definition logic
   if (state == 0) {
     return(0)
-  } else if (state %in% 1:4) {
+  } else if (state %in% c(1, 2, 3, 4)) {
     return(1)
-  } else if (state %in% 5:10) {
+  } else if (state %in% c(5, 6, 7, 8, 9, 10)) {
     return(2)
-  } else if (state %in% 11:16) {
+  } else if (state %in% c(12, 13, 15, 16, 17)) {
     return(3)
+  } else if (state %in% c(11, 14)) {
+    return(4)
   } else {
     warning("No valid phase found for state: ", state)
     return(NA_integer_)
   }
 }
 
+
 # -------------------------------------------------------------------
-# Given a Q-table, pick for each phase the action corresponding to the single highest Q-value.
+# Given a Q-table, pick for each phase the action corresponding
+# to the single highest Q-value.
 # -------------------------------------------------------------------
 compute_actions_per_phase <- function(q_table) {
   states <- 0:(nrow(q_table)-1)
   phases <- sapply(states, get_phase)
   
-  actions_per_phase <- integer(4) # store chosen action for phases 0 to 3
+  actions_per_phase <- integer(4)  # store chosen action for phases 0 to 3
   
   for (p in 0:3) {
     phase_states <- which(phases == p)
@@ -63,44 +72,8 @@ compute_actions_per_phase <- function(q_table) {
 }
 
 # -------------------------------------------------------------------
-# Analyze all Q_tables in a given Q_table directory (for a single personality).
-# Returns a matrix of dimensions (#episodes x 4), where rows = episodes, cols = phases.
-# -------------------------------------------------------------------
-analyze_personality <- function(q_table_path) {
-  q_table_files <- list.files(q_table_path, pattern="Q_table_\\d+\\.csv", full.names=TRUE)
-  
-  if (length(q_table_files) == 0) {
-    warning("No Q-tables found in: ", q_table_path)
-    return(matrix(NA, nrow=0, ncol=4))
-  }
-  
-  # Extract episode from filename and sort by episode number to ensure proper ordering
-  episode_numbers <- as.integer(str_extract(basename(q_table_files), "(?<=Q_table_)\\d+"))
-  order_idx <- order(episode_numbers)
-  q_table_files <- q_table_files[order_idx]
-  
-  all_phase_actions <- lapply(q_table_files, function(f) {
-    q_table <- tryCatch({
-      read.csv(f, header=FALSE)
-    }, error = function(e) {
-      warning("Error reading Q-table: ", f, " - ", e$message)
-      return(NULL)
-    })
-    
-    if (is.null(q_table)) {
-      return(rep(NA, 4))
-    }
-    
-    # Compute chosen action per phase
-    compute_actions_per_phase(q_table)
-  })
-  
-  phase_action_matrix <- do.call(rbind, all_phase_actions)
-  return(phase_action_matrix)
-}
-
-# -------------------------------------------------------------------
-# Original stability count function (consecutive identical pairs)
+# Count how many consecutive identical pairs of actions
+# in consecutive episodes (older "stability" metric).
 # -------------------------------------------------------------------
 count_stability <- function(actions_per_phase_matrix) {
   # actions_per_phase_matrix: rows = episodes, cols = phases
@@ -114,14 +87,15 @@ count_stability <- function(actions_per_phase_matrix) {
 }
 
 # -------------------------------------------------------------------
-# New function to count streaks and longest streak based on a threshold 'a'
+# Count streaks of length >= a for each sequence
+# (Used in new streak metrics).
 # -------------------------------------------------------------------
 count_streaks <- function(actions, a) {
   if (length(actions) == 0 || all(is.na(actions))) {
     return(list(streak_count = 0, longest_streak = 0))
   }
   
-  actions <- na.omit(actions) # remove NA if any
+  actions <- na.omit(actions) # remove NAs if any
   if (length(actions) == 0) {
     return(list(streak_count = 0, longest_streak = 0))
   }
@@ -162,13 +136,11 @@ count_streaks <- function(actions, a) {
 }
 
 # -------------------------------------------------------------------
-# Function to apply streak counting per phase
+# Apply streak counting per phase
 # -------------------------------------------------------------------
 compute_streak_metrics <- function(actions_per_phase_matrix, a) {
   # actions_per_phase_matrix: rows = episodes, cols = phases
-  # Returns two matrices: streak_count_per_phase and longest_streak_per_phase
-  # each with one row (since it's for a single participant/personality) and 4 columns (one per phase)
-  
+  # Returns two vectors (StreakCount, LongestStreak) each length=4
   if (nrow(actions_per_phase_matrix) == 0) {
     # No data
     return(list(
@@ -192,19 +164,230 @@ compute_streak_metrics <- function(actions_per_phase_matrix, a) {
   return(list(StreakCount = streak_counts, LongestStreak = longest_streaks))
 }
 
+################################################################################
+# New Metrics for Q-table Analysis (Entropy, Gap, Convergence, Consistency)
+################################################################################
+
 # -------------------------------------------------------------------
-# Main code: 
-# 1) Iterate over all participants and personalities, 
-# 2) Compute stability counts,
-# 3) Compute streak metrics,
-# 4) Aggregate results by personality type,
-# 5) Write out personality_average_stability.csv
+# Softmax of a numeric vector (for computing entropy).
 # -------------------------------------------------------------------
+softmax <- function(x, temp=1.0) {
+  exp_x <- exp(x / temp)
+  exp_x / sum(exp_x)
+}
+
+# -------------------------------------------------------------------
+# Shannon Entropy of a probability distribution vector.
+# -------------------------------------------------------------------
+shannon_entropy <- function(prob_vec) {
+  prob_vec <- prob_vec[prob_vec > 0]  # avoid log(0)
+  -sum(prob_vec * log(prob_vec))
+}
+
+# -------------------------------------------------------------------
+# 1) Entropy of Q-values:
+#    - Convert each state’s Q-values to a softmax distribution
+#    - Compute Shannon entropy
+#    - Average across states
+# -------------------------------------------------------------------
+compute_q_entropy <- function(q_table) {
+  num_states <- nrow(q_table)
+  entropies <- numeric(num_states)
+  
+  for (s in seq_len(num_states)) {
+    p_actions <- softmax(q_table[s, ])
+    entropies[s] <- shannon_entropy(p_actions)
+  }
+  mean(entropies, na.rm = TRUE)
+}
+
+# -------------------------------------------------------------------
+# 2) Average Q-value Gap:
+#    - For each state, find difference between highest and 2nd highest action
+#    - Average across states
+# -------------------------------------------------------------------
+compute_q_gap <- function(q_table) {
+  # Ensure q_table is a numeric matrix
+  q_table <- as.matrix(q_table)
+  mode(q_table) <- "numeric"  # Ensure all entries are numeric
+  
+  num_states <- nrow(q_table)
+  gaps <- numeric(num_states)
+  
+  for (s in seq_len(num_states)) {
+    # Extract row as a numeric vector
+    row_vals <- q_table[s, ]
+    
+    # Handle missing or invalid rows
+    if (is.null(row_vals) || all(is.na(row_vals))) {
+      gaps[s] <- NA
+      next
+    }
+    
+    # Sort and compute the gap
+    sorted_vals <- sort(row_vals, decreasing = TRUE)
+    if (length(sorted_vals) < 2) {
+      gaps[s] <- NA
+    } else {
+      gaps[s] <- sorted_vals[1] - sorted_vals[2]
+    }
+  }
+  
+  # Return mean of gaps
+  mean(gaps, na.rm = TRUE)
+}
+
+
+# -------------------------------------------------------------------
+# 3) Convergence Rate:
+#    - L1 distance between Q-tables from consecutive episodes
+# -------------------------------------------------------------------
+compute_q_distance <- function(q_table1, q_table2) {
+  if (any(dim(q_table1) != dim(q_table2))) {
+    warning("Q-tables have different dimensions.")
+    return(NA)
+  }
+  sum(abs(q_table1 - q_table2))  # L1 norm
+}
+
+# -------------------------------------------------------------------
+# 4) Action Consistency:
+#    - For each state, check if best action in table1 == best action in table2
+#    - Fraction of states consistent
+# -------------------------------------------------------------------
+action_consistency_for_two_tables <- function(q_table1, q_table2) {
+  if (any(dim(q_table1) != dim(q_table2))) {
+    warning("Q-tables have different dimensions for action consistency.")
+    return(NA)
+  }
+  
+  num_states <- nrow(q_table1)
+  consistent_count <- 0
+  
+  for (s in seq_len(num_states)) {
+    best_action_1 <- which.max(q_table1[s, ])
+    best_action_2 <- which.max(q_table2[s, ])
+    if (best_action_1 == best_action_2) {
+      consistent_count <- consistent_count + 1
+    }
+  }
+  
+  consistent_count / num_states
+}
+
+################################################################################
+# Main Analysis Function
+################################################################################
+
+# -------------------------------------------------------------------
+# Analyze all Q_tables in a given Q_table directory (for a single personality).
+# Returns:
+#   1) phase_action_matrix (#episodes x 4), rows = episodes, cols = phases
+#   2) metrics_df (data frame of episode-level new metrics:
+#      Episode, Entropy, AvgQGap, Convergence, ActionConsistency)
+# -------------------------------------------------------------------
+analyze_personality <- function(q_table_path) {
+  q_table_files <- list.files(q_table_path, pattern="Q_table_\\d+\\.csv", full.names=TRUE)
+  
+  if (length(q_table_files) == 0) {
+    warning("No Q-tables found in: ", q_table_path)
+    return(list(
+      phase_action_matrix = matrix(NA, nrow=0, ncol=4),
+      metrics_df = data.frame()
+    ))
+  }
+  
+  # Sort by episode number to ensure proper ordering
+  temp_vec <- str_extract(basename(q_table_files), "Q_table_\\d+")
+  # Then remove the "Q_table_" part
+  temp_vec <- str_remove(temp_vec, "Q_table_")
+  # Now convert to integer
+  episode_numbers <- as.integer(temp_vec)
+  
+  order_idx <- order(episode_numbers)
+  q_table_files <- q_table_files[order_idx]
+  episode_numbers <- episode_numbers[order_idx]
+  
+  phase_action_list <- list()
+  
+  
+  # Storage for new Q-table-based metrics
+  metrics_list <- list()
+  
+  previous_q_table <- NULL
+  
+  
+  for (i in seq_along(q_table_files)) {
+    f <- q_table_files[i]
+    episode <- episode_numbers[i]
+    
+    q_table <- tryCatch({
+      read.csv(f, header=FALSE)
+    }, error = function(e) {
+      warning("Error reading Q-table: ", f, " - ", e$message)
+      return(NULL)
+    })
+    
+    if (is.null(q_table)) {
+      # If there's an error reading, store NAs
+      phase_action_list[[i]] <- rep(NA, 4)
+      metrics_list[[i]] <- data.frame(
+        Episode = episode,
+        Entropy = NA,
+        AvgQGap = NA,
+        Convergence = NA,
+        ActionConsistency = NA
+      )
+      next
+    }
+   
+    
+    # 1) Phase-based best-action analysis
+    actions_per_phase <- compute_actions_per_phase(q_table)
+    phase_action_list[[i]] <- actions_per_phase
+
+    # 2) Compute new metrics
+    entropy_val <- compute_q_entropy(q_table)
+
+    q_gap_val   <- compute_q_gap(q_table)
+
+    if (!is.null(previous_q_table)) {
+      convergence_val    <- compute_q_distance(previous_q_table, q_table)
+      consistency_val    <- action_consistency_for_two_tables(previous_q_table, q_table)
+    } else {
+      convergence_val    <- NA
+      consistency_val    <- NA
+    }
+    
+    previous_q_table <- q_table
+
+    
+    metrics_list[[i]] <- data.frame(
+      Episode           = episode,
+      Entropy           = entropy_val,
+      AvgQGap           = q_gap_val,
+      Convergence       = convergence_val,
+      ActionConsistency = consistency_val
+    )
+  }
+  
+  phase_action_matrix <- do.call(rbind, phase_action_list)
+  metrics_df <- do.call(rbind, metrics_list)
+  
+  return(list(
+    phase_action_matrix = phase_action_matrix,
+    metrics_df          = metrics_df
+  ))
+}
+
+################################################################################
+# Main Code
+################################################################################
 
 participants <- list.dirs(data_collection_dir, recursive=FALSE, full.names=TRUE)
 participants <- participants[grepl("participant_", basename(participants))]
 
-# Initialize an empty data frame to store all results
+# 1) Data Frame to store old metrics (stability, streaks) aggregated by participant/personality
 all_results <- data.frame(
   Participant = character(),
   Personality = character(),
@@ -223,10 +406,23 @@ all_results <- data.frame(
   stringsAsFactors = FALSE
 )
 
+# 2) Data Frame to store new Q-table-based metrics (per-episode & then aggregated)
+all_metrics <- data.frame(
+  Participant = character(),
+  Personality = character(),
+  Episode = integer(),
+  Entropy = numeric(),
+  AvgQGap = numeric(),
+  Convergence = numeric(),
+  ActionConsistency = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Loop over participants and personalities
 for (participant_dir in participants) {
   participant_name <- basename(participant_dir)
   
-  # List personality directories for this participant
+  # List personality directories
   personality_dirs <- list.dirs(participant_dir, recursive=FALSE, full.names=TRUE)
   personality_dirs <- personality_dirs[grepl("personality_type_", basename(personality_dirs))]
   
@@ -239,69 +435,108 @@ for (participant_dir in participants) {
       warning("No Q_tables directory for: ", personality_dir)
       next
     }
-    
+
     # Analyze personality
-    phase_action_matrix <- analyze_personality(q_table_path)
+
+    analysis_res <- analyze_personality(q_table_path)
+    phase_action_matrix <- analysis_res$phase_action_matrix
+    metrics_df <- analysis_res$metrics_df
     
     if (nrow(phase_action_matrix) == 0) {
       # No data, skip
       next
     }
     
-    # Compute old stability metric (consecutive identical pairs)
+    # -------------------------------
+    # 1) Old metrics: stability, streaks
+    # -------------------------------
     final_stability <- count_stability(phase_action_matrix)
-    
-    # Compute new streak metrics
     streak_res <- compute_streak_metrics(phase_action_matrix, a)
     
-    # Add a row to all_results
     new_row <- data.frame(
-      Participant = participant_name,
-      Personality = personality_name,
-      Stability_Phase0 = final_stability[1],
-      Stability_Phase1 = final_stability[2],
-      Stability_Phase2 = final_stability[3],
-      Stability_Phase3 = final_stability[4],
-      StreakCount_Phase0 = streak_res$StreakCount[1],
-      StreakCount_Phase1 = streak_res$StreakCount[2],
-      StreakCount_Phase2 = streak_res$StreakCount[3],
-      StreakCount_Phase3 = streak_res$StreakCount[4],
-      LongestStreak_Phase0 = streak_res$LongestStreak[1],
-      LongestStreak_Phase1 = streak_res$LongestStreak[2],
-      LongestStreak_Phase2 = streak_res$LongestStreak[3],
-      LongestStreak_Phase3 = streak_res$LongestStreak[4],
+      Participant           = participant_name,
+      Personality           = personality_name,
+      Stability_Phase0      = final_stability[1],
+      Stability_Phase1      = final_stability[2],
+      Stability_Phase2      = final_stability[3],
+      Stability_Phase3      = final_stability[4],
+      StreakCount_Phase0    = streak_res$StreakCount[1],
+      StreakCount_Phase1    = streak_res$StreakCount[2],
+      StreakCount_Phase2    = streak_res$StreakCount[3],
+      StreakCount_Phase3    = streak_res$StreakCount[4],
+      LongestStreak_Phase0  = streak_res$LongestStreak[1],
+      LongestStreak_Phase1  = streak_res$LongestStreak[2],
+      LongestStreak_Phase2  = streak_res$LongestStreak[3],
+      LongestStreak_Phase3  = streak_res$LongestStreak[4],
       stringsAsFactors = FALSE
     )
     
     all_results <- rbind(all_results, new_row)
+    
+    # -------------------------------
+    # 2) New Q-table-based metrics (per-episode)
+    # -------------------------------
+    if (nrow(metrics_df) > 0) {
+      metrics_df$Participant <- participant_name
+      metrics_df$Personality <- personality_name
+      metrics_df <- metrics_df[, c("Participant", "Personality", "Episode",
+                                   "Entropy", "AvgQGap", "Convergence", "ActionConsistency")]
+
+      all_metrics <- rbind(all_metrics, metrics_df)
+    }
   }
 }
 
-# Now compute the average stability and streak metrics per personality type
+################################################################################
+# Aggregate Results (per-participant, per-personality)
+################################################################################
+
+# 1) Average stability & streak metrics (per-participant, per-personality)
 average_stability <- all_results %>%
-  group_by(Personality) %>%
+  group_by(Participant, Personality) %>%         # <--- group by participant + personality
   summarize(
-    Avg_Stability_Phase0 = mean(Stability_Phase0, na.rm = TRUE),
-    Avg_Stability_Phase1 = mean(Stability_Phase1, na.rm = TRUE),
-    Avg_Stability_Phase2 = mean(Stability_Phase2, na.rm = TRUE),
-    Avg_Stability_Phase3 = mean(Stability_Phase3, na.rm = TRUE),
-    Avg_StreakCount_Phase0 = mean(StreakCount_Phase0, na.rm = TRUE),
-    Avg_StreakCount_Phase1 = mean(StreakCount_Phase1, na.rm = TRUE),
-    Avg_StreakCount_Phase2 = mean(StreakCount_Phase2, na.rm = TRUE),
-    Avg_StreakCount_Phase3 = mean(StreakCount_Phase3, na.rm = TRUE),
-    Avg_LongestStreak_Phase0 = mean(LongestStreak_Phase0, na.rm = TRUE),
-    Avg_LongestStreak_Phase1 = mean(LongestStreak_Phase1, na.rm = TRUE),
-    Avg_LongestStreak_Phase2 = mean(LongestStreak_Phase2, na.rm = TRUE),
-    Avg_LongestStreak_Phase3 = mean(LongestStreak_Phase3, na.rm = TRUE),
+    Avg_Stability_Phase0       = mean(Stability_Phase0, na.rm = TRUE),
+    Avg_Stability_Phase1       = mean(Stability_Phase1, na.rm = TRUE),
+    Avg_Stability_Phase2       = mean(Stability_Phase2, na.rm = TRUE),
+    Avg_Stability_Phase3       = mean(Stability_Phase3, na.rm = TRUE),
+    Avg_StreakCount_Phase0     = mean(StreakCount_Phase0, na.rm = TRUE),
+    Avg_StreakCount_Phase1     = mean(StreakCount_Phase1, na.rm = TRUE),
+    Avg_StreakCount_Phase2     = mean(StreakCount_Phase2, na.rm = TRUE),
+    Avg_StreakCount_Phase3     = mean(StreakCount_Phase3, na.rm = TRUE),
+    Avg_LongestStreak_Phase0   = mean(LongestStreak_Phase0, na.rm = TRUE),
+    Avg_LongestStreak_Phase1   = mean(LongestStreak_Phase1, na.rm = TRUE),
+    Avg_LongestStreak_Phase2   = mean(LongestStreak_Phase2, na.rm = TRUE),
+    Avg_LongestStreak_Phase3   = mean(LongestStreak_Phase3, na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  mutate(across(where(is.numeric), round, digits = 3))
-
-average_stability <- average_stability%>%
+  # Convert numeric columns to 3 decimal places
+  mutate(across(where(is.numeric), round, digits = 3)) %>%
+  # (Optional) remove baseline if you do not want to include it
   filter(Personality != "personality_type_baseline")
 
-# Write out the final aggregated results
-output_file <- file.path(data_collection_dir, "personality_average_stability.csv")
+# Write out aggregated stability & streak metrics
+output_file <- file.path(data_collection_dir, "participant_personality_average_stability.csv")
 write.csv(average_stability, file = output_file, row.names = FALSE)
 print(average_stability)
-message("Averaged stability and streak metrics per personality type written to: ", output_file)
+message("Averaged stability and streak metrics (per participant, per personality) written to: ", output_file)
+
+
+# 2) Average new metrics (per-participant, per-personality)
+average_metrics <- all_metrics %>%
+  group_by(Participant, Personality) %>%         # <--- group by participant + personality
+  summarize(
+    Avg_Entropy            = mean(as.numeric(Entropy), na.rm = TRUE),
+    Avg_QGap               = mean(as.numeric(AvgQGap), na.rm = TRUE),
+    Avg_Convergence        = mean(as.numeric(Convergence), na.rm = TRUE),
+    Avg_ActionConsistency  = mean(as.numeric(ActionConsistency), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(across(where(is.numeric), round, digits = 3)) %>%
+  filter(Personality != "personality_type_baseline")
+
+# Write out aggregated new Q-table-based metrics
+output_file_new <- file.path(data_collection_dir, "q_table_metrics.csv")
+write.csv(average_metrics, file = output_file_new, row.names = FALSE)
+print(average_metrics)
+message("Averaged new Q-table metrics (per participant, per personality) written to: ", output_file_new)
+
