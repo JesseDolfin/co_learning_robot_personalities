@@ -5,43 +5,65 @@ library(tidyr)
 library(stringr)
 library(assertthat) # For column existence checks
 library(viridis)    # For a nicer color palette
+# For correlation matrix plot
+# install.packages("GGally")
+library(GGally)
 
 #' Plot summary metrics and personality identification on a polar plot.
 #'
 #' @param data_collection_dir Directory where the CSV summary file is located.
 #' @param summary_csv_filename Name of the summary CSV file.
-#' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle.
+#' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle for the polar plot.
 #' 
 #' This function:
 #' 1. Reads a summary CSV file with participant results.
 #' 2. Filters out baseline personality data.
 #' 3. Creates and saves:
-#'    - A bar chart with mean performance rates (MPR) by personality.
-#'    - A bar chart with average cumulative rewards by personality.
-#'    - A Cartesian scatter plot (optionally restricted to a circle) of personality traits 
-#'      (patient-impatient vs leader-follower).
+#'    - A bar chart with mean performance rates (MPR) by personality
+#'    - A bar chart with average cumulative rewards by personality
+#'    - A bar chart with average fluency score by personality
+#'    - A polar (Cartesian) scatter plot of perceived personality traits
+#'    - A bar chart: total strategy changes by personality
+#'    - A scatter plot: stability vs. total strategy changes
+#'    - A scatter plot: MPR vs. cumulative reward
+#'    - A box plot: stability by personality
+#'    - A scatter plot: fluency score vs. MPR
+#'    - A scatter plot: total strategy changes vs. fluency score (new)
+#'    - A scatter plot: stability vs. fluency score (new)
+#'    - An optional correlation matrix of key numeric columns
+#'
 plot_summary_metrics <- function(data_collection_dir, 
                                  summary_csv_filename,
                                  circle = TRUE) {
   
-  # Construct the full path to the CSV file
+  # ------------------------------------------------------------------------
+  # 0) Load data
+  # ------------------------------------------------------------------------
   summary_csv_path <- file.path(data_collection_dir, summary_csv_filename)
   
-  # Check if the CSV file exists
   if (!file.exists(summary_csv_path)) {
     stop("The summary CSV file does not exist at path: ", summary_csv_path)
   }
   
-  # Load the results
   final_results <- read.csv(summary_csv_path)
   
-  # Check necessary columns
-  required_cols <- c("Participant", "Personality", "Mean_Performance_Rate", 
-                     "Cumulative_Reward", "Patient_Impatient_Score", "Leader_Follower_Score")
+  # Check for necessary columns; if some are missing, we just warn
+  required_cols <- c(
+    "Participant", 
+    "Personality", 
+    "Mean_Performance_Rate",
+    "Cumulative_Reward", 
+    "Patient_Impatient_Score", 
+    "Leader_Follower_Score",
+    "Fluency_Score",
+    "Total_Strategy_Changes",
+    "Stability"
+  )
   
   missing_cols <- setdiff(required_cols, colnames(final_results))
   if (length(missing_cols) > 0) {
-    warning("The following required columns are missing: ", paste(missing_cols, collapse=", "))
+    warning("The following required columns are missing: ", 
+            paste(missing_cols, collapse = ", "))
   }
   
   # Filter out baseline personality if present
@@ -55,9 +77,9 @@ plot_summary_metrics <- function(data_collection_dir,
       Personality = as.factor(Personality)
     )
   
-  # ---------------------------------------------------------------
-  # Helper functions for summarizing and plotting
-  # ---------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # Helper Functions
+  # ------------------------------------------------------------------------
   
   summarize_with_ci <- function(data, measure_col, group_col = "Personality") {
     # Summarize data by group_col, computing mean, sd, and 95% CI
@@ -65,14 +87,15 @@ plot_summary_metrics <- function(data_collection_dir,
       group_by(!!sym(group_col)) %>%
       summarise(
         Mean = mean(.data[[measure_col]], na.rm = TRUE),
-        SD = sd(.data[[measure_col]], na.rm = TRUE),
-        N = sum(!is.na(.data[[measure_col]])),
-        CI = ifelse(N > 1, qt(0.975, df = N - 1) * (SD / sqrt(N)), NA_real_),
+        SD   = sd(.data[[measure_col]], na.rm = TRUE),
+        N    = sum(!is.na(.data[[measure_col]])),
+        CI   = ifelse(N > 1, qt(0.975, df = N - 1) * (SD / sqrt(N)), NA_real_),
         .groups = "drop"
       )
   }
   
-  create_bar_plot <- function(df, x_col, y_col, fill_col, y_label, title, subtitle = NULL, y_limits = NULL, percent_scale = FALSE) {
+  create_bar_plot <- function(df, x_col, y_col, fill_col, y_label, title,
+                              subtitle = NULL, y_limits = NULL, percent_scale = FALSE) {
     p <- ggplot(df, aes(x = .data[[x_col]], y = Mean, fill = .data[[fill_col]])) +
       geom_bar(stat = "identity", width = 0.7) +
       geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2) +
@@ -88,145 +111,374 @@ plot_summary_metrics <- function(data_collection_dir,
         axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "none"
       )
+    
     if (!is.null(y_limits)) {
-      p <- p + scale_y_continuous(limits = y_limits, 
-                                  labels = if (percent_scale) scales::percent_format(scale = 1) else waiver())
+      p <- p + scale_y_continuous(
+        limits = y_limits, 
+        labels = if (percent_scale) scales::percent_format(scale = 1) else waiver()
+      )
     } else if (percent_scale) {
+      # Convert y-axis to percentages
       p <- p + scale_y_continuous(labels = scales::percent_format(scale = 1))
     }
+    
     return(p)
   }
   
-  # ---------------------------------------------------------------
-  # MPR Plot
-  # ---------------------------------------------------------------
-  summary_mpr <- summarize_with_ci(final_results, "Mean_Performance_Rate", "Personality")
-  mpr_plot <- create_bar_plot(
-    df = summary_mpr,
-    x_col = "Personality",
-    y_col = "Mean",
-    fill_col = "Personality",
-    y_label = "Mean Performance Rate (%)",
-    title = "Mean Performance Rate by Personality",
-    subtitle = "Error bars represent ±1 SD",
-    y_limits = c(0, 100),
-    percent_scale = TRUE
-  )
-  
-  # Save the MPR plot
-  mpr_plot_filename <- file.path(data_collection_dir, "Average_Mean_Performance_Rate.png")
-  ggsave(filename = mpr_plot_filename, plot = mpr_plot, width = 8, height = 6)
-  message("MPR plot saved to: ", mpr_plot_filename)
-  
-  # ---------------------------------------------------------------
-  # Cumulative Reward Plot
-  # ---------------------------------------------------------------
-  summary_reward <- summarize_with_ci(final_results, "Cumulative_Reward", "Personality")
-  cumulative_reward_plot <- create_bar_plot(
-    df = summary_reward,
-    x_col = "Personality",
-    y_col = "Mean",
-    fill_col = "Personality",
-    y_label = "Cumulative Reward",
-    title = "Average Cumulative Reward by Personality",
-    subtitle = "Error bars represent ±1 SD"
-  )
-  
-  # Save the Cumulative Reward plot
-  cumulative_reward_plot_filename <- file.path(data_collection_dir, "Average_Cumulative_Reward.png")
-  ggsave(filename = cumulative_reward_plot_filename, plot = cumulative_reward_plot, width = 8, height = 6)
-  message("Cumulative Reward plot saved to: ", cumulative_reward_plot_filename)
-  
-  # ---------------------------------------------------------------
-  # Polar Plot for Personality Scores
-  # ---------------------------------------------------------------
-  
-  # Compute averages and normalize Patient-Impatient and Leader-Follower scores
-  polar_plot_data <- final_results %>%
-    group_by(Personality) %>%
-    summarise(
-      Avg_Patient_Impatient = mean(Patient_Impatient_Score, na.rm = TRUE),
-      Avg_Leader_Follower = mean(Leader_Follower_Score, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    mutate(
-      # Normalize to [-1, 1] if the data range is assumed to be ±3 originally
-      Avg_Patient_Impatient = Avg_Patient_Impatient / 3,
-      Avg_Leader_Follower = Avg_Leader_Follower / 3
+  # ------------------------------------------------------------------------
+  # 1) Mean Performance Rate (MPR) Plot
+  # ------------------------------------------------------------------------
+  if (all(c("Mean_Performance_Rate", "Personality") %in% colnames(final_results))) {
+    summary_mpr <- summarize_with_ci(final_results, "Mean_Performance_Rate", "Personality")
+    mpr_plot <- create_bar_plot(
+      df = summary_mpr,
+      x_col = "Personality",
+      y_col = "Mean",
+      fill_col = "Personality",
+      y_label = "Mean Performance Rate (%)",
+      title = "Mean Performance Rate by Personality",
+      subtitle = "Error bars represent ±1 SD",
+      y_limits = c(0, 100),
+      percent_scale = TRUE
     )
+    
+    mpr_plot_filename <- file.path(data_collection_dir, "Average_Mean_Performance_Rate.png")
+    ggsave(filename = mpr_plot_filename, plot = mpr_plot, width = 8, height = 6)
+    message("MPR plot saved to: ", mpr_plot_filename)
+  }
   
-  # If circle == TRUE, restrict to unit circle if radius > 1
-  if (circle) {
-    polar_plot_data <- polar_plot_data %>%
-      rowwise() %>%
-      mutate(
-        radius = sqrt(Avg_Patient_Impatient^2 + Avg_Leader_Follower^2),
-        Avg_Patient_Impatient = ifelse(radius > 1, Avg_Patient_Impatient / radius, Avg_Patient_Impatient),
-        Avg_Leader_Follower = ifelse(radius > 1, Avg_Leader_Follower / radius, Avg_Leader_Follower)
+  # ------------------------------------------------------------------------
+  # 2) Cumulative Reward Plot
+  # ------------------------------------------------------------------------
+  if (all(c("Cumulative_Reward", "Personality") %in% colnames(final_results))) {
+    summary_reward <- summarize_with_ci(final_results, "Cumulative_Reward", "Personality")
+    cumulative_reward_plot <- create_bar_plot(
+      df = summary_reward,
+      x_col = "Personality",
+      y_col = "Mean",
+      fill_col = "Personality",
+      y_label = "Cumulative Reward",
+      title = "Average Cumulative Reward by Personality",
+      subtitle = "Error bars represent ±1 SD"
+    )
+    
+    cumulative_reward_plot_filename <- file.path(data_collection_dir, "Average_Cumulative_Reward.png")
+    ggsave(filename = cumulative_reward_plot_filename, plot = cumulative_reward_plot, width = 8, height = 6)
+    message("Cumulative Reward plot saved to: ", cumulative_reward_plot_filename)
+  }
+  
+  # ------------------------------------------------------------------------
+  # 3) Fluency Plot
+  # ------------------------------------------------------------------------
+  if (all(c("Fluency_Score", "Personality") %in% colnames(final_results))) {
+    summary_fluency <- summarize_with_ci(final_results, "Fluency_Score", "Personality")
+    fluency_plot <- create_bar_plot(
+      df = summary_fluency,
+      x_col = "Personality",
+      y_col = "Mean",
+      fill_col = "Personality",
+      y_label = "Average Fluency Score",
+      title = "Average Fluency Score by Personality",
+      subtitle = "Error bars represent ±1 SD"
+    )
+    
+    fluency_plot_filename <- file.path(data_collection_dir, "Average_Fluency_Score.png")
+    ggsave(filename = fluency_plot_filename, plot = fluency_plot, width = 8, height = 6)
+    message("Fluency plot saved to: ", fluency_plot_filename)
+  }
+  
+  # ------------------------------------------------------------------------
+  # 4) Polar (Cartesian) Plot of Perceived Personality
+  # ------------------------------------------------------------------------
+  # Only create if we have scores for both axes
+  if (all(c("Patient_Impatient_Score", "Leader_Follower_Score") %in% colnames(final_results))) {
+    polar_plot_data <- final_results %>%
+      group_by(Personality) %>%
+      summarise(
+        Avg_Patient_Impatient = mean(Patient_Impatient_Score, na.rm = TRUE),
+        Avg_Leader_Follower   = mean(Leader_Follower_Score, na.rm = TRUE),
+        .groups = "drop"
       ) %>%
-      ungroup() %>%
-      select(-radius)
+      mutate(
+        # Example normalization if range is ±3
+        Avg_Patient_Impatient = Avg_Patient_Impatient / 3,
+        Avg_Leader_Follower   = Avg_Leader_Follower / 3
+      )
+    
+    if (circle) {
+      polar_plot_data <- polar_plot_data %>%
+        rowwise() %>%
+        mutate(
+          radius = sqrt(Avg_Patient_Impatient^2 + Avg_Leader_Follower^2),
+          Avg_Patient_Impatient = ifelse(radius > 1, Avg_Patient_Impatient / radius, Avg_Patient_Impatient),
+          Avg_Leader_Follower   = ifelse(radius > 1, Avg_Leader_Follower / radius, Avg_Leader_Follower)
+        ) %>%
+        ungroup() %>%
+        select(-radius)
+    }
+    
+    circle_coords <- function(r = 1, n = 200) {
+      tibble(
+        x = r * cos(seq(0, 2*pi, length.out = n)),
+        y = r * sin(seq(0, 2*pi, length.out = n))
+      )
+    }
+    
+    circle1 <- circle_coords(1)
+    circle2 <- circle_coords(0.75)
+    circle3 <- circle_coords(0.5)
+    circle4 <- circle_coords(0.25)
+    
+    polar_plot <- ggplot() +
+      geom_path(data = circle1, aes(x = x, y = y), color = "black") +
+      geom_path(data = circle2, aes(x = x, y = y), color = "black", linetype = "dotted") +
+      geom_path(data = circle3, aes(x = x, y = y), color = "black", linetype = "dotted") +
+      geom_path(data = circle4, aes(x = x, y = y), color = "black", linetype = "dotted") +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+      geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
+      geom_point(
+        data = polar_plot_data, 
+        aes(x = Avg_Patient_Impatient, y = Avg_Leader_Follower, color = Personality), 
+        size = 4
+      ) +
+      scale_color_viridis_d(option = "D", end = 0.9) +
+      coord_fixed(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
+      theme_minimal(base_size = 14) +
+      labs(
+        title = if (circle) "Perceived Personality Scores (Restricted to Circle)" else "Perceived Personality Scores",
+        subtitle = "Patient (-1) to Impatient (1) vs. Follower (-1) to Leader (1)",
+        x = "← Patient           Impatient → ",
+        y = "← Follower           Leader → "
+      ) +
+      theme(
+        legend.position = "right",
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10))
+      )
+    
+    polar_plot_filename <- file.path(
+      data_collection_dir, 
+      if(circle) "Cartesian_Scatter_Plot_with_Circle.png" else "Cartesian_Scatter_Plot_noCircle.png"
+    )
+    ggsave(filename = polar_plot_filename, plot = polar_plot, width = 8, height = 8)
+    message("Polar personality plot saved to: ", polar_plot_filename)
   }
   
-  # Generate circle coordinates for reference lines
-  circle_coords <- function(r=1, n=200) {
-    tibble(
-      x = r * cos(seq(0, 2*pi, length.out = n)),
-      y = r * sin(seq(0, 2*pi, length.out = n))
+  # ------------------------------------------------------------------------
+  # Additional Plots
+  # ------------------------------------------------------------------------
+  
+  # ------------------------------------------------------------------------
+  # 5) Bar Chart: Total Strategy Changes by Personality
+  # ------------------------------------------------------------------------
+  bar_plot_strategy_changes <- NULL
+  if (all(c("Total_Strategy_Changes", "Personality") %in% colnames(final_results))) {
+    summary_changes <- summarize_with_ci(final_results, "Total_Strategy_Changes", "Personality")
+    bar_plot_strategy_changes <- create_bar_plot(
+      df = summary_changes,
+      x_col = "Personality",
+      y_col = "Mean",
+      fill_col = "Personality",
+      y_label = "Mean Total Strategy Changes",
+      title = "Mean Total Strategy Changes by Personality",
+      subtitle = "Error bars represent ±1 SD"
     )
+    
+    sc_plot_filename <- file.path(data_collection_dir, "Mean_Total_Strategy_Changes.png")
+    ggsave(filename = sc_plot_filename, plot = bar_plot_strategy_changes, width = 8, height = 6)
+    message("Strategy Changes plot saved to: ", sc_plot_filename)
   }
   
-  # Concentric circles at different radii
-  circle1 <- circle_coords(1)
-  circle2 <- circle_coords(0.75)
-  circle3 <- circle_coords(0.5)
-  circle4 <- circle_coords(0.25)
+  # ------------------------------------------------------------------------
+  # 6) Scatter Plot: Stability vs. Total Strategy Changes
+  # ------------------------------------------------------------------------
+  scatter_stability_vs_changes <- NULL
+  if (all(c("Stability", "Total_Strategy_Changes") %in% colnames(final_results))) {
+    scatter_stability_vs_changes <- ggplot(final_results,
+                                           aes(x = Total_Strategy_Changes, 
+                                               y = Stability, 
+                                               color = Personality)) +
+      geom_point(size = 3, alpha = 0.7) +
+      theme_minimal(base_size = 14) +
+      scale_color_viridis_d(end = 0.9) +
+      labs(
+        title = "Stability vs. Total Strategy Changes",
+        x = "Total Strategy Changes",
+        y = "Stability (0 - 1)"
+      ) +
+      theme(legend.position = "right")
+    
+    stab_vs_ch_filename <- file.path(data_collection_dir, "Stability_vs_Strategy_Changes.png")
+    ggsave(filename = stab_vs_ch_filename, plot = scatter_stability_vs_changes, width = 8, height = 6)
+    message("Stability vs. Changes plot saved to: ", stab_vs_ch_filename)
+  }
   
-  polar_plot <- ggplot() +
-    # Draw reference circles
-    geom_path(data = circle1, aes(x = x, y = y), color = "black") +
-    geom_path(data = circle2, aes(x = x, y = y), color = "black", linetype = "dotted") +
-    geom_path(data = circle3, aes(x = x, y = y), color = "black", linetype = "dotted") +
-    geom_path(data = circle4, aes(x = x, y = y), color = "black", linetype = "dotted") +
-    # Add horizontal and vertical reference lines
-    geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
-    # Plot points
-    geom_point(
-      data = polar_plot_data, 
-      aes(x = Avg_Patient_Impatient, y = Avg_Leader_Follower, color = Personality), 
-      size = 4
-    ) +
-    scale_color_viridis_d(option = "D", end = 0.9) +
-    coord_fixed(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
-    theme_minimal(base_size = 14) +
-    labs(
-      title = if (circle) "Perceived Personality Scores (Restricted to Circle)" else "Perceived Personality Scores",
-      subtitle = "Patient (-1) to Impatient (1) vs. Follower (-1) to Leader (1)",
-      x = "← Patient           Impatient → ",
-      y = "← Follower           Leader → "
-    ) +
-    theme(
-      legend.position = "right",
-      axis.title.x = element_text(margin = margin(t = 10)),
-      axis.title.y = element_text(margin = margin(r = 10))
-    )
+  # ------------------------------------------------------------------------
+  # 7) Scatter Plot: Mean Performance Rate vs. Cumulative Reward
+  # ------------------------------------------------------------------------
+  scatter_mpr_vs_reward <- NULL
+  if (all(c("Mean_Performance_Rate", "Cumulative_Reward") %in% colnames(final_results))) {
+    scatter_mpr_vs_reward <- ggplot(final_results,
+                                    aes(x = Mean_Performance_Rate, 
+                                        y = Cumulative_Reward, 
+                                        color = Personality)) +
+      geom_point(size = 3, alpha = 0.7) +
+      theme_minimal(base_size = 14) +
+      scale_color_viridis_d(end = 0.9) +
+      labs(
+        title = "Mean Performance Rate (%) vs. Cumulative Reward",
+        x = "Mean Performance Rate (%)",
+        y = "Cumulative Reward"
+      ) +
+      theme(legend.position = "right")
+    
+    mpr_vs_cr_filename <- file.path(data_collection_dir, "MPR_vs_Reward.png")
+    ggsave(filename = mpr_vs_cr_filename, plot = scatter_mpr_vs_reward, width = 8, height = 6)
+    message("MPR vs. Reward plot saved to: ", mpr_vs_cr_filename)
+  }
   
-  # Save the polar (Cartesian) plot
-  polar_plot_filename <- file.path(
-    data_collection_dir, 
-    if(circle) "Cartesian_Scatter_Plot_with_Circle.png" else "Cartesian_Scatter_Plot_noCircle.png"
+  # ------------------------------------------------------------------------
+  # 8) Box Plot: Stability by Personality
+  # ------------------------------------------------------------------------
+  box_stability <- NULL
+  if (all(c("Stability", "Personality") %in% colnames(final_results))) {
+    box_stability <- ggplot(final_results, 
+                            aes(x = Personality, y = Stability, fill = Personality)) +
+      geom_boxplot(alpha = 0.7, outlier.shape = 16, outlier.size = 2) +
+      theme_minimal(base_size = 14) +
+      scale_fill_viridis_d(end = 0.9) +
+      labs(
+        title = "Stability Distribution by Personality",
+        x = "Personality",
+        y = "Stability (0 - 1)"
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none"
+      )
+    
+    stability_box_filename <- file.path(data_collection_dir, "Stability_by_Personality.png")
+    ggsave(filename = stability_box_filename, plot = box_stability, width = 8, height = 6)
+    message("Stability box plot saved to: ", stability_box_filename)
+  }
+  
+  # ------------------------------------------------------------------------
+  # 9) Scatter Plot: Fluency Score vs. Mean Performance Rate
+  # ------------------------------------------------------------------------
+  scatter_fluency_vs_mpr <- NULL
+  if (all(c("Fluency_Score", "Mean_Performance_Rate") %in% colnames(final_results))) {
+    scatter_fluency_vs_mpr <- ggplot(final_results,
+                                     aes(x = Fluency_Score, 
+                                         y = Mean_Performance_Rate, 
+                                         color = Personality)) +
+      geom_point(size = 3, alpha = 0.7) +
+      theme_minimal(base_size = 14) +
+      scale_color_viridis_d(end = 0.9) +
+      labs(
+        title = "Fluency Score vs. Mean Performance Rate (%)",
+        x = "Fluency Score",
+        y = "Mean Performance Rate (%)"
+      ) +
+      theme(legend.position = "right")
+    
+    fluency_vs_mpr_filename <- file.path(data_collection_dir, "Fluency_vs_MPR.png")
+    ggsave(filename = fluency_vs_mpr_filename, plot = scatter_fluency_vs_mpr, width = 8, height = 6)
+    message("Fluency vs. MPR plot saved to: ", fluency_vs_mpr_filename)
+  }
+  
+  # ------------------------------------------------------------------------
+  # 10) Scatter Plot: Total Strategy Changes vs. Fluency Score (NEW)
+  # ------------------------------------------------------------------------
+  scatter_changes_vs_fluency <- NULL
+  if (all(c("Total_Strategy_Changes", "Fluency_Score") %in% colnames(final_results))) {
+    scatter_changes_vs_fluency <- ggplot(final_results,
+                                         aes(x = Total_Strategy_Changes, 
+                                             y = Fluency_Score, 
+                                             color = Personality)) +
+      geom_point(size = 3, alpha = 0.7) +
+      theme_minimal(base_size = 14) +
+      scale_color_viridis_d(end = 0.9) +
+      labs(
+        title = "Total Strategy Changes vs. Fluency Score",
+        x = "Total Strategy Changes",
+        y = "Fluency Score"
+      ) +
+      theme(legend.position = "right")
+    
+    changes_vs_fluency_filename <- file.path(data_collection_dir, "Strategy_Changes_vs_Fluency.png")
+    ggsave(filename = changes_vs_fluency_filename, plot = scatter_changes_vs_fluency, width = 8, height = 6)
+    message("Strategy Changes vs. Fluency plot saved to: ", changes_vs_fluency_filename)
+  }
+  
+  # ------------------------------------------------------------------------
+  # 11) Scatter Plot: Stability vs. Fluency Score (NEW)
+  # ------------------------------------------------------------------------
+  scatter_stability_vs_fluency <- NULL
+  if (all(c("Stability", "Fluency_Score") %in% colnames(final_results))) {
+    scatter_stability_vs_fluency <- ggplot(final_results,
+                                           aes(x = Stability, 
+                                               y = Fluency_Score, 
+                                               color = Personality)) +
+      geom_point(size = 3, alpha = 0.7) +
+      theme_minimal(base_size = 14) +
+      scale_color_viridis_d(end = 0.9) +
+      labs(
+        title = "Stability vs. Fluency Score",
+        x = "Stability (0 - 1)",
+        y = "Fluency Score"
+      ) +
+      theme(legend.position = "right")
+    
+    stability_vs_fluency_filename <- file.path(data_collection_dir, "Stability_vs_Fluency.png")
+    ggsave(filename = stability_vs_fluency_filename, plot = scatter_stability_vs_fluency, width = 8, height = 6)
+    message("Stability vs. Fluency plot saved to: ", stability_vs_fluency_filename)
+  }
+  
+  # ------------------------------------------------------------------------
+  # 12) Correlation Matrix for Key Numeric Columns (Optional)
+  # ------------------------------------------------------------------------
+  correlation_matrix_plot <- NULL
+  numeric_cols <- c(
+    "Mean_Performance_Rate", "Cumulative_Reward", "Total_Strategy_Changes", 
+    "Stability", "Fluency_Score", "Patient_Impatient_Score", "Leader_Follower_Score"
   )
-  ggsave(filename = polar_plot_filename, plot = polar_plot, width = 8, height = 8)
-  message("Polar personality plot saved to: ", polar_plot_filename)
+  # Check if these columns are present
+  numeric_cols_present <- intersect(numeric_cols, colnames(final_results))
   
-  # Optionally display the plots in console
-  print(mpr_plot)
-  print(cumulative_reward_plot)
-  print(polar_plot)
+  if (length(numeric_cols_present) > 1) {
+    # Build a numeric-only dataframe
+    numeric_data <- final_results %>%
+      select(all_of(numeric_cols_present))
+    
+    # Create a correlation matrix plot using GGally
+    correlation_matrix_plot <- ggpairs(numeric_data,
+                                       title = "Correlation Matrix of Key Metrics")
+    
+    corr_matrix_filename <- file.path(data_collection_dir, "Correlation_Matrix.png")
+    # ggsave can handle ggpairs objects, but might need a slight tweak in size
+    ggsave(filename = corr_matrix_filename, plot = correlation_matrix_plot, width = 10, height = 10)
+    message("Correlation matrix plot saved to: ", corr_matrix_filename)
+  }
+  
+  # ------------------------------------------------------------------------
+  # Print or Show Plots in Console
+  # ------------------------------------------------------------------------
+  # (You can comment out prints if you only want to save to files)
+  if (exists("mpr_plot"))                     print(mpr_plot)
+  if (exists("cumulative_reward_plot"))       print(cumulative_reward_plot)
+  if (exists("fluency_plot"))                 print(fluency_plot)
+  if (exists("polar_plot"))                   print(polar_plot)
+  if (!is.null(bar_plot_strategy_changes))    print(bar_plot_strategy_changes)
+  if (!is.null(scatter_stability_vs_changes)) print(scatter_stability_vs_changes)
+  if (!is.null(scatter_mpr_vs_reward))        print(scatter_mpr_vs_reward)
+  if (!is.null(box_stability))                print(box_stability)
+  if (!is.null(scatter_fluency_vs_mpr))       print(scatter_fluency_vs_mpr)
+  if (!is.null(scatter_changes_vs_fluency))   print(scatter_changes_vs_fluency)
+  if (!is.null(scatter_stability_vs_fluency)) print(scatter_stability_vs_fluency)
+  if (!is.null(correlation_matrix_plot))      print(correlation_matrix_plot)
 }
 
-
+# Example usage:
 data_collection_dir <- "/home/jesse/thesis/src/co_learning_robot_personalities/data_collection"
 summary_csv_filename <- "summary_metrics.csv"
 plot_summary_metrics(data_collection_dir, summary_csv_filename, circle = TRUE)

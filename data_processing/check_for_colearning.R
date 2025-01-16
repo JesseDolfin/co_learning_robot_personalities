@@ -9,7 +9,7 @@ library(readr)
 library(kableExtra)
 
 # Set the default threshold (can be overridden later)
-thresh = 5
+thresh = 11
 
 # ------------------------------------------------------
 # Helper Functions
