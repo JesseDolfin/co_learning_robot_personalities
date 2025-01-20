@@ -103,18 +103,19 @@ plot_summary_metrics <- function(data_collection_dir,
         legend.position = "none"
       )
     
+    # Use coord_cartesian to zoom in on y-axis range without removing data
     if (!is.null(y_limits)) {
-      p <- p + scale_y_continuous(
-        limits = y_limits, 
-        labels = if (percent_scale) scales::percent_format(scale = 1) else waiver()
-      )
-    } else if (percent_scale) {
+      p <- p + coord_cartesian(ylim = y_limits)
+    }
+    
+    if (percent_scale) {
       # Convert y-axis to percentages
       p <- p + scale_y_continuous(labels = scales::percent_format(scale = 1))
     }
     
     return(p)
   }
+  
   
   # ------------------------------------------------------------------------
   # 1) Mean Performance Rate (MPR) Plot
@@ -459,6 +460,7 @@ plot_summary_metrics <- function(data_collection_dir,
   # 12) Bar Charts for Q-table Metrics (Avg_Entropy, Avg_QGap, etc.)
   # ------------------------------------------------------------------------
   # Example: create bar charts for each metric if the column exists
+  # Example: create bar charts for each metric if the column exists
   qtable_metrics <- c("Avg_Entropy", "Avg_QGap", "Avg_Convergence", "Avg_ActionConsistency")
   
   for (metric_col in qtable_metrics) {
@@ -466,6 +468,10 @@ plot_summary_metrics <- function(data_collection_dir,
       
       # Summarize data by metric_col
       summary_metric <- summarize_with_ci(final_results, metric_col, "Personality")
+      
+      # Set y-axis limits only for Avg_ActionConsistency
+      y_limits <- if (metric_col == "Avg_ActionConsistency") c(0.9, 1) else NULL
+  
       
       # Create bar plot
       metric_plot <- create_bar_plot(
@@ -475,7 +481,8 @@ plot_summary_metrics <- function(data_collection_dir,
         fill_col = "Personality",
         y_label = metric_col,
         title = paste("Average", metric_col, "by Personality"),
-        subtitle = "Error bars represent ±1 SD"
+        subtitle = "Error bars represent ±1 SD",
+        y_limits = y_limits
       )
       
       # Save the plot
@@ -484,6 +491,7 @@ plot_summary_metrics <- function(data_collection_dir,
       message(metric_col, " plot saved to: ", plot_filename)
     }
   }
+  
   
   # ------------------------------------------------------------------------
   # 13) Correlation Matrix for Key Numeric Columns

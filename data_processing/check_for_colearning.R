@@ -256,8 +256,6 @@ analyze_logs <- function(log_file) {
   phase2 <- fill_forward(results$strategy_phase_2)
   phase3 <- fill_forward(results$strategy_phase_3)
   
-  print(phase2)
-  
   # Count changes for each phase
   phase1_changes <- 0
   phase2_changes <- 0
