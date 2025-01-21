@@ -5,22 +5,15 @@ library(tidyr)
 library(stringr)
 library(assertthat) # For column existence checks
 library(viridis)    # For a nicer color palette
-library(GGally) # For correlation matrix plot
+library(GGally)     # For correlation matrix plot
 
-#' Plot summary metrics and personality identification on a polar plot.
+#' Plot summary metrics and personality identification on a polar plot,
+#' plus additional scatterplots linking perceived personality to co-learning metrics.
 #'
 #' @param data_collection_dir Directory where the CSV summary file is located.
 #' @param summary_csv_filename Name of the summary CSV file.
-#' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle for the polar plot.
+#' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle (in the polar plot).
 #' 
-#' This function:
-#' 1. Reads a summary CSV file with participant results (including Q-table metrics).
-#' 2. Filters out baseline personality data.
-#' 3. Creates and saves:
-#'    - Existing bar charts/scatter plots for Mean Performance Rate, Cumulative Reward, etc.
-#'    - Bar charts (optional) for new Q-table metrics like Average Entropy, QGap, Convergence, ActionConsistency
-#'    - Updates the correlation matrix to include these new columns if present
-#'
 plot_summary_metrics <- function(data_collection_dir, 
                                  summary_csv_filename,
                                  circle = TRUE) {
@@ -47,8 +40,6 @@ plot_summary_metrics <- function(data_collection_dir,
     "Fluency_Score",
     "Total_Strategy_Changes",
     "Stability"
-    # If you want your new Q-table columns to be considered "required",
-    # add them here. For now, we won't treat them as strictly required.
   )
   
   missing_cols <- setdiff(required_cols, colnames(final_results))
@@ -103,22 +94,55 @@ plot_summary_metrics <- function(data_collection_dir,
         legend.position = "none"
       )
     
-    # Use coord_cartesian to zoom in on y-axis range without removing data
     if (!is.null(y_limits)) {
       p <- p + coord_cartesian(ylim = y_limits)
     }
-    
     if (percent_scale) {
-      # Convert y-axis to percentages
       p <- p + scale_y_continuous(labels = scales::percent_format(scale = 1))
     }
-    
     return(p)
   }
   
+  # NEW HELPER: Create a scatterplot with a regression line + correlation
+  create_scatter_with_corr <- function(df, x_col, y_col, color_col,
+                                       x_label, y_label, plot_title,
+                                       out_filename) {
+    # Only consider rows that are not NA for both x_col, y_col
+    df_clean <- df %>%
+      filter(!is.na(.data[[x_col]]), !is.na(.data[[y_col]]))
+    
+    if (nrow(df_clean) < 2) {
+      warning("Not enough data to plot scatter for ", x_col, " vs. ", y_col)
+      return(NULL)
+    }
+    
+    # Calculate correlation (Pearson)
+    cor_val <- cor(df_clean[[x_col]], df_clean[[y_col]], method = "pearson")
+    
+    # Build plot
+    p <- ggplot(df_clean, aes(x = .data[[x_col]], y = .data[[y_col]],
+                              color = .data[[color_col]])) +
+      geom_point(size = 3, alpha = 0.7) +
+      geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+      scale_color_viridis_d(end = 0.9) +
+      theme_minimal(base_size = 14) +
+      labs(
+        title = paste0(plot_title, " (r = ", round(cor_val, 2), ")"),
+        x = x_label,
+        y = y_label,
+        color = "Personality"
+      ) +
+      theme(legend.position = "right")
+    
+    # Save plot
+    ggsave(filename = out_filename, plot = p, width = 8, height = 6)
+    message("Scatter plot saved to: ", out_filename, 
+            " [Correlation ~ ", round(cor_val, 2), "]")
+    return(p)
+  }
   
   # ------------------------------------------------------------------------
-  # 1) Mean Performance Rate (MPR) Plot
+  # 1) Mean Performance Rate Plot
   # ------------------------------------------------------------------------
   if (all(c("Mean_Performance_Rate", "Personality") %in% colnames(final_results))) {
     summary_mpr <- summarize_with_ci(final_results, "Mean_Performance_Rate", "Personality")
@@ -140,17 +164,14 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
-  # 2) Cumulative Reward Plot (Separated by Negative vs. Positive)
+  # 2) Cumulative Reward Plot
   # ------------------------------------------------------------------------
   if (all(c("Cumulative_Reward", "Personality") %in% colnames(final_results))) {
-    
-    # 1) Add a column to distinguish negative vs. positive reward
     final_results <- final_results %>%
       mutate(
         Reward_Type = ifelse(Cumulative_Reward < 0, "Negative", "Positive")
       )
     
-    # 2) Summarize by Personality *and* Reward_Type
     summary_reward <- final_results %>%
       group_by(Personality, Reward_Type) %>%
       summarise(
@@ -161,7 +182,6 @@ plot_summary_metrics <- function(data_collection_dir,
         .groups = "drop"
       )
     
-    # 3) Create a grouped bar chart with specific colors
     cumulative_reward_plot <- ggplot(summary_reward, 
                                      aes(x = Personality, 
                                          y = Mean, 
@@ -185,13 +205,10 @@ plot_summary_metrics <- function(data_collection_dir,
         legend.position = "right"
       )
     
-    # 4) Save the plot
     cumulative_reward_plot_filename <- file.path(data_collection_dir, "Average_Cumulative_Reward_PosNeg.png")
     ggsave(filename = cumulative_reward_plot_filename, plot = cumulative_reward_plot, width = 8, height = 6)
     message("Cumulative Reward (Neg vs. Pos) plot saved to: ", cumulative_reward_plot_filename)
   }
-  
-  
   
   # ------------------------------------------------------------------------
   # 3) Fluency Plot
@@ -214,9 +231,8 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
-  # 4) Polar (Cartesian) Plot of Perceived Personality
+  # 4) Polar Plot of Perceived Personality
   # ------------------------------------------------------------------------
-  # Only create if we have scores for both axes
   if (all(c("Patient_Impatient_Score", "Leader_Follower_Score") %in% colnames(final_results))) {
     polar_plot_data <- final_results %>%
       group_by(Personality) %>%
@@ -226,7 +242,6 @@ plot_summary_metrics <- function(data_collection_dir,
         .groups = "drop"
       ) %>%
       mutate(
-        # Example normalization if range is ±3
         Avg_Patient_Impatient = Avg_Patient_Impatient / 3,
         Avg_Leader_Follower   = Avg_Leader_Follower / 3
       )
@@ -249,7 +264,6 @@ plot_summary_metrics <- function(data_collection_dir,
         y = r * sin(seq(0, 2*pi, length.out = n))
       )
     }
-    
     circle1 <- circle_coords(1)
     circle2 <- circle_coords(0.75)
     circle3 <- circle_coords(0.5)
@@ -265,22 +279,28 @@ plot_summary_metrics <- function(data_collection_dir,
       geom_point(
         data = polar_plot_data, 
         aes(x = Avg_Patient_Impatient, y = Avg_Leader_Follower, color = Personality), 
-        size = 4
+        size = 6 # Increased dot size
       ) +
-      scale_color_viridis_d(option = "D", end = 0.9) +
+      scale_color_viridis_d(
+        option = "D", 
+        end = 0.9, 
+        labels = c("Follower", "Impatient", "Leader", "Patient") # Replace with your desired abbreviations
+      ) +
       coord_fixed(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
       theme_minimal(base_size = 14) +
       labs(
         title = if (circle) "Perceived Personality Scores (Restricted to Circle)" else "Perceived Personality Scores",
         subtitle = "Patient (-1) to Impatient (1) vs. Follower (-1) to Leader (1)",
         x = "← Patient           Impatient → ",
-        y = "← Follower           Leader → "
+        y = "← Follower           Leader → ",
+        color = "Personality" # Legend title
       ) +
       theme(
         legend.position = "right",
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10))
       )
+    
     
     polar_plot_filename <- file.path(
       data_collection_dir, 
@@ -336,6 +356,72 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
+  # 7) Create the new scatter plots for personality vs. co-learning
+  # ------------------------------------------------------------------------
+  
+  # 7a) Patient_Impatient_Score vs. Avg_QGap
+  if (all(c("Patient_Impatient_Score", "Avg_QGap", "Personality") %in% colnames(final_results))) {
+    out_file <- file.path(data_collection_dir, "Scatter_PatientImpatient_vs_QGap.png")
+    scatter_pIS_qgap <- create_scatter_with_corr(
+      df = final_results,
+      x_col = "Patient_Impatient_Score",
+      y_col = "Avg_QGap",
+      color_col = "Personality",
+      x_label = "Patient-Impatient Score",
+      y_label = "Avg QGap (RL Confidence)",
+      plot_title = "Patient vs. Impatient vs. QGap",
+      out_filename = out_file
+    )
+  }
+  
+  # 7b) Patient_Impatient_Score vs. Avg_ActionConsistency
+  if (all(c("Patient_Impatient_Score", "Avg_ActionConsistency", "Personality") %in% colnames(final_results))) {
+    out_file <- file.path(data_collection_dir, "Scatter_PatientImpatient_vs_ActionConsistency.png")
+    
+    scatter_pIS_acons <- create_scatter_with_corr(
+      df = final_results,
+      x_col = "Patient_Impatient_Score",
+      y_col = "Avg_ActionConsistency",
+      color_col = "Personality",
+      x_label = "Patient-Impatient Score",
+      y_label = "Avg ActionConsistency",
+      plot_title = "Patient vs. Impatient vs. ActionConsistency",
+      out_filename = out_file
+    )
+    
+    # If create_scatter_with_corr returns the ggplot object, we can do:
+    if (!is.null(scatter_pIS_acons)) {
+      scatter_pIS_acons <- scatter_pIS_acons +
+        scale_color_viridis_d(
+          name = "Personality",
+          breaks = c("personality_type_follower",
+                     "personality_type_impatient",
+                     "personality_type_leader",
+                     "personality_type_patient"),
+          labels = c("Follower", "Impatient", "Leader", "Patient")
+        )
+      
+      ggsave(filename = out_file, plot = scatter_pIS_acons, width = 8, height = 6)
+    }
+  }
+  
+  
+  # 7c) Leader_Follower_Score vs. Avg_QGap
+  if (all(c("Leader_Follower_Score", "Avg_QGap", "Personality") %in% colnames(final_results))) {
+    out_file <- file.path(data_collection_dir, "Scatter_LeaderFollower_vs_QGap.png")
+    scatter_lfs_qgap <- create_scatter_with_corr(
+      df = final_results,
+      x_col = "Leader_Follower_Score",
+      y_col = "Avg_QGap",
+      color_col = "Personality",
+      x_label = "Leader-Follower Score",
+      y_label = "Avg QGap (RL Confidence)",
+      plot_title = "Leader vs. Follower vs. QGap",
+      out_filename = out_file
+    )
+  }
+  
+  # ------------------------------------------------------------------------
   # 7) Scatter Plot: Mean Performance Rate vs. Cumulative Reward
   # ------------------------------------------------------------------------
   scatter_mpr_vs_reward <- NULL
@@ -368,7 +454,13 @@ plot_summary_metrics <- function(data_collection_dir,
                             aes(x = Personality, y = Stability, fill = Personality)) +
       geom_boxplot(alpha = 0.7, outlier.shape = 16, outlier.size = 2) +
       theme_minimal(base_size = 14) +
-      scale_fill_viridis_d(end = 0.9) +
+      scale_fill_viridis_d(end = 0.9, guide = "none") +  # no legend
+      scale_x_discrete(
+        labels = c("personality_type_follower"  = "Follower",
+                   "personality_type_impatient" = "Impatient",
+                   "personality_type_leader"    = "Leader",
+                   "personality_type_patient"   = "Patient")
+      ) +
       labs(
         title = "Stability Distribution by Personality",
         x = "Personality",
@@ -383,6 +475,7 @@ plot_summary_metrics <- function(data_collection_dir,
     ggsave(filename = stability_box_filename, plot = box_stability, width = 8, height = 6)
     message("Stability box plot saved to: ", stability_box_filename)
   }
+  
   
   # ------------------------------------------------------------------------
   # 9) Scatter Plot: Fluency Score vs. Mean Performance Rate
@@ -470,7 +563,13 @@ plot_summary_metrics <- function(data_collection_dir,
       summary_metric <- summarize_with_ci(final_results, metric_col, "Personality")
       
       # Set y-axis limits only for Avg_ActionConsistency
-      y_limits <- if (metric_col == "Avg_ActionConsistency") c(0.9, 1) else NULL
+      y_limits <- switch(
+        metric_col,
+        "Avg_ActionConsistency" = c(0.9, 1),
+        "Avg_Entropy" = c(1.25, 2),
+        NULL  # default
+      )
+      
   
       
       # Create bar plot
@@ -491,6 +590,29 @@ plot_summary_metrics <- function(data_collection_dir,
       message(metric_col, " plot saved to: ", plot_filename)
     }
   }
+  
+
+  # ------------------------------------------------------------------------
+  # X) Scatter Plot: Mean Performance Rate vs. Stability
+  # ------------------------------------------------------------------------
+  if (all(c("Mean_Performance_Rate", "Stability", "Personality") %in% colnames(final_results))) {
+    out_file <- file.path(data_collection_dir, "Scatter_MPR_vs_Stability.png")
+    
+    scatter_mpr_stability <- create_scatter_with_corr(
+      df           = final_results,
+      x_col        = "Mean_Performance_Rate",
+      y_col        = "Stability",
+      color_col    = "Personality",
+      x_label      = "Mean Performance Rate (%)",
+      y_label      = "Stability (0 - 1)",
+      plot_title   = "MPR vs. Stability",
+      out_filename = out_file
+    )
+    
+    # Optionally, print the plot to the console too:
+    #print(scatter_mpr_stability)
+  }
+  
   
   
   # ------------------------------------------------------------------------
@@ -541,8 +663,10 @@ plot_summary_metrics <- function(data_collection_dir,
   if (!is.null(scatter_fluency_vs_mpr))       print(scatter_fluency_vs_mpr)
   if (!is.null(scatter_changes_vs_fluency))   print(scatter_changes_vs_fluency)
   if (!is.null(scatter_stability_vs_fluency)) print(scatter_stability_vs_fluency)
-  # new bar charts were created in the loop, not stored as separate variables
-  
+  if (exists("scatter_pIS_qgap"))            print(scatter_pIS_qgap)
+  if (exists("scatter_pIS_acons"))           print(scatter_pIS_acons)
+  if (exists("scatter_lfs_qgap"))            print(scatter_lfs_qgap)
+  if (exists("scatter_mpr_stability"))        print(print(scatter_mpr_stability))
   if (!is.null(correlation_matrix_plot))      print(correlation_matrix_plot)
 }
 

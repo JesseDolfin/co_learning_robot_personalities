@@ -1,15 +1,11 @@
 ###############################################################################
-# File: MANOVA_and_RM_ANOVA_fixed.R
+# File: MANOVA_and_RM_ANOVA_no_FDR.R
 #
 # Purpose:
 #   1) Perform a repeated-measures MANOVA across multiple metrics (DVs).
-#   2) If MANOVA shows an overall effect, follow up with:
+#   2) Follow up with:
 #      - Repeated-measures ANOVAs for each metric.
-#      - Post-hoc pairwise comparisons that respect within-subject design.
-#
-# Fixes:
-#   - We properly construct `idata` with DV x Personality (44 rows),
-#     and reorder the wide columns to match that order.
+#      - Post-hoc pairwise comparisons for metrics with significant \(p\)-values.
 ###############################################################################
 
 # -----------------------------
@@ -17,8 +13,8 @@
 # -----------------------------
 library(afex)         # for aov_ez() repeated-measures ANOVAs
 library(emmeans)      # for post-hoc tests
-library(tidyverse)    # for data wrangling
 library(car)          # for MANOVA with repeated-measures design
+library(tidyverse)    # for data wrangling
 
 # -----------------------------
 # 1. Read and Prepare Data
@@ -33,8 +29,6 @@ data$Personality <- factor(data$Personality)
 # Quick sanity checks
 cat("Data preview:\n")
 print(head(data))
-cat("\nStructure:\n")
-str(data)
 cat("\nParticipant x Personality count:\n")
 print(table(data$Participant, data$Personality))
 
@@ -56,138 +50,84 @@ dependent_vars <- c(
 )
 
 # -----------------------------
-# 3. Pivot Data to Wide Format
+# 3. Run MANOVA
 # -----------------------------
-# We'll pivot each DV to wide format so each participant is a single row,
-# and each (DV, personality-level) combination is a separate column.
+cat("\n--- STEP 3: Running MANOVA ---\n")
 
-personality_levels <- levels(data$Personality)  # e.g., 4 levels
+# Pivot data into wide format
+wide_data <- data %>%
+  pivot_wider(names_from = Personality, values_from = dependent_vars, names_sep = "_")
 
-pivot_dv_to_wide <- function(df, dv_col, subj_col = "Participant", within_col = "Personality") {
-  df %>%
-    select(all_of(c(subj_col, within_col, dv_col))) %>%
-    pivot_wider(
-      names_from  = all_of(within_col),
-      values_from = all_of(dv_col)
-    ) %>%
-    rename_with(
-      ~ paste0(dv_col, "_", .x),  # e.g., "Mean_Performance_Rate_follower"
-      all_of(personality_levels)
-    )
-}
+# Create response matrix (DVs x Personality combinations)
+response_matrix <- as.matrix(wide_data %>%
+                               select(starts_with("Mean_Performance_Rate"), starts_with("Cumulative_Reward"), 
+                                      starts_with("Total_Strategy_Changes"), starts_with("Stability"), 
+                                      starts_with("Fluency_Score"), starts_with("Patient_Impatient_Score"), 
+                                      starts_with("Leader_Follower_Score"), starts_with("Avg_Entropy"),
+                                      starts_with("Avg_QGap"), starts_with("Avg_Convergence"), 
+                                      starts_with("Avg_ActionConsistency")))
 
-# Pivot each DV -> store in a list
-wide_data_list <- lapply(dependent_vars, pivot_dv_to_wide, df = data)
-# Merge all wide data frames on "Participant"
-wide_data <- reduce(wide_data_list, left_join, by = "Participant")
-
-cat("\n--- Wide Data Preview ---\n")
-print(head(wide_data))
-
-# -----------------------------
-# 4. Construct idata for Repeated-Measures MANOVA
-# -----------------------------
-# We have 11 DVs x 4 Personality levels = 44 columns.
-# We need an idata with exactly 44 rows, specifying which DV and which Personality
-# each column corresponds to, in the *exact* order of our cbind(...).
-
-dv_names <- dependent_vars
-pers_levels <- personality_levels
-
+# Define idata for repeated-measures design
 idata <- expand.grid(
-  DV          = factor(dv_names,      levels = dv_names),
-  Personality = factor(pers_levels,   levels = pers_levels)
-)
-# This produces 11 x 4 = 44 rows.
-
-# -----------------------------
-# 5. Build cbind(...) in the same order as idata
-# -----------------------------
-# We'll iterate over each row of idata, pick the correct wide-data column,
-# and bind them together in exactly that order.
-
-all_columns <- vector("list", length = nrow(idata))  # 44 in total
-
-for (i in seq_len(nrow(idata))) {
-  this_dv   <- as.character(idata$DV[i])
-  this_pers <- as.character(idata$Personality[i])
-  
-  # The matching column in wide_data:
-  col_name <- paste0(this_dv, "_", this_pers)
-  
-  # Extract as a numeric vector
-  all_columns[[i]] <- wide_data[[col_name]]
-}
-
-# cbind them to form the response matrix
-resp_matrix <- do.call(cbind, all_columns)
-
-cat("\nDimensions of resp_matrix:\n")
-print(dim(resp_matrix))  # Should be 7 participants x 44 columns if you have 7 participants
-
-# Double check each row is a participant
-# We'll build a data frame for the model so we can pass it to lm()
-manova_df <- data.frame(
-  Participant = wide_data$Participant,
-  resp_matrix
+  DV = dependent_vars,
+  Personality = levels(data$Personality)
 )
 
-# We typically can do: lm(cbind(...) ~ 1), but let's do it with a matrix explicitly:
-manova_model <- lm(
-  formula = resp_matrix ~ 1
-  # no data = ... needed here because we already have the matrix in the environment
-)
-
-# -----------------------------
-# 6. Repeated-Measures MANOVA with car::Anova
-# -----------------------------
-cat("\n--- STEP 6: Running Repeated-Measures MANOVA ---\n")
-
+# Fit MANOVA model
+manova_model <- lm(response_matrix ~ 1)
 manova_results <- Anova(
-  manova_model,
-  idata   = idata,
-  idesign = ~ Personality,  # only personality is the repeated factor
-  type    = "III"
+  manova_model, 
+  idata = idata,
+  idesign = ~ Personality, 
+  type = "III"
 )
 
+# Display MANOVA results
 cat("\nMANOVA Results (Multivariate Tests):\n")
 print(summary(manova_results, multivariate = TRUE))
 
-# If you want to see univariate results from the same model:
-# cat("\nMANOVA Results (Univariate Tests):\n")
-# print(summary(manova_results, univariate = TRUE))
+# -----------------------------
+# 4. Run Repeated-Measures ANOVAs
+# -----------------------------
+anova_results <- list()  # To store ANOVA results for all metrics
 
-# -----------------------------
-# 7. Follow-Up: Repeated-Measures ANOVAs + Post-hoc for Each DV
-# -----------------------------
-cat("\n--- STEP 7: Univariate Repeated-Measures ANOVAs & Post-hoc ---\n")
+cat("\n--- STEP 4: Running Repeated-Measures ANOVAs ---\n")
 for (dv in dependent_vars) {
   cat("\n=======================================\n")
   cat("DV:", dv, "\n")
   cat("=======================================\n")
   
-  # Repeated-measures ANOVA with afex::aov_ez
+  # Repeated-measures ANOVA
   aov_result <- aov_ez(
-    id   = "Participant",
-    dv   = dv,
-    data = data,
+    id     = "Participant",
+    dv     = dv,
+    data   = data,
     within = "Personality",
-    type = 3  # Type III SS
+    type   = 3
   )
   
-  # Print the ANOVA table
-  print(aov_result)
+  # Store the result
+  anova_results[[dv]] <- aov_result
+}
+
+# -----------------------------
+# 5. Post-Hoc Tests for Significant DVs
+# -----------------------------
+cat("\n--- STEP 5: Post-Hoc Tests for Significant DVs ---\n")
+for (dv in dependent_vars) {
+  # Extract p-value from the ANOVA table
+  p_value <- anova_results[[dv]]$anova_table$`Pr(>F)`[1]
   
-  # If you only want post-hoc if significant, you can check:
-  # p_val <- aov_result$Anova$"Pr(>F)"[1]
-  # if (p_val < 0.05) {
-  #   # do post-hoc
-  # }
-  
-  # For demonstration, always do post-hoc:
-  posthoc <- emmeans(aov_result, pairwise ~ Personality, adjust = "tukey")
-  cat("\nPost-hoc Pairwise Comparisons:\n")
-  print(posthoc)
+  # Perform post-hoc tests if p-value < 0.05
+  if (p_value < 0.05) {
+    cat("\nPost-hoc tests for DV:", dv, "\n")
+    
+    # Post-hoc comparisons
+    posthoc <- emmeans(anova_results[[dv]], pairwise ~ Personality, adjust = "tukey")
+    print(posthoc)
+  } else {
+    cat("\nNo significant effect for DV:", dv, "(p =", p_value, ")\n")
+  }
 }
 
 cat("\n\n*** Analysis Complete! ***\n")
