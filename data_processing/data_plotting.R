@@ -14,6 +14,109 @@ library(GGally)     # For correlation matrix plot
 #' @param summary_csv_filename Name of the summary CSV file.
 #' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle (in the polar plot).
 #' 
+plot_qgap_trends <- function(per_episode_file, output_dir) {
+  require(ggplot2)
+  require(dplyr)
+  require(stringr)
+  
+  # Read and prepare data
+  df <- read.csv(per_episode_file) %>%
+    mutate(
+      Personality = str_remove(Personality, "personality_type_"),
+      Personality = factor(Personality, 
+                           levels = c("follower", "patient", "leader", "impatient"))
+    ) %>%
+    filter(!is.na(AvgQGap)) %>%
+    group_by(Personality, Episode) %>%
+    summarise(
+      Mean_QGap = mean(AvgQGap, na.rm = TRUE),
+      SE_QGap = sd(AvgQGap, na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    )
+  
+  # Create plot
+  p <- ggplot(df, aes(x = Episode, y = Mean_QGap, color = Personality)) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 3) +
+    geom_ribbon(aes(ymin = Mean_QGap - 1.96*SE_QGap,
+                    ymax = Mean_QGap + 1.96*SE_QGap,
+                    fill = Personality),
+                alpha = 0.0, colour = NA) +
+    scale_color_viridis_d(end = 0.9) +
+    scale_fill_viridis_d(end = 0.9) +
+    labs(
+      title = "Average Q-Gap Over Learning Episodes by Personality",
+      x = "Episode Number",
+      y = "Average Q-Gap",
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      legend.position = "right",
+      panel.grid.minor = element_blank(),
+      plot.caption = element_text(hjust = 0, face = "italic"),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  # Save plot
+  output_file <- file.path(output_dir, "Qgap_Over_Episodes.png")
+  ggsave(output_file, p, width = 10, height = 6, dpi = 300)
+  message("Q-Gap plot saved to: ", output_file)
+  
+  return(p)
+}
+plot_entropy_over_episodes <- function(data_collection_dir) {
+  require(ggplot2)
+  require(dplyr)
+  require(stringr)
+  
+  # Read per-episode data
+  per_episode_file <- file.path(data_collection_dir, "per_episode_metrics.csv")
+  if (!file.exists(per_episode_file)) {
+    stop("Per-episode metrics file not found: ", per_episode_file)
+  }
+  
+  # Process data
+  entropy_data <- read.csv(per_episode_file) %>%
+    filter(!str_detect(Personality, "baseline")) %>%
+    mutate(Personality = str_remove(Personality, "personality_type_")) %>%
+    group_by(Personality, Episode) %>%
+    summarise(
+      Mean_Entropy = mean(Entropy, na.rm = TRUE),
+      SE_Entropy = sd(Entropy, na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    ) %>%
+    mutate(Personality = factor(Personality,
+                                levels = c("follower", "patient", "leader", "impatient")))
+  
+  # Create plot (WITH POINTS ADDED)
+  p <- ggplot(entropy_data, aes(x = Episode, y = Mean_Entropy, 
+                                color = Personality, fill = Personality)) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 3) +  # <--- THIS LINE ADDED
+    geom_ribbon(aes(ymin = Mean_Entropy - 1.96*SE_Entropy,
+                    ymax = Mean_Entropy + 1.96*SE_Entropy),
+                alpha = 0.0, colour = NA) +
+    scale_color_viridis_d(end = 0.9) +
+    scale_fill_viridis_d(end = 0.9) +
+    labs(
+      title = "Average Entropy Over Learning Episodes by Personality",
+      x = "Episode Number",
+      y = "Average Entropy"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      legend.position = "right",
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  # Save plot
+  output_file <- file.path(data_collection_dir, "Entropy_Over_Episodes.png")
+  ggsave(output_file, p, width = 10, height = 6, dpi = 300)
+  message("Entropy trend plot saved to: ", output_file)
+  
+  return(p)
+}
 plot_summary_metrics <- function(data_collection_dir, 
                                  summary_csv_filename,
                                  circle = TRUE) {
@@ -649,6 +752,20 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
+  # 14) Entropy Over Episodes Plot
+  # ------------------------------------------------------------------------
+  message("\nGenerating entropy-over-episodes plot...")
+  plot_entropy_over_episodes(data_collection_dir)
+  
+  # ------------------------------------------------------------------------
+  # 14) q-gap Over Episodes Plot
+  # -----------------------------------------------------------------
+  plot_qgap_trends(
+    per_episode_file = file.path(data_collection_dir, "per_episode_metrics.csv"),
+    output_dir = data_collection_dir
+  )
+  
+  # ------------------------------------------------------------------------
   # Print or Show Plots in Console
   # ------------------------------------------------------------------------
   # (You can comment out prints if you only want to save to files)
@@ -667,7 +784,6 @@ plot_summary_metrics <- function(data_collection_dir,
   if (exists("scatter_pIS_acons"))           print(scatter_pIS_acons)
   if (exists("scatter_lfs_qgap"))            print(scatter_lfs_qgap)
   if (exists("scatter_mpr_stability"))        print(print(scatter_mpr_stability))
-  if (!is.null(correlation_matrix_plot))      print(correlation_matrix_plot)
 }
 
 # Example usage:

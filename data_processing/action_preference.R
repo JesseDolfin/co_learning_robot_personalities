@@ -483,6 +483,11 @@ for (participant_dir in participants) {
                                    "Entropy", "AvgQGap", "Convergence", "ActionConsistency")]
 
       all_metrics <- rbind(all_metrics, metrics_df)
+      
+      # Save raw per-episode metrics
+      per_episode_file <- file.path(data_collection_dir, "per_episode_metrics.csv")
+      write.csv(all_metrics, per_episode_file, row.names = FALSE)
+      message("Per-episode metrics saved to: ", per_episode_file)
     }
   }
 }
