@@ -7,13 +7,10 @@ library(assertthat) # For column existence checks
 library(viridis)    # For a nicer color palette
 library(GGally)     # For correlation matrix plot
 
-#' Plot summary metrics and personality identification on a polar plot,
-#' plus additional scatterplots linking perceived personality to co-learning metrics.
+#' Plot Q-Gap trends over episodes
 #'
-#' @param data_collection_dir Directory where the CSV summary file is located.
-#' @param summary_csv_filename Name of the summary CSV file.
-#' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle (in the polar plot).
-#' 
+#' @param per_episode_file Path to the CSV containing per-episode data
+#' @param output_dir Directory to which the Q-Gap plot will be saved
 plot_qgap_trends <- function(per_episode_file, output_dir) {
   require(ggplot2)
   require(dplyr)
@@ -30,16 +27,16 @@ plot_qgap_trends <- function(per_episode_file, output_dir) {
     group_by(Personality, Episode) %>%
     summarise(
       Mean_QGap = mean(AvgQGap, na.rm = TRUE),
-      SE_QGap = sd(AvgQGap, na.rm = TRUE) / sqrt(n()),
-      .groups = "drop"
+      SE_QGap   = sd(AvgQGap, na.rm = TRUE) / sqrt(n()),
+      .groups   = "drop"
     )
   
   # Create plot
   p <- ggplot(df, aes(x = Episode, y = Mean_QGap, color = Personality)) +
     geom_line(linewidth = 1.2) +
     geom_point(size = 3) +
-    geom_ribbon(aes(ymin = Mean_QGap - 1.96*SE_QGap,
-                    ymax = Mean_QGap + 1.96*SE_QGap,
+    geom_ribbon(aes(ymin = Mean_QGap - 1.96 * SE_QGap,
+                    ymax = Mean_QGap + 1.96 * SE_QGap,
                     fill = Personality),
                 alpha = 0.0, colour = NA) +
     scale_color_viridis_d(end = 0.9) +
@@ -47,7 +44,7 @@ plot_qgap_trends <- function(per_episode_file, output_dir) {
     labs(
       title = "Average Q-Gap Over Learning Episodes by Personality",
       x = "Episode Number",
-      y = "Average Q-Gap",
+      y = "Average Q-Gap"
     ) +
     theme_minimal(base_size = 14) +
     theme(
@@ -64,6 +61,10 @@ plot_qgap_trends <- function(per_episode_file, output_dir) {
   
   return(p)
 }
+
+#' Plot entropy trends over episodes
+#'
+#' @param data_collection_dir Directory containing per_episode_metrics.csv
 plot_entropy_over_episodes <- function(data_collection_dir) {
   require(ggplot2)
   require(dplyr)
@@ -82,19 +83,19 @@ plot_entropy_over_episodes <- function(data_collection_dir) {
     group_by(Personality, Episode) %>%
     summarise(
       Mean_Entropy = mean(Entropy, na.rm = TRUE),
-      SE_Entropy = sd(Entropy, na.rm = TRUE) / sqrt(n()),
-      .groups = "drop"
+      SE_Entropy   = sd(Entropy, na.rm = TRUE) / sqrt(n()),
+      .groups      = "drop"
     ) %>%
     mutate(Personality = factor(Personality,
                                 levels = c("follower", "patient", "leader", "impatient")))
   
-  # Create plot (WITH POINTS ADDED)
+  # Create plot
   p <- ggplot(entropy_data, aes(x = Episode, y = Mean_Entropy, 
                                 color = Personality, fill = Personality)) +
     geom_line(linewidth = 1.2) +
-    geom_point(size = 3) +  # <--- THIS LINE ADDED
-    geom_ribbon(aes(ymin = Mean_Entropy - 1.96*SE_Entropy,
-                    ymax = Mean_Entropy + 1.96*SE_Entropy),
+    geom_point(size = 3) +
+    geom_ribbon(aes(ymin = Mean_Entropy - 1.96 * SE_Entropy,
+                    ymax = Mean_Entropy + 1.96 * SE_Entropy),
                 alpha = 0.0, colour = NA) +
     scale_color_viridis_d(end = 0.9) +
     scale_fill_viridis_d(end = 0.9) +
@@ -117,6 +118,185 @@ plot_entropy_over_episodes <- function(data_collection_dir) {
   
   return(p)
 }
+
+##############################################################################
+# NEW FUNCTION: Plot Action Consistency over episodes
+##############################################################################
+#' Plot Action Consistency trends over episodes
+#'
+#' @param data_collection_dir Directory containing per_episode_metrics.csv
+plot_action_consistency_over_episodes <- function(data_collection_dir) {
+  require(ggplot2)
+  require(dplyr)
+  require(stringr)
+  
+  # Read per-episode data
+  per_episode_file <- file.path(data_collection_dir, "per_episode_metrics.csv")
+  if (!file.exists(per_episode_file)) {
+    stop("Per-episode metrics file not found: ", per_episode_file)
+  }
+  
+  # Process data: remove 'baseline', remove 'personality_type_' prefix
+  action_consistency_data <- read.csv(per_episode_file) %>%
+    filter(!str_detect(Personality, "baseline")) %>%
+    mutate(Personality = str_remove(Personality, "personality_type_")) %>%
+    filter(!is.na(ActionConsistency)) %>%
+    group_by(Personality, Episode) %>%
+    summarise(
+      Mean_ActionCons = mean(ActionConsistency, na.rm = TRUE),
+      SE_ActionCons   = sd(ActionConsistency, na.rm = TRUE) / sqrt(n()),
+      .groups         = "drop"
+    ) %>%
+    mutate(Personality = factor(Personality,
+                                levels = c("follower", "patient", "leader", "impatient")))
+  
+  # Create plot
+  p <- ggplot(action_consistency_data, 
+              aes(x = Episode, y = Mean_ActionCons, 
+                  color = Personality, fill = Personality)) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 3) +
+    geom_ribbon(aes(ymin = Mean_ActionCons - 1.96 * SE_ActionCons,
+                    ymax = Mean_ActionCons + 1.96 * SE_ActionCons),
+                alpha = 0.0, colour = NA) +
+    scale_color_viridis_d(end = 0.9) +
+    scale_fill_viridis_d(end = 0.9) +
+    labs(
+      title = "Average Action Consistency Over Learning Episodes by Personality",
+      x = "Episode Number",
+      y = "Average Action Consistency"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      legend.position = "right",
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  # Save plot
+  output_file <- file.path(data_collection_dir, "ActionConsistency_Over_Episodes.png")
+  ggsave(output_file, p, width = 10, height = 6, dpi = 300)
+  message("Action Consistency plot saved to: ", output_file)
+  
+  return(p)
+}
+##############################################################################
+#' Plot scatter plot of Mean Performance Rate vs Stability
+#'
+#' @param data_collection_dir Directory containing summary_metrics.csv
+plot_mpr_vs_stability <- function(data_collection_dir) {
+  require(ggplot2)
+  require(dplyr)
+  require(stringr)
+  require(viridis)  # Better color palette
+  
+  # Read summary data
+  summary_file <- file.path(data_collection_dir, "summary_metrics.csv")
+  if (!file.exists(summary_file)) {
+    stop("Summary metrics file not found: ", summary_file)
+  }
+  
+  df <- read.csv(summary_file) %>%
+    mutate(Personality = str_remove(Personality, "personality_type_"),
+           Personality = factor(Personality, 
+                                levels = c("follower", "patient", "leader", "impatient")))
+  
+  # Compute Pearson correlation
+  cor_val <- cor(df$Mean_Performance_Rate, df$Stability, method = "pearson")
+  
+  # Create scatter plot
+  p <- ggplot(df, aes(x = Mean_Performance_Rate, y = Stability, color = Personality)) +
+    geom_point(size = 4, alpha = 0.8) +
+    geom_smooth(method = "lm", color = "black", linetype = "dashed", se = TRUE) +
+    scale_color_viridis_d(option = "D", end = 0.9) +
+    theme_minimal(base_size = 14) +
+    labs(
+      title = paste("Mean Performance Rate vs Stability (r =", round(cor_val, 2), ")"),
+      x = "Mean Performance Rate",
+      y = "Stability",
+      color = "Personality"
+    ) +
+    theme(
+      legend.position = "right",
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(hjust = 0.5, face = "plain"),
+      axis.text.x = element_text(size = 14),
+      axis.text.y = element_text(size = 14)
+    )
+  
+  # Save plot
+  output_file <- file.path(data_collection_dir, "Scatter_MPR_vs_Stability.png")
+  ggsave(output_file, p, width = 10, height = 7, dpi = 300)
+  message("Scatter plot saved to: ", output_file)
+  
+  return(p)
+}
+
+#' Plot Convergence trends over episodes
+#'
+#' @param data_collection_dir Directory containing per_episode_metrics.csv
+plot_convergence_over_episodes <- function(data_collection_dir) {
+  require(ggplot2)
+  require(dplyr)
+  require(stringr)
+  
+  # Read per-episode data
+  per_episode_file <- file.path(data_collection_dir, "per_episode_metrics.csv")
+  if (!file.exists(per_episode_file)) {
+    stop("Per-episode metrics file not found: ", per_episode_file)
+  }
+  
+  # Process data: remove 'baseline', remove 'personality_type_' prefix
+  convergence_data <- read.csv(per_episode_file) %>%
+    filter(!str_detect(Personality, "baseline")) %>%
+    mutate(Personality = str_remove(Personality, "personality_type_")) %>%
+    filter(!is.na(Convergence)) %>%
+    group_by(Personality, Episode) %>%
+    summarise(
+      Mean_Convergence = mean(Convergence, na.rm = TRUE),
+      SE_Convergence   = sd(Convergence, na.rm = TRUE) / sqrt(n()),
+      .groups          = "drop"
+    ) %>%
+    mutate(Personality = factor(Personality,
+                                levels = c("follower", "patient", "leader", "impatient")))
+  
+  # Create plot
+  p <- ggplot(convergence_data, 
+              aes(x = Episode, y = Mean_Convergence, 
+                  color = Personality, fill = Personality)) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 3) +
+    geom_ribbon(aes(ymin = Mean_Convergence - 1.96 * SE_Convergence,
+                    ymax = Mean_Convergence + 1.96 * SE_Convergence),
+                alpha = 0.0, colour = NA) +
+    scale_color_viridis_d(end = 0.9) +
+    scale_fill_viridis_d(end = 0.9) +
+    labs(
+      title = "Average Convergence Over Learning Episodes by Personality",
+      x = "Episode Number",
+      y = "Average Convergence"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      legend.position = "right",
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  # Save plot
+  output_file <- file.path(data_collection_dir, "Convergence_Over_Episodes.png")
+  ggsave(output_file, p, width = 10, height = 6, dpi = 300)
+  message("Convergence plot saved to: ", output_file)
+  
+  return(p)
+}
+
+#' Plot summary metrics and personality identification on a polar plot,
+#' plus additional scatterplots linking perceived personality to co-learning metrics.
+#'
+#' @param data_collection_dir Directory where the CSV summary file is located.
+#' @param summary_csv_filename Name of the summary CSV file.
+#' @param circle Logical. If TRUE, restrict personality points to lie on a unit circle (in the polar plot).
 plot_summary_metrics <- function(data_collection_dir, 
                                  summary_csv_filename,
                                  circle = TRUE) {
@@ -151,15 +331,13 @@ plot_summary_metrics <- function(data_collection_dir,
             paste(missing_cols, collapse = ", "))
   }
   
-  # Filter out baseline personality if present
+  # Filter out baseline personality if present, remove prefix, set factor levels
   final_results <- final_results %>%
-    filter(!Personality %in% c("personality_type_baseline", "baseline"))
-  
-  # Convert Participant and Personality to factors for consistent plotting
-  final_results <- final_results %>%
+    filter(!str_detect(Personality, "baseline")) %>%
     mutate(
+      Personality = str_remove(Personality, "^personality_type_"),
       Participant = as.factor(Participant),
-      Personality = as.factor(Personality)
+      Personality = factor(Personality, levels = c("follower", "patient", "leader", "impatient"))
     )
   
   # ------------------------------------------------------------------------
@@ -206,11 +384,36 @@ plot_summary_metrics <- function(data_collection_dir,
     return(p)
   }
   
+  # Boxplot helper (for Action Consistency specifically)
+  create_box_plot <- function(data, x_col, y_col, fill_col, 
+                              y_label, title, subtitle = NULL, y_limits = NULL) {
+    p <- ggplot(data, aes(x = .data[[x_col]], y = .data[[y_col]], fill = .data[[fill_col]])) +
+      geom_boxplot(alpha = 0.7, outlier.shape = 16, outlier.size = 2) +
+      theme_minimal(base_size = 14) +
+      scale_fill_viridis_d(end = 0.9, guide = "none") +
+      labs(
+        title = title,
+        subtitle = subtitle,
+        x = x_col,
+        y = y_label
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none"
+      )
+    
+    if (!is.null(y_limits)) {
+      p <- p + coord_cartesian(ylim = y_limits)
+    }
+    
+    return(p)
+  }
+  
   # NEW HELPER: Create a scatterplot with a regression line + correlation
   create_scatter_with_corr <- function(df, x_col, y_col, color_col,
                                        x_label, y_label, plot_title,
                                        out_filename) {
-    # Only consider rows that are not NA for both x_col, y_col
+    # Only consider rows that are not NA for both x_col and y_col
     df_clean <- df %>%
       filter(!is.na(.data[[x_col]]), !is.na(.data[[y_col]]))
     
@@ -225,8 +428,8 @@ plot_summary_metrics <- function(data_collection_dir,
     # Build plot
     p <- ggplot(df_clean, aes(x = .data[[x_col]], y = .data[[y_col]],
                               color = .data[[color_col]])) +
-      geom_point(size = 3, alpha = 0.7) +
-      geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+      geom_point(size = 3, alpha = 0.8) +
+      geom_smooth(method = "lm", se = TRUE, color = "black", linetype = "dashed") +
       scale_color_viridis_d(end = 0.9) +
       theme_minimal(base_size = 14) +
       labs(
@@ -345,6 +548,7 @@ plot_summary_metrics <- function(data_collection_dir,
         .groups = "drop"
       ) %>%
       mutate(
+        # Scale the scores to [-1, 1] range if needed
         Avg_Patient_Impatient = Avg_Patient_Impatient / 3,
         Avg_Leader_Follower   = Avg_Leader_Follower / 3
       )
@@ -382,13 +586,9 @@ plot_summary_metrics <- function(data_collection_dir,
       geom_point(
         data = polar_plot_data, 
         aes(x = Avg_Patient_Impatient, y = Avg_Leader_Follower, color = Personality), 
-        size = 6 # Increased dot size
+        size = 6
       ) +
-      scale_color_viridis_d(
-        option = "D", 
-        end = 0.9, 
-        labels = c("Follower", "Impatient", "Leader", "Patient") # Replace with your desired abbreviations
-      ) +
+      scale_color_viridis_d(option = "D", end = 0.9) +
       coord_fixed(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
       theme_minimal(base_size = 14) +
       labs(
@@ -396,14 +596,13 @@ plot_summary_metrics <- function(data_collection_dir,
         subtitle = "Patient (-1) to Impatient (1) vs. Follower (-1) to Leader (1)",
         x = "← Patient           Impatient → ",
         y = "← Follower           Leader → ",
-        color = "Personality" # Legend title
+        color = "Personality"
       ) +
       theme(
         legend.position = "right",
         axis.title.x = element_text(margin = margin(t = 10)),
         axis.title.y = element_text(margin = margin(r = 10))
       )
-    
     
     polar_plot_filename <- file.path(
       data_collection_dir, 
@@ -492,26 +691,22 @@ plot_summary_metrics <- function(data_collection_dir,
       out_filename = out_file
     )
     
-    # If create_scatter_with_corr returns the ggplot object, we can do:
     if (!is.null(scatter_pIS_acons)) {
       scatter_pIS_acons <- scatter_pIS_acons +
         scale_color_viridis_d(
-          name = "Personality",
-          breaks = c("personality_type_follower",
-                     "personality_type_impatient",
-                     "personality_type_leader",
-                     "personality_type_patient"),
-          labels = c("Follower", "Impatient", "Leader", "Patient")
+          name   = "Personality",
+          breaks = c("follower", "impatient", "leader", "patient"),
+          labels = c("follower", "impatient", "leader", "patient")
         )
       
       ggsave(filename = out_file, plot = scatter_pIS_acons, width = 8, height = 6)
     }
   }
   
-  
   # 7c) Leader_Follower_Score vs. Avg_QGap
   if (all(c("Leader_Follower_Score", "Avg_QGap", "Personality") %in% colnames(final_results))) {
     out_file <- file.path(data_collection_dir, "Scatter_LeaderFollower_vs_QGap.png")
+    
     scatter_lfs_qgap <- create_scatter_with_corr(
       df = final_results,
       x_col = "Leader_Follower_Score",
@@ -522,10 +717,48 @@ plot_summary_metrics <- function(data_collection_dir,
       plot_title = "Leader vs. Follower vs. QGap",
       out_filename = out_file
     )
+    
+    if (!is.null(scatter_lfs_qgap)) {
+      scatter_lfs_qgap <- scatter_lfs_qgap +
+        scale_color_viridis_d(
+          name   = "Personality",
+          breaks = c("follower", "impatient", "leader", "patient"),
+          labels = c("follower", "impatient", "leader", "patient")
+        )
+      
+      ggsave(filename = out_file, plot = scatter_lfs_qgap, width = 8, height = 6)
+    }
+  }
+  
+  # 7d) Scatter Plot: Average Entropy vs. Average QGap
+  if (all(c("Avg_Entropy", "Avg_QGap", "Personality") %in% colnames(final_results))) {
+    out_file <- file.path(data_collection_dir, "Scatter_Entropy_vs_QGap.png")
+    
+    scatter_entropy_vs_qgap <- create_scatter_with_corr(
+      df = final_results,
+      x_col = "Avg_Entropy",
+      y_col = "Avg_QGap",
+      color_col = "Personality",
+      x_label = "Average Entropy",
+      y_label = "Avg QGap (RL Confidence)",
+      plot_title = "Average Entropy vs. Average QGap",
+      out_filename = out_file
+    )
+    
+    if (!is.null(scatter_entropy_vs_qgap)) {
+      scatter_entropy_vs_qgap <- scatter_entropy_vs_qgap +
+        scale_color_viridis_d(
+          name   = "Personality",
+          breaks = c("follower", "impatient", "leader", "patient"),
+          labels = c("follower", "impatient", "leader", "patient")
+        )
+      
+      ggsave(filename = out_file, plot = scatter_entropy_vs_qgap, width = 8, height = 6)
+    }
   }
   
   # ------------------------------------------------------------------------
-  # 7) Scatter Plot: Mean Performance Rate vs. Cumulative Reward
+  # Scatter Plot: Mean Performance Rate vs. Cumulative Reward
   # ------------------------------------------------------------------------
   scatter_mpr_vs_reward <- NULL
   if (all(c("Mean_Performance_Rate", "Cumulative_Reward") %in% colnames(final_results))) {
@@ -557,13 +790,7 @@ plot_summary_metrics <- function(data_collection_dir,
                             aes(x = Personality, y = Stability, fill = Personality)) +
       geom_boxplot(alpha = 0.7, outlier.shape = 16, outlier.size = 2) +
       theme_minimal(base_size = 14) +
-      scale_fill_viridis_d(end = 0.9, guide = "none") +  # no legend
-      scale_x_discrete(
-        labels = c("personality_type_follower"  = "Follower",
-                   "personality_type_impatient" = "Impatient",
-                   "personality_type_leader"    = "Leader",
-                   "personality_type_patient"   = "Patient")
-      ) +
+      scale_fill_viridis_d(end = 0.9, guide = "none") +
       labs(
         title = "Stability Distribution by Personality",
         x = "Personality",
@@ -578,7 +805,6 @@ plot_summary_metrics <- function(data_collection_dir,
     ggsave(filename = stability_box_filename, plot = box_stability, width = 8, height = 6)
     message("Stability box plot saved to: ", stability_box_filename)
   }
-  
   
   # ------------------------------------------------------------------------
   # 9) Scatter Plot: Fluency Score vs. Mean Performance Rate
@@ -653,48 +879,42 @@ plot_summary_metrics <- function(data_collection_dir,
   }
   
   # ------------------------------------------------------------------------
-  # 12) Bar Charts for Q-table Metrics (Avg_Entropy, Avg_QGap, etc.)
+  # 12) Box Charts for Q-table Metrics (Avg_Entropy, Avg_QGap, Avg_Convergence, Avg_ActionConsistency)
   # ------------------------------------------------------------------------
-  # Example: create bar charts for each metric if the column exists
-  # Example: create bar charts for each metric if the column exists
   qtable_metrics <- c("Avg_Entropy", "Avg_QGap", "Avg_Convergence", "Avg_ActionConsistency")
   
   for (metric_col in qtable_metrics) {
+    # Proceed only if the metric_col actually exists in final_results
     if (all(c(metric_col, "Personality") %in% colnames(final_results))) {
       
-      # Summarize data by metric_col
-      summary_metric <- summarize_with_ci(final_results, metric_col, "Personality")
+      # Create a boxplot for each metric
+      p_box <- ggplot(final_results, 
+                      aes(x = Personality, y = .data[[metric_col]], fill = Personality)) +
+        geom_boxplot(alpha = 0.7, outlier.shape = 16, outlier.size = 2) +
+        theme_minimal(base_size = 14) +
+        scale_fill_viridis_d(end = 0.9, guide = "none") +
+        labs(
+          title = paste("Distribution of", metric_col, "by Personality"),
+          subtitle = paste("Boxplot of", metric_col),
+          x = "Personality",
+          y = metric_col
+        ) +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none"
+        )
       
-      # Set y-axis limits only for Avg_ActionConsistency
-      y_limits <- switch(
-        metric_col,
-        "Avg_ActionConsistency" = c(0.9, 1),
-        "Avg_Entropy" = c(1.25, 2),
-        NULL  # default
-      )
+      # Optionally, set y-limits for specific metrics if desired
+      # Example: if (metric_col == "Avg_ActionConsistency") p_box <- p_box + coord_cartesian(ylim = c(0.9, 1))
       
-  
-      
-      # Create bar plot
-      metric_plot <- create_bar_plot(
-        df = summary_metric,
-        x_col = "Personality",
-        y_col = "Mean",
-        fill_col = "Personality",
-        y_label = metric_col,
-        title = paste("Average", metric_col, "by Personality"),
-        subtitle = "Error bars represent ±1 SD",
-        y_limits = y_limits
-      )
-      
-      # Save the plot
-      plot_filename <- file.path(data_collection_dir, paste0("Average_", metric_col, ".png"))
-      ggsave(filename = plot_filename, plot = metric_plot, width = 8, height = 6)
-      message(metric_col, " plot saved to: ", plot_filename)
+      # Save plot
+      plot_filename <- file.path(data_collection_dir, paste0("BoxPlot_", metric_col, ".png"))
+      ggsave(filename = plot_filename, plot = p_box, width = 8, height = 6)
+      message(metric_col, " boxplot saved to: ", plot_filename)
     }
   }
   
-
+  
   # ------------------------------------------------------------------------
   # X) Scatter Plot: Mean Performance Rate vs. Stability
   # ------------------------------------------------------------------------
@@ -711,18 +931,11 @@ plot_summary_metrics <- function(data_collection_dir,
       plot_title   = "MPR vs. Stability",
       out_filename = out_file
     )
-    
-    # Optionally, print the plot to the console too:
-    #print(scatter_mpr_stability)
   }
-  
-  
   
   # ------------------------------------------------------------------------
   # 13) Correlation Matrix for Key Numeric Columns
   # ------------------------------------------------------------------------
-  
-  # Here, we add Q-table metrics to numeric_cols if they exist:
   potential_qtable_cols <- c("Avg_Entropy", "Avg_QGap", "Avg_Convergence", "Avg_ActionConsistency")
   numeric_cols <- c(
     "Mean_Performance_Rate", "Cumulative_Reward", "Total_Strategy_Changes", 
@@ -730,23 +943,20 @@ plot_summary_metrics <- function(data_collection_dir,
     potential_qtable_cols
   )
   
-  # Check if these columns are present
+  # Check which numeric columns actually exist in final_results
   numeric_cols_present <- intersect(numeric_cols, colnames(final_results))
   
   correlation_matrix_plot <- NULL
   if (length(numeric_cols_present) > 1) {
-    # Build a numeric-only dataframe
     numeric_data <- final_results %>%
       select(all_of(numeric_cols_present))
     
-    # Create a correlation matrix plot using GGally
     correlation_matrix_plot <- ggpairs(
       numeric_data,
       title = "Correlation Matrix of Key Metrics"
     )
     
     corr_matrix_filename <- file.path(data_collection_dir, "Correlation_Matrix.png")
-    # ggsave can handle ggpairs objects, but might need a slight tweak in size
     ggsave(filename = corr_matrix_filename, plot = correlation_matrix_plot, width = 20, height = 20)
     message("Correlation matrix plot saved to: ", corr_matrix_filename)
   }
@@ -758,17 +968,50 @@ plot_summary_metrics <- function(data_collection_dir,
   plot_entropy_over_episodes(data_collection_dir)
   
   # ------------------------------------------------------------------------
-  # 14) q-gap Over Episodes Plot
-  # -----------------------------------------------------------------
+  # 15) Q-gap Over Episodes Plot
+  # ------------------------------------------------------------------------
   plot_qgap_trends(
     per_episode_file = file.path(data_collection_dir, "per_episode_metrics.csv"),
-    output_dir = data_collection_dir
+    output_dir       = data_collection_dir
   )
   
   # ------------------------------------------------------------------------
-  # Print or Show Plots in Console
+  # Scatter Plot: Stability vs. Action Consistency
   # ------------------------------------------------------------------------
-  # (You can comment out prints if you only want to save to files)
+  scatter_stability_vs_action_consistency <- NULL
+  if (all(c("Stability", "Avg_ActionConsistency", "Personality") %in% colnames(final_results))) {
+    out_file <- file.path(data_collection_dir, "Scatter_Stability_vs_ActionConsistency.png")
+    
+    scatter_stability_vs_action_consistency <- create_scatter_with_corr(
+      df           = final_results,
+      x_col        = "Stability",
+      y_col        = "Avg_ActionConsistency",
+      color_col    = "Personality",
+      x_label      = "Stability (0 - 1)",
+      y_label      = "Average Action Consistency",
+      plot_title   = "Stability vs. Action Consistency",
+      out_filename = out_file
+    )
+  }
+  if (!is.null(scatter_stability_vs_action_consistency)) {
+    print(scatter_stability_vs_action_consistency)
+  }
+  
+  # ------------------------------------------------------------------------
+  # 16) Action Consistency Over Episodes Plot (NEW)
+  # ------------------------------------------------------------------------
+  message("\nGenerating action consistency over episodes plot...")
+  plot_action_consistency_over_episodes(data_collection_dir)
+  
+  message("\nGenerating mpr_vs_stability scatter plot...")
+  plot_mpr_vs_stability(data_collection_dir)
+  
+  message("\nGenerating convergence over episodes plot...")
+  plot_convergence_over_episodes(data_collection_dir)
+  
+  # ------------------------------------------------------------------------
+  # Print or Show Plots in Console (if you are running an interactive session)
+  # ------------------------------------------------------------------------
   if (exists("mpr_plot"))                     print(mpr_plot)
   if (exists("cumulative_reward_plot"))       print(cumulative_reward_plot)
   if (exists("fluency_plot"))                 print(fluency_plot)
@@ -780,13 +1023,20 @@ plot_summary_metrics <- function(data_collection_dir,
   if (!is.null(scatter_fluency_vs_mpr))       print(scatter_fluency_vs_mpr)
   if (!is.null(scatter_changes_vs_fluency))   print(scatter_changes_vs_fluency)
   if (!is.null(scatter_stability_vs_fluency)) print(scatter_stability_vs_fluency)
-  if (exists("scatter_pIS_qgap"))            print(scatter_pIS_qgap)
-  if (exists("scatter_pIS_acons"))           print(scatter_pIS_acons)
-  if (exists("scatter_lfs_qgap"))            print(scatter_lfs_qgap)
-  if (exists("scatter_mpr_stability"))        print(print(scatter_mpr_stability))
+  if (exists("scatter_pIS_qgap"))             print(scatter_pIS_qgap)
+  if (exists("scatter_pIS_acons"))            print(scatter_pIS_acons)
+  if (exists("scatter_lfs_qgap"))             print(scatter_lfs_qgap)
+  if (exists("scatter_mpr_stability"))        print(scatter_mpr_stability)
 }
 
-# Example usage:
+# -----------------------------------------------------------------------
+# USAGE EXAMPLE
+# -----------------------------------------------------------------------
 data_collection_dir <- "/home/jesse/thesis/src/co_learning_robot_personalities/data_collection"
 summary_csv_filename <- "summary_metrics.csv"
-plot_summary_metrics(data_collection_dir, summary_csv_filename, circle = TRUE)
+
+plot_summary_metrics(
+  data_collection_dir = data_collection_dir, 
+  summary_csv_filename = summary_csv_filename, 
+  circle = TRUE
+)
