@@ -20,8 +20,9 @@ plot_qgap_trends <- function(per_episode_file, output_dir) {
   df <- read.csv(per_episode_file) %>%
     mutate(
       Personality = str_remove(Personality, "personality_type_"),
-      Personality = factor(Personality, 
-                           levels = c("follower", "patient", "leader", "impatient"))
+      Personality = factor(Personality,
+                           levels = c("follower", "leader", "impatient", "patient"))
+      
     ) %>%
     filter(!is.na(AvgQGap)) %>%
     group_by(Personality, Episode) %>%
@@ -87,7 +88,8 @@ plot_entropy_over_episodes <- function(data_collection_dir) {
       .groups      = "drop"
     ) %>%
     mutate(Personality = factor(Personality,
-                                levels = c("follower", "patient", "leader", "impatient")))
+                                levels = c("follower", "leader", "impatient", "patient"))
+    )
   
   # Create plot
   p <- ggplot(entropy_data, aes(x = Episode, y = Mean_Entropy, 
@@ -148,7 +150,8 @@ plot_action_consistency_over_episodes <- function(data_collection_dir) {
       .groups         = "drop"
     ) %>%
     mutate(Personality = factor(Personality,
-                                levels = c("follower", "patient", "leader", "impatient")))
+                                levels = c("follower", "leader", "impatient", "patient"))
+    )
   
   # Create plot
   p <- ggplot(action_consistency_data, 
@@ -198,8 +201,9 @@ plot_mpr_vs_stability <- function(data_collection_dir) {
   
   df <- read.csv(summary_file) %>%
     mutate(Personality = str_remove(Personality, "personality_type_"),
-           Personality = factor(Personality, 
-                                levels = c("follower", "patient", "leader", "impatient")))
+           Personality = factor(Personality,
+                                levels = c("follower", "leader", "impatient", "patient"))
+    )
   
   # Compute Pearson correlation
   cor_val <- cor(df$Mean_Performance_Rate, df$Stability, method = "pearson")
@@ -258,7 +262,8 @@ plot_convergence_over_episodes <- function(data_collection_dir) {
       .groups          = "drop"
     ) %>%
     mutate(Personality = factor(Personality,
-                                levels = c("follower", "patient", "leader", "impatient")))
+                                levels = c("follower", "leader", "impatient", "patient"))
+    )
   
   # Create plot
   p <- ggplot(convergence_data, 
@@ -337,7 +342,9 @@ plot_summary_metrics <- function(data_collection_dir,
     mutate(
       Personality = str_remove(Personality, "^personality_type_"),
       Participant = as.factor(Participant),
-      Personality = factor(Personality, levels = c("follower", "patient", "leader", "impatient"))
+      Personality = factor(Personality,
+                           levels = c("follower", "leader", "impatient", "patient"))
+      
     )
   
   # ------------------------------------------------------------------------
